@@ -27,7 +27,7 @@ export default function Index() {
     <div className="dark min-h-screen bg-background text-foreground flex flex-col">
       <header className="p-4 border-b flex justify-between items-center bg-card">
         <div className="flex items-center gap-3">
-          <img src="/public/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+          <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
           <h1 className="font-bold text-lg tracking-tight">CAJ TECH</h1>
         </div>
         <Button variant="ghost" size="icon" onClick={signOut}><LogOut className="h-5 w-5"/></Button>
