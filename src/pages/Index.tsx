@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 export default function Index() {
   const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira">("barbeiro");
   const store = useSupabaseStore();
-  const { signOut, userRole } = useAuth();
+  // AQUI: Puxamos o `user` para saber exatamente quem está logado
+  const { signOut, userRole, user } = useAuth();
 
   const visibleTabs = userRole === "barbeiro" ? [
     { id: "barbeiro", label: "Agenda", icon: Scissors },
@@ -84,7 +85,8 @@ export default function Index() {
           <CarteiraBarbeiro 
             comissaoTotalMes={store.comissaoTotalMes}
             totalCortesMes={store.totalCortesMes}
-            nomeBarbeiro={store.barbeiros_find(store.barbeiroSelecionadoId)?.nome || "Barbeiro"}
+            // AQUI: Usamos o user.id em vez do barbeiroSelecionadoId
+            nomeBarbeiro={store.barbeiros_find(user?.id || "")?.nome || "Barbeiro"}
           />
         )}
 
@@ -103,12 +105,10 @@ export default function Index() {
             onAddDespesa={store.adicionarDespesa}
             onRemoveDespesa={store.removerDespesa}
             onAddBarbeiro={(nome, comissao, email, senha) => {
-              // Correção: Passando argumentos soltos para o store
               store.adicionarBarbeiro(nome, comissao, email, senha);
             }}
             onRemoveBarbeiro={store.removerBarbeiro}
             onAddServico={(nome, preco) => {
-              // Correção: Passando argumentos soltos para o store
               store.adicionarServico(nome, preco);
             }}
             onRemoveServico={store.removerServico}
