@@ -30,7 +30,10 @@ export default function Index() {
           <img src="/public/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
           <h1 className="font-bold text-lg tracking-tight">CAJ TECH</h1>
         </div>
-        <Button variant="ghost" size="icon" onClick={signOut}><LogOut className="h-5 w-5"/></Button>
+        <Button variant="ghost" size="sm" onClick={signOut} className="gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+          <LogOut className="h-4 w-4"/>
+          <span className="text-xs font-medium">Sair</span>
+        </Button>
       </header>
 
       {/* SELETOR DE DATA (Visível para Dono e na Agenda do Barbeiro) */}
