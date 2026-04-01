@@ -1,50 +1,33 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import { VitePWA } from "vite-plugin-pwa";
-import path from "path";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react-swc'
+import path from 'path'
+import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  server: {
-    host: true, // Isso faz o link "Network" (online) aparecer sempre!
-    port: 8080,
-  },
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
-      injectRegister: "auto",
-      devOptions: {
-        enabled: true, // Permite testar a instalação do App mesmo em modo de treino
-      },
-      includeAssets: ["favicon.png", "logoempresaCAJsemfundo.png"],
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: "CAJ TECH - Gestão de Barbearia",
-        short_name: "CAJ TECH",
-        description: "O sistema definitivo para sua barbearia",
-        theme_color: "#000000",
-        background_color: "#000000",
-        display: "standalone", // Remove a barra do navegador ao abrir o app
-        start_url: "/",
+        name: 'CAJ Tech - Barber',
+        short_name: 'CAJBarber',
+        description: 'Gestão Profissional para Barbearias',
+        theme_color: '#000000',
         icons: [
-          {
-            src: "logoempresaCAJsemfundo.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: "logoempresaCAJsemfundo.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any maskable",
-          }
-        ],
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' }
+        ]
       },
-    }),
+      workbox: {
+        // Isso garante que o app funcione offline salvando os arquivos JS/CSS
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+      }
+    })
   ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-});
+})
