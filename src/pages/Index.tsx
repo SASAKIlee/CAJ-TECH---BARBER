@@ -21,7 +21,14 @@ export default function Index() {
     { id: "dono", label: "Dashboard", icon: LayoutDashboard }
   ];
 
-  if (store.loading) return <div className="min-h-screen flex items-center justify-center dark bg-background text-primary font-bold">CAJ TECH...</div>;
+  if (store.loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center dark bg-background text-primary font-bold gap-4">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+        <p className="tracking-widest animate-pulse">CAJ TECH...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="dark min-h-screen bg-background text-foreground flex flex-col">
@@ -33,7 +40,7 @@ export default function Index() {
         <Button variant="ghost" size="icon" onClick={signOut}><LogOut className="h-5 w-5"/></Button>
       </header>
 
-      {/* SELETOR DE DATA (Visível para Dono e na Agenda do Barbeiro) */}
+      {/* SELETOR DE DATA */}
       {tab !== "carteira" && (
         <div className="bg-card border-b p-3 flex items-center justify-center gap-3 sticky top-0 z-10">
           <div className="relative flex items-center">
@@ -59,7 +66,8 @@ export default function Index() {
       <main className="flex-1 p-4 pb-24 max-w-lg mx-auto w-full">
         {tab === "barbeiro" && (
           <VisaoBarbeiro
-            barbeiros={store.barbeiros} servicos={store.servicos}
+            barbeiros={store.barbeiros} 
+            servicos={store.servicos}
             agendamentosBarbeiroHoje={store.agendamentosBarbeiroHoje}
             comissaoBarbeiroHoje={store.comissaoBarbeiroHoje}
             barbeiroSelecionadoId={store.barbeiroSelecionadoId}
@@ -84,25 +92,31 @@ export default function Index() {
           <VisaoDono
             faturamentoHoje={store.faturamentoHoje}
             comissoesAPagarHoje={store.comissoesAPagarHoje}
+            despesasNoDia={store.despesasNoDia}
+            lucroRealHoje={store.lucroRealHoje}
             cortesRealizadosHoje={store.cortesRealizadosHoje}
             comissaoPorBarbeiroHoje={store.comissaoPorBarbeiroHoje}
+            barbeiros={store.barbeiros}
             servicos={store.servicos}
+            despesas={store.despesas}
+            dataFiltro={store.dataFiltro}
+            onAddDespesa={store.adicionarDespesa}
+            onRemoveDespesa={store.removerDespesa}
             onAddBarbeiro={(nome, comissao, email, senha) => {
-              store.adicionarBarbeiro({ 
-                nome, 
-                comissao_pct: comissao, 
-                email, 
-                senha 
-              });
+              // Correção: Passando argumentos soltos para o store
+              store.adicionarBarbeiro(nome, comissao, email, senha);
             }}
             onRemoveBarbeiro={store.removerBarbeiro}
-            onAddServico={(nome, preco) => store.adicionarServico({ nome, preco })}
+            onAddServico={(nome, preco) => {
+              // Correção: Passando argumentos soltos para o store
+              store.adicionarServico(nome, preco);
+            }}
             onRemoveServico={store.removerServico}
           />
         )}
       </main>
 
-      <nav className="fixed bottom-0 w-full bg-card border-t flex justify-around p-2 shadow-2xl">
+      <nav className="fixed bottom-0 w-full bg-card border-t flex justify-around p-2 shadow-2xl z-20">
         {visibleTabs.map(t => (
           <button 
             key={t.id} 
