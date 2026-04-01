@@ -21,7 +21,7 @@ export function useSupabaseStore() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não logado");
 
-      // 1. Busca a barbearia (Usando lista + [0] para evitar o Erro 406 do single)
+      // 1. Busca a barbearia (Usando lista para evitar erro 406)
       const { data: bList }: any = await (supabase as any)
         .from("barbearias")
         .select("slug")
@@ -29,7 +29,6 @@ export function useSupabaseStore() {
 
       let bInfo = bList && bList.length > 0 ? bList[0] : null;
 
-      // Se não for dono, tenta buscar como barbeiro vinculado
       if (!bInfo) {
         const { data: barbList }: any = await (supabase as any)
           .from("barbeiros")
@@ -42,14 +41,13 @@ export function useSupabaseStore() {
       }
 
       if (!bInfo?.slug) {
-        console.warn("Nenhuma barbearia encontrada para este perfil.");
         setLoading(false);
         return;
       }
 
       setBarbeariaSlug(bInfo.slug);
 
-      // 2. Busca todos os dados em paralelo filtrando pelo Slug
+      // 2. Busca dados filtrando pelo Slug
       const [bRes, sRes, aRes, dRes]: any = await Promise.all([
         (supabase as any).from("barbeiros").select("*").eq("barbearia_slug", bInfo.slug).order("nome"),
         (supabase as any).from("servicos").select("*").eq("barbearia_slug", bInfo.slug).order("nome"),
@@ -67,7 +65,7 @@ export function useSupabaseStore() {
       }
 
     } catch (e) {
-      console.error("Erro no carregamento dos dados:", e);
+      console.error("Erro no fetchAll:", e);
     } finally {
       setLoading(false);
     }
@@ -75,7 +73,7 @@ export function useSupabaseStore() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // --- LÓGICA FINANCEIRA ---
+  // --- CÁLCULOS FINANCEIROS ---
   const agendamentosNoDia = agendamentos?.filter(ag => ag.data === dataFiltro) || [];
   
   const faturamentoHoje = agendamentosNoDia
@@ -113,14 +111,23 @@ export function useSupabaseStore() {
       cortes: agendamentosNoDia.filter(ag => ag.barbeiro_id === b.id && ag.status === "Finalizado").length
     })),
 
-    // --- AÇÕES ---
+    // --- AÇÃO DE AGENDAR (CORRIGIDA) ---
     adicionarAgendamento: async (ag: any) => {
       const { data, error }: any = await (supabase as any).from("agendamentos").insert({
-        ...ag, status: "Pendente", barbearia_slug: barbeariaSlug
+        data: ag.data,
+        horario: ag.horario,
+        nome_cliente: ag.nomeCliente,        // Mapeado para snake_case
+        telefone_cliente: ag.telefoneCliente, // Mapeado para snake_case
+        barbeiro_id: ag.barbeiroId,           // Mapeado para snake_case
+        servico_id: ag.servicoId,             // Mapeado para snake_case
+        status: "Pendente",
+        barbearia_slug: barbeariaSlug
       }).select().single();
+
       if (!error && data) setAgendamentos(prev => [...prev, data]);
       return { error };
     },
+
     finalizarAgendamento: async (id: string) => {
       await (supabase as any).from("agendamentos").update({ status: "Finalizado" }).eq("id", id);
       setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, status: "Finalizado" } : a));
@@ -130,7 +137,10 @@ export function useSupabaseStore() {
       setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, status: "Cancelado" } : a));
     },
     adicionarDespesa: async (nova: any) => {
-      const { data, error }: any = await (supabase as any).from("despesas").insert({ ...nova, barbearia_slug: barbeariaSlug }).select().single();
+      const { data, error }: any = await (supabase as any).from("despesas").insert({ 
+        ...nova, 
+        barbearia_slug: barbeariaSlug 
+      }).select().single();
       if (!error && data) setDespesas(prev => [data, ...prev]);
     },
     removerDespesa: async (id: string) => {
@@ -152,7 +162,9 @@ export function useSupabaseStore() {
       setBarbeiros(prev => prev.filter(b => b.id !== id));
     },
     adicionarServico: async (nome: string, preco: number) => {
-      const { data, error }: any = await (supabase as any).from("servicos").insert({ nome, preco, barbearia_slug: barbeariaSlug }).select().single();
+      const { data, error }: any = await (supabase as any).from("servicos").insert({ 
+        nome, preco, barbearia_slug: barbeariaSlug 
+      }).select().single();
       if (!error && data) setServicos(prev => [...prev, data]);
     },
     removerServico: async (id: string) => {
