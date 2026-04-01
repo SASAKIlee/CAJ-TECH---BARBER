@@ -5,6 +5,13 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Pega a data local ignorando o fuso de Londres (UTC) para evitar bug depois das 21h
+const getLocalDate = () => {
+  const data = new Date();
+  data.setMinutes(data.getMinutes() - data.getTimezoneOffset());
+  return data.toISOString().split("T")[0];
+};
+
 export function useSupabaseStore() {
   const [barbeiros, setBarbeiros] = useState<any[]>([]);
   const [servicos, setServicos] = useState<any[]>([]);
@@ -13,7 +20,7 @@ export function useSupabaseStore() {
   const [loading, setLoading] = useState(true);
   const [barbeariaSlug, setBarbeariaSlug] = useState<string>("");
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
-  const [dataFiltro, setDataFiltro] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [dataFiltro, setDataFiltro] = useState<string>(getLocalDate()); // <-- Usando a data local aqui!
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -21,7 +28,7 @@ export function useSupabaseStore() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não logado");
 
-      // 1. Busca a barbearia (Usando lista para evitar Erro 406 do single)
+      // 1. Busca a barbearia (Usando lista + [0] para evitar o Erro 406 do single)
       const { data: bList }: any = await (supabase as any)
         .from("barbearias")
         .select("slug")
@@ -116,19 +123,11 @@ export function useSupabaseStore() {
     // --- AÇÕES ---
     adicionarAgendamento: async (ag: any) => {
       const { data, error }: any = await (supabase as any).from("agendamentos").insert({
-        data: ag.data,
-        horario: ag.horario,
-        nome_cliente: ag.nomeCliente,
-        telefone_cliente: ag.telefoneCliente,
-        barbeiro_id: ag.barbeiroId,
-        servico_id: ag.servicoId,
-        status: "Pendente",
-        barbearia_slug: barbeariaSlug
+        ...ag, status: "Pendente", barbearia_slug: barbeariaSlug
       }).select().single();
       if (!error && data) setAgendamentos(prev => [...prev, data]);
       return { error };
     },
-
     finalizarAgendamento: async (id: string) => {
       try {
         const agendamentoAtual = agendamentos.find(a => a.id === id);
@@ -156,22 +155,18 @@ export function useSupabaseStore() {
         console.error("Erro ao finalizar:", err);
       }
     },
-
     cancelarAgendamento: async (id: string) => {
       await (supabase as any).from("agendamentos").update({ status: "Cancelado" }).eq("id", id);
       setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, status: "Cancelado" } : a));
     },
-
     adicionarDespesa: async (nova: any) => {
       const { data, error }: any = await (supabase as any).from("despesas").insert({ ...nova, barbearia_slug: barbeariaSlug }).select().single();
       if (!error && data) setDespesas(prev => [data, ...prev]);
     },
-
     removerDespesa: async (id: string) => {
       await (supabase as any).from("despesas").delete().eq("id", id);
       setDespesas(prev => prev.filter(d => d.id !== id));
     },
-
     adicionarBarbeiro: async (nome: string, comissao: number, email: string, senha: string) => {
       const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email, password: senha });
@@ -182,22 +177,18 @@ export function useSupabaseStore() {
       }).select().single();
       if (!profileError) setBarbeiros(prev => [...prev, data]);
     },
-
     removerBarbeiro: async (id: string) => {
       await (supabase as any).from("barbeiros").delete().eq("id", id);
       setBarbeiros(prev => prev.filter(b => b.id !== id));
     },
-
     adicionarServico: async (nome: string, preco: number) => {
       const { data, error }: any = await (supabase as any).from("servicos").insert({ nome, preco, barbearia_slug: barbeariaSlug }).select().single();
       if (!error && data) setServicos(prev => [...prev, data]);
     },
-
     removerServico: async (id: string) => {
       await (supabase as any).from("servicos").delete().eq("id", id);
       setServicos(prev => prev.filter(s => s.id !== id));
     },
-
     servicos_find: (id: string) => servicos.find(s => s.id === id),
     barbeiros_find: (id: string) => barbeiros.find(b => b.id === id),
     horariosOcupados: (data: string, bId: string) => agendamentos.filter(ag => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado").map(ag => ag.horario)
