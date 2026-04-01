@@ -1,136 +1,136 @@
 import { useState } from "react";
-import { DollarSign, TrendingDown, Wallet, Plus, Trash2, Users, Scissors } from "lucide-react";
+import { DollarSign, TrendingDown, Wallet, Plus, Trash2, Users, Scissors, Briefcase } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
 export function VisaoDono({ 
-  faturamentoHoje = 0, 
-  comissoesAPagarHoje = 0, 
-  despesasNoDia = 0, 
-  lucroRealHoje = 0, 
-  despesas = [], 
-  onAddDespesa, 
-  onRemoveDespesa, 
-  comissaoPorBarbeiroHoje = [], 
-  dataFiltro 
+  faturamentoHoje = 0, comissoesAPagarHoje = 0, despesasNoDia = 0, lucroRealHoje = 0, 
+  despesas = [], onAddDespesa, onRemoveDespesa, 
+  comissaoPorBarbeiroHoje = [], dataFiltro,
+  barbeiros = [], servicos = [], 
+  onAddBarbeiro, onRemoveBarbeiro, onAddServico, onRemoveServico 
 }: any) {
+  
+  // States para os formulários
   const [novaDesc, setNovaDesc] = useState("");
   const [novoValor, setNovoValor] = useState("");
+  const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
+  const [nServico, setNServico] = useState({ nome: "", preco: "" });
 
-  // Função auxiliar para formatar moeda com segurança
-  const formatarMoeda = (valor: any) => {
-    return Number(valor || 0).toFixed(2);
-  };
+  const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
   return (
-    <div className="space-y-6 pb-10">
-      {/* 1. RESUMO FINANCEIRO (ALTO CONTRASTE) */}
+    <div className="space-y-8 pb-20">
+      
+      {/* 1. DASHBOARD FINANCEIRO */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4 bg-[#161616] border-zinc-800">
-          <div className="flex items-center gap-2 mb-1 text-zinc-500">
-            <DollarSign className="h-3 w-3"/>
-            <span className="text-[10px] uppercase font-black tracking-widest">Entradas</span>
-          </div>
+          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Entradas</p>
           <p className="text-2xl font-black text-white">R$ {formatarMoeda(faturamentoHoje)}</p>
         </Card>
-
-        <Card className="p-4 bg-[#161616] border-zinc-800">
-          <div className="flex items-center gap-2 mb-1 text-zinc-500">
-            <Users className="h-3 w-3"/>
-            <span className="text-[10px] uppercase font-black tracking-widest">Comissões</span>
-          </div>
-          <p className="text-2xl font-black text-orange-500">R$ {formatarMoeda(comissoesAPagarHoje)}</p>
-        </Card>
-
-        <Card className="p-4 bg-[#161616] border-zinc-800">
-          <div className="flex items-center gap-2 mb-1 text-zinc-500">
-            <TrendingDown className="h-3 w-3"/>
-            <span className="text-[10px] uppercase font-black tracking-widest">Gastos Extras</span>
-          </div>
-          <p className="text-2xl font-black text-red-500">R$ {formatarMoeda(despesasNoDia)}</p>
-        </Card>
-
-        <Card className="p-4 bg-primary border-none shadow-lg shadow-primary/20">
-          <div className="flex items-center gap-2 mb-1 text-black/60">
-            <Wallet className="h-3 w-3"/>
-            <span className="text-[10px] uppercase font-black tracking-widest">Lucro Real</span>
-          </div>
+        <Card className="p-4 bg-primary border-none">
+          <p className="text-[10px] uppercase font-black text-black/60 tracking-widest mb-1">Lucro Real</p>
           <p className="text-2xl font-black text-black">R$ {formatarMoeda(lucroRealHoje)}</p>
         </Card>
       </div>
 
-      {/* 2. LANÇAR DESPESA EXTRA */}
-      <Card className="p-5 bg-[#1A1A1A] border-zinc-800 space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-red-500"></div>
-          <h3 className="text-sm font-black text-white uppercase tracking-tighter">Lançar Despesa (Luz, Aluguel, etc)</h3>
+      {/* 2. GESTÃO DE EQUIPE (BARBEIROS) */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Users className="h-4 w-4 text-primary" />
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Gestão de Barbeiros</h3>
         </div>
-        <div className="flex gap-2">
-          <input 
-            placeholder="Descrição" 
-            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md px-3 text-white h-12 focus:outline-none focus:border-primary" 
-            value={novaDesc} 
-            onChange={e => setNovaDesc(e.target.value)}
-          />
-          <input 
-            placeholder="R$ 0,00" 
-            type="number"
-            className="w-24 bg-zinc-900 border border-zinc-800 rounded-md px-3 text-white h-12 focus:outline-none focus:border-primary font-bold" 
-            value={novoValor} 
-            onChange={e => setNovoValor(e.target.value)}
-          />
-          <Button 
-            className="bg-primary text-black font-black h-12 px-6 hover:bg-primary/90"
-            onClick={() => {
-              if(!novaDesc || !novoValor) return;
-              onAddDespesa({ descricao: novaDesc, valor: Number(novoValor), data: dataFiltro });
-              setNovaDesc(""); setNovoValor("");
-            }}
-          >
-            <Plus className="h-6 w-6"/>
-          </Button>
-        </div>
-      </Card>
-
-      {/* 3. HISTÓRICO DE DESPESAS */}
-      <div className="space-y-3">
-        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] ml-1">Detalhamento de Saídas</h3>
-        {(despesas || []).filter((d:any) => d.data === dataFiltro).length === 0 ? (
-          <p className="text-center py-6 text-zinc-600 text-xs italic">Nenhuma despesa extra registrada neste dia.</p>
-        ) : (
-          (despesas || []).filter((d:any) => d.data === dataFiltro).map((d: any) => (
-            <div key={d.id} className="flex justify-between items-center bg-[#161616] p-4 rounded-2xl border border-zinc-800/50">
-              <div>
-                <p className="text-sm font-bold text-zinc-100 uppercase tracking-tight">{d.descricao}</p>
-                <Badge variant="outline" className="text-[9px] border-red-500/30 text-red-400 font-black">SAÍDA</Badge>
-              </div>
-              <div className="flex items-center gap-4">
-                <p className="text-lg font-black text-white">R$ {formatarMoeda(d.valor)}</p>
-                <Button variant="ghost" size="icon" className="text-zinc-700 hover:text-red-500 h-8 w-8" onClick={() => onRemoveDespesa(d.id)}>
-                  <Trash2 className="h-4 w-4"/>
-                </Button>
-              </div>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-3">
+          <input placeholder="Nome do Barbeiro" className="w-full bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={nBarbeiro.nome} onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} />
+          <div className="flex gap-2">
+            <input placeholder="Email" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+              value={nBarbeiro.email} onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} />
+            <input placeholder="Comissão %" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+              value={nBarbeiro.comissao} onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} />
+          </div>
+          <div className="flex gap-2">
+            <input placeholder="Senha de Acesso" type="password" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+              value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
+            <Button className="bg-primary text-black font-black" onClick={() => {
+              onAddBarbeiro(nBarbeiro.nome, Number(nBarbeiro.comissao), nBarbeiro.email, nBarbeiro.senha);
+              setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
+            }}>Adicionar</Button>
+          </div>
+        </Card>
+        
+        <div className="grid gap-2">
+          {barbeiros.map((b: any) => (
+            <div key={b.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+              <span className="text-sm font-bold text-white uppercase">{b.nome} ({b.comissao_pct}%)</span>
+              <Button variant="ghost" size="sm" onClick={() => onRemoveBarbeiro(b.id)} className="text-zinc-600 hover:text-red-500">
+                <Trash2 className="h-4 w-4"/>
+              </Button>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      </section>
 
-      {/* 4. PERFORMANCE DOS BARBEIROS */}
-      <div className="space-y-3 pt-4">
-        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] ml-1">Produção da Equipe</h3>
-        <div className="grid gap-3">
-          {(comissaoPorBarbeiroHoje || []).map((item: any) => (
-            <Card key={item.barbeiro?.id || Math.random()} className="p-4 bg-[#161616] border-zinc-800 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Scissors className="h-5 w-5 text-primary"/>
-                </div>
-                <div>
-                  <p className="font-bold text-white uppercase text-sm">{item.barbeiro?.nome || "Barbeiro"}</p>
-                  <p className="text-[10px] text-zinc-500 font-bold">{item.cortes || 0} cortes realizados</p>
-                </div>
+      {/* 3. GESTÃO DE SERVIÇOS */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Briefcase className="h-4 w-4 text-primary" />
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Serviços e Preços</h3>
+        </div>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
+          <input placeholder="Nome do Serviço" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={nServico.nome} onChange={e => setNServico({...nServico, nome: e.target.value})} />
+          <input placeholder="Preço" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={nServico.preco} onChange={e => setNServico({...nServico, preco: e.target.value})} />
+          <Button className="bg-primary text-black font-black" onClick={() => {
+            onAddServico(nServico.nome, Number(nServico.preco));
+            setNServico({ nome: "", preco: "" });
+          }}> <Plus className="h-5 w-5"/> </Button>
+        </Card>
+
+        <div className="grid grid-cols-2 gap-2">
+          {servicos.map((s: any) => (
+            <div key={s.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+              <div className="text-xs">
+                <p className="font-bold text-white uppercase">{s.nome}</p>
+                <p className="text-primary font-black">R$ {formatarMoeda(s.preco)}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => onRemoveServico(s.id)} className="text-zinc-600 hover:text-red-500 h-8 w-8">
+                <Trash2 className="h-4 w-4"/>
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. LANÇAR DESPESA EXTRA */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <TrendingDown className="h-4 w-4 text-red-500" />
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Despesas do Dia</h3>
+        </div>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
+          <input placeholder="Ex: Aluguel, Luz..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={novaDesc} onChange={e => setNovaDesc(e.target.value)} />
+          <input placeholder="Valor" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={novoValor} onChange={e => setNovoValor(e.target.value)} />
+          <Button className="bg-red-500 text-white font-black" onClick={() => {
+            onAddDespesa({ descricao: novaDesc, valor: Number(novoValor), data: dataFiltro });
+            setNovaDesc(""); setNovoValor("");
+          }}> <Plus className="h-5 w-5"/> </Button>
+        </Card>
+      </section>
+
+      {/* 5. PERFORMANCE DA EQUIPE */}
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] ml-1">Produção de Hoje</h3>
+        <div className="grid gap-2">
+          {comissaoPorBarbeiroHoje.map((item: any) => (
+            <Card key={item.barbeiro?.id} className="p-4 bg-[#161616] border-zinc-800 flex justify-between items-center">
+              <div>
+                <p className="font-bold text-white uppercase text-sm">{item.barbeiro?.nome}</p>
+                <p className="text-[10px] text-zinc-500 font-bold">{item.cortes} cortes realizados</p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-zinc-500 font-black uppercase">Comissão</p>
@@ -139,7 +139,7 @@ export function VisaoDono({
             </Card>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
