@@ -4,6 +4,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
+// IMPORTANDO O ZOD E O TOAST
+import { barbeiroSchema, servicoSchema, despesaSchema } from "@/lib/schemas";
+import { toast } from "sonner";
+
 export function VisaoDono({ 
   faturamentoHoje = 0, comissoesAPagarHoje = 0, despesasNoDia = 0, lucroRealHoje = 0, 
   despesas = [], onAddDespesa, onRemoveDespesa, 
@@ -19,6 +23,61 @@ export function VisaoDono({
   const [nServico, setNServico] = useState({ nome: "", preco: "" });
 
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
+
+  // --- FUNÇÕES DE VALIDAÇÃO COM ZOD ---
+
+  const handleAddBarbeiro = () => {
+    const validacao = barbeiroSchema.safeParse({
+      nome: nBarbeiro.nome,
+      email: nBarbeiro.email,
+      senha: nBarbeiro.senha,
+      comissao: nBarbeiro.comissao
+    });
+
+    if (!validacao.success) {
+      return toast.error(validacao.error.errors[0].message);
+    }
+
+    onAddBarbeiro(validacao.data.nome, validacao.data.comissao, validacao.data.email, validacao.data.senha);
+    toast.success("Barbeiro cadastrado com sucesso! ✂️");
+    setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
+  };
+
+  const handleAddServico = () => {
+    const validacao = servicoSchema.safeParse({
+      nome: nServico.nome,
+      preco: nServico.preco
+    });
+
+    if (!validacao.success) {
+      return toast.error(validacao.error.errors[0].message);
+    }
+
+    onAddServico(validacao.data.nome, validacao.data.preco);
+    toast.success("Serviço adicionado com sucesso!");
+    setNServico({ nome: "", preco: "" });
+  };
+
+  const handleAddDespesa = () => {
+    const validacao = despesaSchema.safeParse({
+      descricao: novaDesc,
+      valor: novoValor,
+      data: dataFiltro
+    });
+
+    if (!validacao.success) {
+      return toast.error(validacao.error.errors[0].message);
+    }
+
+    onAddDespesa({
+      descricao: validacao.data.descricao,
+      valor: validacao.data.valor,
+      data: validacao.data.data
+    });
+    toast.success("Despesa registrada no caixa! 💸");
+    setNovaDesc(""); 
+    setNovoValor("");
+  };
 
   return (
     <div className="space-y-8 pb-20">
@@ -53,10 +112,8 @@ export function VisaoDono({
           <div className="flex gap-2">
             <input placeholder="Senha de Acesso" type="password" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
               value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
-            <Button className="bg-primary text-black font-black" onClick={() => {
-              onAddBarbeiro(nBarbeiro.nome, Number(nBarbeiro.comissao), nBarbeiro.email, nBarbeiro.senha);
-              setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
-            }}>Adicionar</Button>
+            {/* Trocado o onClick para usar a nossa função validada */}
+            <Button className="bg-primary text-black font-black" onClick={handleAddBarbeiro}>Adicionar</Button>
           </div>
         </Card>
         
@@ -83,10 +140,8 @@ export function VisaoDono({
             value={nServico.nome} onChange={e => setNServico({...nServico, nome: e.target.value})} />
           <input placeholder="Preço" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
             value={nServico.preco} onChange={e => setNServico({...nServico, preco: e.target.value})} />
-          <Button className="bg-primary text-black font-black" onClick={() => {
-            onAddServico(nServico.nome, Number(nServico.preco));
-            setNServico({ nome: "", preco: "" });
-          }}> <Plus className="h-5 w-5"/> </Button>
+          {/* Trocado o onClick para usar a nossa função validada */}
+          <Button className="bg-primary text-black font-black" onClick={handleAddServico}> <Plus className="h-5 w-5"/> </Button>
         </Card>
 
         <div className="grid grid-cols-2 gap-2">
@@ -115,10 +170,8 @@ export function VisaoDono({
             value={novaDesc} onChange={e => setNovaDesc(e.target.value)} />
           <input placeholder="Valor" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
             value={novoValor} onChange={e => setNovoValor(e.target.value)} />
-          <Button className="bg-red-500 text-white font-black" onClick={() => {
-            onAddDespesa({ descricao: novaDesc, valor: Number(novoValor), data: dataFiltro });
-            setNovaDesc(""); setNovoValor("");
-          }}> <Plus className="h-5 w-5"/> </Button>
+          {/* Trocado o onClick para usar a nossa função validada */}
+          <Button className="bg-red-500 text-white font-black" onClick={handleAddDespesa}> <Plus className="h-5 w-5"/> </Button>
         </Card>
       </section>
 

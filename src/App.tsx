@@ -9,7 +9,15 @@ import Auth from "./pages/Auth.tsx";
 import SelecionarPapel from "./pages/SelecionarPapel.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
-const queryClient = new QueryClient();
+// AQUI ESTÁ O PULO DO GATO: Configuração do motor de Cache!
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // Os dados ficam no cache sem precisar baixar de novo por 5 minutos
+      refetchOnWindowFocus: false, // Não faz requisição no banco só de trocar de aba no navegador
+    },
+  },
+});
 
 function AppRoutes() {
   const { user, loading, userRole } = useAuth();
