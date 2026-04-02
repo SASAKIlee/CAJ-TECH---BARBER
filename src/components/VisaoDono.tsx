@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TrendingDown, Plus, Trash2, Users } from "lucide-react";
+import { TrendingDown, Plus, Trash2, Users, Briefcase } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema, despesaSchema } from "@/lib/schemas";
@@ -42,6 +42,14 @@ export function VisaoDono({
     onAddBarbeiro(validacao.data.nome, validacao.data.comissao, validacao.data.email, validacao.data.senha);
     toast.success("Barbeiro cadastrado! ✂️");
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
+  };
+
+  const handleAddServico = () => {
+    const validacao = servicoSchema.safeParse(nServico);
+    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
+    onAddServico(validacao.data.nome, validacao.data.preco);
+    toast.success("Serviço adicionado!");
+    setNServico({ nome: "", preco: "" });
   };
 
   const handleAddDespesa = () => {
@@ -103,7 +111,7 @@ export function VisaoDono({
         </Card>
       </div>
 
-      {/* GESTÃO DE EQUIPE (UNIFICADA) */}
+      {/* ✂️ GESTÃO DE EQUIPE */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 px-1">
           <Users className="h-4 w-4 text-primary" />
@@ -112,21 +120,21 @@ export function VisaoDono({
         <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-3">
           <input 
             placeholder="Nome do Barbeiro" 
-            className="w-full bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+            className="w-full bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
             value={nBarbeiro.nome} 
             onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} 
           />
           <div className="flex gap-2">
             <input 
               placeholder="Email de Login" 
-              className="flex-1 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+              className="flex-1 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
               value={nBarbeiro.email} 
               onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} 
             />
             <input 
               placeholder="%" 
               type="number" 
-              className="w-20 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+              className="w-20 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
               value={nBarbeiro.comissao} 
               onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} 
             />
@@ -134,12 +142,12 @@ export function VisaoDono({
           <input 
             placeholder="Senha (mínimo 6 caracteres)" 
             type="password"
-            className="w-full bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+            className="w-full bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
             value={nBarbeiro.senha} 
             onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} 
           />
           <Button className="w-full bg-primary text-black font-black uppercase text-xs" onClick={handleAddBarbeiro}>
-            Adicionar Barbeiro
+            Cadastrar Barbeiro
           </Button>
         </Card>
         
@@ -153,7 +161,48 @@ export function VisaoDono({
         </div>
       </section>
 
-      {/* LANÇAR DESPESA (RECUPERADA) */}
+      {/* 💼 GESTÃO DE SERVIÇOS */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Briefcase className="h-4 w-4 text-primary" />
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Serviços</h3>
+        </div>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-3">
+          <div className="flex gap-2">
+            <input 
+              placeholder="Nome do Serviço" 
+              className="flex-1 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
+              value={nServico.nome} 
+              onChange={e => setNServico({...nServico, nome: e.target.value})} 
+            />
+            <input 
+              placeholder="R$ Preço" 
+              type="number" 
+              className="w-24 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
+              value={nServico.preco} 
+              onChange={e => setNServico({...nServico, preco: e.target.value})} 
+            />
+          </div>
+          <Button className="w-full bg-primary text-black font-black uppercase text-xs" onClick={handleAddServico}>
+            Adicionar Serviço
+          </Button>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-2">
+          {servicos.map((s: any) => (
+            <div key={s.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+              <span className="text-sm font-bold text-white uppercase">
+                {s.nome} <span className="text-primary ml-2">R$ {formatarMoeda(s.preco)}</span>
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => onRemoveServico(s.id)} className="text-zinc-600 hover:text-red-500">
+                <Trash2 className="h-4 w-4"/>
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 💸 LANÇAR DESPESA */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 px-1">
           <TrendingDown className="h-4 w-4 text-red-500" />
@@ -177,7 +226,7 @@ export function VisaoDono({
         </div>
       </section>
 
-      {/* PERFORMANCE */}
+      {/* 🏆 PERFORMANCE (PRODUÇÃO DE HOJE) */}
       <section className="space-y-4">
         <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] ml-1">Produção de Hoje</h3>
         <div className="grid gap-2">
