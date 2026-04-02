@@ -8,7 +8,7 @@ import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
 
-// 🚀 NOSSAS GAVETAS DO REACT QUERY (Puxando os hooks que corrigimos)
+// 🚀 NOSSAS GAVETAS DO REACT QUERY
 import { 
   useBarbearia, useBarbeiros, useServicos, useDespesas, useAgendamentos,
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesDespesa, useMutacoesAgendamento
@@ -30,7 +30,7 @@ export default function Index() {
 
   const { signOut, userRole, user } = useAuth();
 
-  // 1. CARREGANDO OS DADOS DO BANCO (Usando o cache inteligente)
+  // 1. CARREGANDO OS DADOS DO BANCO
   const { data: barbearia, isLoading: loadingBarbearia } = useBarbearia();
   const slug = barbearia?.slug;
   const isDono = barbearia?.isDono;
@@ -40,13 +40,12 @@ export default function Index() {
   const { data: agendamentos = [], isLoading: loadingAgendamentos } = useAgendamentos(slug);
   const { data: despesas = [], isLoading: loadingDespesas } = useDespesas(isDono ? slug : undefined);
 
-  // 2. MUTAÇÕES (Ações de escrita no banco)
+  // 2. MUTAÇÕES
   const mutacoesBarbeiro = useMutacoesBarbeiro();
   const mutacoesServico = useMutacoesServico();
   const mutacoesDespesa = useMutacoesDespesa();
   const mutacoesAgendamento = useMutacoesAgendamento();
 
-  // Ajusta o barbeiro selecionado inicial para ser o usuário logado
   useEffect(() => {
     if (barbeiros.length > 0 && !barbeiroSelecionadoId) {
       const meuPerfil = barbeiros.find((b: any) => b.id === user?.id) || barbeiros[0];
@@ -54,19 +53,16 @@ export default function Index() {
     }
   }, [barbeiros, user?.id, barbeiroSelecionadoId]);
 
-  // --- 📊 LÓGICA FINANCEIRA E FILTROS (useMemo para não travar o app) ---
+  // --- 📊 LÓGICA FINANCEIRA E FILTROS ---
   const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
-
-    // Filtros de Data e Papel
     const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro);
     
     const agParaExibir = isDono 
-      ? (barbeiroSelecionadoId ? noDia.filter(ag => ag.barbeiro_id === barbeiroSelecionadoId) : noDia)
+      ? (barbeiroSelecionadoId ? noDia.filter((ag: any) => ag.barbeiro_id === barbeiroSelecionadoId) : noDia)
       : noDia.filter((ag: any) => ag.barbeiro_id === user?.id);
 
-    // Cálculos Financeiros
     const fatHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => {
         const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
@@ -102,12 +98,11 @@ export default function Index() {
     };
   }, [agendamentos, servicos, despesas, dataFiltro, isDono, user?.id, barbeiroSelecionadoId]);
 
-  // Auxiliares de UI
   const comissaoPorBarbeiroHoje = barbeiros.map((b: any) => {
-    const cortes = agendamentos.filter(ag => ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado");
+    const cortes = agendamentos.filter((ag: any) => ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado");
     return {
       barbeiro: b,
-      total: cortes.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0),
+      total: cortes.reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0),
       cortes: cortes.length
     };
   });
@@ -116,8 +111,6 @@ export default function Index() {
     agendamentos.filter((ag: any) => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado").map((ag: any) => ag.horario);
 
   const servicos_find = (id: string) => servicos.find((s: any) => s.id === id);
-
-  // --- RENDERS ---
 
   if (loadingBarbearia || loadingBarbeiros || loadingServicos || loadingAgendamentos) {
     return (
@@ -157,14 +150,7 @@ export default function Index() {
               className="bg-background border rounded-full pl-9 pr-4 py-1.5 text-sm font-medium focus:ring-2 focus:ring-primary outline-none transition-all color-scheme-dark"
             />
           </div>
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            className="rounded-full px-4 h-9 text-xs font-bold uppercase"
-            onClick={() => setDataFiltro(getLocalDate())}
-          >
-            Hoje
-          </Button>
+          <Button variant="secondary" size="sm" className="rounded-full px-4 h-9 text-xs font-bold uppercase" onClick={() => setDataFiltro(getLocalDate())}> Hoje </Button>
         </div>
       )}
 
@@ -181,18 +167,13 @@ export default function Index() {
             isDono={isDono || false}
             onNovoAgendamento={(ag: any) => mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug })}
             onStatusChange={(id: string, status: string) => {
-              // Se for finalizar, calculamos a comissão no ato para salvar no banco
               if (status === "Finalizado") {
                 const agAtual = agendamentos.find((a: any) => a.id === id);
                 const servico = servicos_find(agAtual?.servico_id);
                 const barbeiro = barbeiros.find((b: any) => b.id === agAtual?.barbeiro_id);
                 const valorComissao = (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
-                
-                return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ 
-                  id, status: "Finalizado", comissaoGanha: valorComissao, slug 
-                });
+                return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status: "Finalizado", comissaoGanha: valorComissao, slug });
               }
-              // Senão, apenas atualizamos o status (Pendente/Confirmado/Cancelado)
               return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status, slug });
             }}
           />
@@ -220,10 +201,14 @@ export default function Index() {
             dataFiltro={dataFiltro}
             onAddDespesa={(nova: any) => mutacoesDespesa.adicionarDespesa.mutate({ nova, slug })}
             onRemoveDespesa={(id: string) => mutacoesDespesa.removerDespesa.mutate({ id, slug })}
-            onAddBarbeiro={(nome: string, comissao: number, email: string, senha: string) => 
-              mutacoesBarbeiro.adicionarBarbeiro.mutate({ nome, comissao, email, senha, slug })}
+            
+            // ✅ CORREÇÃO APLICADA: Captura os argumentos individuais da VisaoDono
+            onAddBarbeiro={(nome: string, comissao_pct: number, email: string, senha: string) => 
+              mutacoesBarbeiro.adicionarBarbeiro.mutate({ nome, comissao_pct, email, senha, slug })}
             onRemoveBarbeiro={(id: string) => mutacoesBarbeiro.removerBarbeiro.mutate({ id, slug })}
-            onAddServico={(nome: string, preco: number) => mutacoesServico.adicionarServico.mutate({ nome, preco, slug })}
+            
+            onAddServico={(nome: string, preco: number) => 
+              mutacoesServico.adicionarServico.mutate({ nome, preco, slug })}
             onRemoveServico={(id: string) => mutacoesServico.removerServico.mutate({ id, slug })}
           />
         )}
@@ -231,19 +216,11 @@ export default function Index() {
 
       <nav className="fixed bottom-0 w-full bg-card border-t flex justify-around p-2 shadow-2xl z-20">
         {visibleTabs.map(t => (
-          <button 
-            key={t.id} 
-            onClick={() => setTab(t.id as any)} 
-            className={cn(
-              "flex flex-col items-center p-2 transition-all duration-300 outline-none", 
-              tab === t.id ? "text-primary scale-110 font-bold" : "text-muted-foreground opacity-60"
-            )}
-          >
+          <button key={t.id} onClick={() => setTab(t.id as any)} className={cn("flex flex-col items-center p-2 transition-all duration-300 outline-none", tab === t.id ? "text-primary scale-110 font-bold" : "text-muted-foreground opacity-60")}>
             <t.icon className="h-6 w-6"/><span className="text-[10px] mt-1 uppercase tracking-tighter">{t.label}</span>
           </button>
         ))}
       </nav>
-
       <TermosDeUso />
     </div>
   );

@@ -78,13 +78,14 @@ export function useMutacoesAgendamento() {
   return {
     adicionarAgendamento: useMutation({
       mutationFn: async ({ ag, slug }: any) => {
+        // Blindagem: ag já deve vir com nome_cliente, barbeiro_id, etc.
         const { data, error } = await supabase.from("agendamentos").insert({
-          ...ag, barbearia_slug: slug, status: "Pendente"
+          ...ag, 
+          barbearia_slug: slug, 
+          status: "Pendente"
         }).select().single();
-        if (error) {
-          console.error("Erro no Agendamento:", error.message);
-          throw error;
-        }
+        
+        if (error) throw error;
         return data;
       },
       onSuccess: (_, vars) => {
@@ -118,11 +119,12 @@ export function useMutacoesBarbeiro() {
   return {
     adicionarBarbeiro: useMutation({
       mutationFn: async ({ nome, comissao_pct, email, senha, slug }: any) => {
-        // Validação manual para evitar o erro 422 bobo
-        if (!email.includes("@")) throw new Error("E-mail inválido.");
-        if (senha.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres.");
+        // ✅ BLINDAGEM DE ERRO: Checa se os campos existem antes de operar
+        if (!email || typeof email !== 'string') throw new Error("E-mail é obrigatório.");
+        if (!email.includes("@")) throw new Error("O e-mail digitado não é válido.");
+        if (!senha || senha.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres.");
+        if (!slug) throw new Error("Erro de identificação da barbearia (Slug faltando).");
 
-        // Criamos o cliente temporário para não deslogar o admin atual
         const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
         
         const { data: authData, error: authError } = await tempSupabase.auth.signUp({ 
@@ -131,27 +133,26 @@ export function useMutacoesBarbeiro() {
         });
 
         if (authError) throw authError;
-
         const userId = authData.user!.id;
         
-        // Inserções em cascata
-        const roleRes = await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
-        if (roleRes.error) throw roleRes.error;
+        // Inserções em cascata no banco
+        const { error: roleError } = await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
+        if (roleError) throw roleError;
 
-        const barbRes = await supabase.from("barbeiros").insert({ 
+        const { error: barbError } = await supabase.from("barbeiros").insert({ 
           id: userId, 
           nome, 
           comissao_pct, 
           barbearia_slug: slug 
         });
-        if (barbRes.error) throw barbRes.error;
+        if (barbError) throw barbError;
       },
       onSuccess: (_, vars) => {
         queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
         toast.success("Barbeiro cadastrado e liberado! ✂️");
       },
       onError: (err: any) => {
-        console.error("Erro no cadastro de Barbeiro:", err);
+        console.error("Erro no cadastro:", err.message);
         toast.error(`Falha no cadastro: ${err.message}`);
       }
     }),
@@ -200,6 +201,7 @@ export function useMutacoesServico() {
   return {
     adicionarServico: useMutation({
       mutationFn: async ({ nome, preco, slug }: any) => {
+        if (!nome || !preco) throw new Error("Nome e preço são obrigatórios.");
         const { error } = await supabase.from("servicos").insert({ nome, preco, barbearia_slug: slug });
         if (error) throw error;
       },
