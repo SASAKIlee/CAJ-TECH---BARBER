@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TrendingDown, Plus, Trash2, Users, Briefcase } from "lucide-react";
+import { TrendingDown, Plus, Trash2, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema, despesaSchema } from "@/lib/schemas";
@@ -31,7 +31,6 @@ export function VisaoDono({
 
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
-  // Gera data local pura para o validador
   const getDataAtualLocal = () => {
     const agora = new Date();
     return new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
@@ -45,21 +44,12 @@ export function VisaoDono({
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
   };
 
-  const handleAddServico = () => {
-    const validacao = servicoSchema.safeParse(nServico);
-    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
-    onAddServico(validacao.data.nome, validacao.data.preco);
-    toast.success("Serviço adicionado!");
-    setNServico({ nome: "", preco: "" });
-  };
-
   const handleAddDespesa = () => {
     const dataObjeto = getDataAtualLocal();
     const validacao = despesaSchema.safeParse({ descricao: novaDesc, valor: novoValor, data: dataObjeto });
 
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
 
-    // 🛡️ Blindagem de data: Transformamos o Date em string YYYY-MM-DD local
     const y = dataObjeto.getFullYear();
     const m = String(dataObjeto.getMonth() + 1).padStart(2, '0');
     const d = String(dataObjeto.getDate()).padStart(2, '0');
@@ -90,7 +80,7 @@ export function VisaoDono({
         Visualizando: <span className="text-white">{formatarDataExibicao(dataFiltro)}</span>
       </div>
 
-      {/* 📊 DASHBOARD FINANCEIRO - Grid Responsivo */}
+      {/* 📊 DASHBOARD FINANCEIRO */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Card className="p-4 bg-[#161616] border-zinc-800">
           <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Entradas Hoje</p>
@@ -113,22 +103,44 @@ export function VisaoDono({
         </Card>
       </div>
 
-      {/* GESTÃO DE EQUIPE */}
+      {/* GESTÃO DE EQUIPE (UNIFICADA) */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 px-1">
           <Users className="h-4 w-4 text-primary" />
           <h3 className="font-black text-white uppercase text-sm tracking-tighter">Equipe</h3>
         </div>
         <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-3">
-          <input placeholder="Nome do Barbeiro" className="w-full bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
-            value={nBarbeiro.nome} onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} />
+          <input 
+            placeholder="Nome do Barbeiro" 
+            className="w-full bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+            value={nBarbeiro.nome} 
+            onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} 
+          />
           <div className="flex gap-2">
-            <input placeholder="Email" className="flex-1 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
-              value={nBarbeiro.email} onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} />
-            <input placeholder="%" type="number" className="w-20 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
-              value={nBarbeiro.comissao} onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} />
+            <input 
+              placeholder="Email de Login" 
+              className="flex-1 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+              value={nBarbeiro.email} 
+              onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} 
+            />
+            <input 
+              placeholder="%" 
+              type="number" 
+              className="w-20 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+              value={nBarbeiro.comissao} 
+              onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} 
+            />
           </div>
-          <Button className="w-full bg-primary text-black font-black uppercase text-xs" onClick={handleAddBarbeiro}>Cadastrar Barbeiro</Button>
+          <input 
+            placeholder="Senha (mínimo 6 caracteres)" 
+            type="password"
+            className="w-full bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white placeholder:text-zinc-600 focus:border-primary outline-none" 
+            value={nBarbeiro.senha} 
+            onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} 
+          />
+          <Button className="w-full bg-primary text-black font-black uppercase text-xs" onClick={handleAddBarbeiro}>
+            Adicionar Barbeiro
+          </Button>
         </Card>
         
         <div className="grid gap-2">
@@ -141,7 +153,7 @@ export function VisaoDono({
         </div>
       </section>
 
-      {/* LANÇAR DESPESA */}
+      {/* LANÇAR DESPESA (RECUPERADA) */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 px-1">
           <TrendingDown className="h-4 w-4 text-red-500" />
@@ -149,13 +161,12 @@ export function VisaoDono({
         </div>
         <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
           <input placeholder="Ex: Aluguel, Luz..." className="flex-1 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
-            value={novaDesc} onChange={e => setNovaDesc(e.target.value)} />
+            value={novaDesc} onChange={(e) => setNovaDesc(e.target.value)} />
           <input placeholder="R$" type="number" className="w-24 bg-zinc-900 border-zinc-800 rounded-md p-2 text-sm text-white focus:border-primary outline-none" 
-            value={novoValor} onChange={e => setNovoValor(e.target.value)} />
+            value={novoValor} onChange={(e) => setNovoValor(e.target.value)} />
           <Button className="bg-red-500 text-white font-black" onClick={handleAddDespesa}><Plus className="h-5 w-5"/></Button>
         </Card>
         
-        {/* Lista de despesas recentes */}
         <div className="space-y-1">
           {despesas.slice(0, 3).map((desp: any, idx: number) => (
             <div key={idx} className="flex justify-between items-center bg-zinc-900/30 p-2 rounded-md border border-white/5">
