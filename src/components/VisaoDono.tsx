@@ -1,19 +1,15 @@
 import { useState } from "react";
-import { DollarSign, TrendingDown, Users, Scissors, Briefcase, Plus, Trash2, Wallet } from "lucide-react";
+import { Users, Scissors, Plus, Trash2, DollarSign } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { barbeiroSchema, servicoSchema, despesaSchema } from "@/lib/schemas";
+import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
 import { toast } from "sonner";
 
 export function VisaoDono({ 
   faturamentoHoje = 0, 
   comissoesAPagarHoje = 0, 
-  despesasNoDia = 0, 
   lucroRealHoje = 0, 
   faturamentoMensal = 0,
-  despesas = [], 
-  onAddDespesa, 
-  onRemoveDespesa, 
   comissaoPorBarbeiroHoje = [], 
   barbeiros = [], 
   servicos = [], 
@@ -23,11 +19,9 @@ export function VisaoDono({
   onRemoveServico
 }: any) {
   
-  // Estados dos formulários
+  // Estados dos formulários (Apenas Barbeiro e Serviço)
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
   const [nServico, setNServico] = useState({ nome: "", preco: "" });
-  const [novaDesc, setNovaDesc] = useState("");
-  const [novoValor, setNovoValor] = useState("");
 
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
@@ -60,28 +54,10 @@ export function VisaoDono({
     setNServico({ nome: "", preco: "" });
   };
 
-  const handleAddDespesa = () => {
-    const validacao = despesaSchema.safeParse({
-      descricao: novaDesc,
-      valor: novoValor,
-      data: new Date()
-    });
-
-    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
-
-    onAddDespesa({
-      descricao: validacao.data.descricao,
-      valor: validacao.data.valor,
-      data: validacao.data.data
-    });
-    setNovaDesc("");
-    setNovoValor("");
-  };
-
   return (
     <div className="space-y-8 pb-32">
       
-      {/* 1. DASHBOARD FINANCEIRO */}
+      {/* 1. DASHBOARD FINANCEIRO (Faturamento - Comissões = Lucro) */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4 bg-[#161616] border-zinc-800">
           <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Entradas Hoje</p>
@@ -105,9 +81,9 @@ export function VisaoDono({
       <section className="space-y-4">
         <div className="flex items-center gap-2 px-1">
           <Users className="h-4 w-4 text-primary" />
-          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Equipe e Acessos</h3>
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter italic">Equipe e Acessos</h3>
         </div>
-        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-4">
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-4 shadow-2xl">
           <input placeholder="Nome do Barbeiro" className="w-full bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm text-white outline-none focus:border-primary" 
             value={nBarbeiro.nome} onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} />
           <div className="flex gap-2">
@@ -118,7 +94,7 @@ export function VisaoDono({
           </div>
           <input placeholder="Senha (mínimo 6 caracteres)" type="password" className="w-full bg-zinc-900 border border-zinc-800 rounded-md p-3 text-sm text-white outline-none focus:border-primary" 
             value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
-          <Button className="w-full bg-primary text-black font-black uppercase" onClick={handleAddBarbeiro}>Cadastrar Barbeiro</Button>
+          <Button className="w-full h-12 bg-primary text-black font-black uppercase" onClick={handleAddBarbeiro}>Cadastrar Barbeiro</Button>
         </Card>
         
         <div className="grid gap-2">
@@ -137,7 +113,7 @@ export function VisaoDono({
       <section className="space-y-4">
         <div className="flex items-center gap-2 px-1">
           <Scissors className="h-4 w-4 text-primary" />
-          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Serviços</h3>
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter italic">Serviços</h3>
         </div>
         <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
           <input placeholder="Nome do Serviço" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white outline-none" 
@@ -151,7 +127,7 @@ export function VisaoDono({
             <div key={s.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
               <div className="text-[10px]">
                 <p className="font-bold text-white uppercase">{s.nome}</p>
-                <p className="text-primary">R$ {formatarMoeda(s.preco)}</p>
+                <p className="text-primary font-black">R$ {formatarMoeda(s.preco)}</p>
               </div>
               <Button variant="ghost" size="icon" onClick={() => onRemoveServico(s.id)} className="h-8 w-8 text-zinc-600 hover:text-red-500">
                 <Trash2 className="h-4 w-4"/>
@@ -161,47 +137,19 @@ export function VisaoDono({
         </div>
       </section>
 
-      {/* 4. LANÇAR DESPESA */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <TrendingDown className="h-4 w-4 text-red-500" />
-          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Despesas do Dia</h3>
-        </div>
-        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
-          <input placeholder="Descrição da despesa" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white outline-none" 
-            value={novaDesc} onChange={e => setNovaDesc(e.target.value)} />
-          <input placeholder="Valor" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white outline-none" 
-            value={novoValor} onChange={e => setNovoValor(e.target.value)} />
-          <Button className="bg-red-500 text-white" onClick={handleAddDespesa}><Plus className="h-5 w-5"/></Button>
-        </Card>
-        <div className="space-y-2">
-          {despesas.filter((d: any) => d.data.split('T')[0] === new Date().toISOString().split('T')[0]).map((d: any) => (
-            <div key={d.id} className="flex justify-between items-center bg-red-500/5 p-3 rounded-lg border border-red-500/10">
-              <span className="text-xs text-white uppercase font-medium">{d.descricao}</span>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-black text-red-500">R$ {formatarMoeda(d.valor)}</span>
-                <Button variant="ghost" size="sm" onClick={() => onRemoveDespesa(d.id)} className="h-6 w-6 p-0 text-zinc-600 hover:text-red-500">
-                  <Trash2 className="h-3 w-3"/>
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 5. PRODUÇÃO DA EQUIPE */}
+      {/* 4. PERFORMANCE DA EQUIPE */}
       <section className="space-y-4">
         <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Desempenho Hoje</h3>
         <div className="grid gap-2">
           {comissaoPorBarbeiroHoje.map((item: any) => (
-            <Card key={item.barbeiro?.id} className="p-4 bg-[#161616] border-zinc-800 flex justify-between items-center">
+            <Card key={item.barbeiro?.id} className="p-4 bg-[#161616] border-zinc-800 flex justify-between items-center shadow-lg">
               <div>
                 <p className="font-bold text-white uppercase text-xs">{item.barbeiro?.nome}</p>
-                <p className="text-[9px] text-zinc-500 font-bold">{item.cortes} atendimentos</p>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-tighter">{item.cortes} atendimentos</p>
               </div>
               <div className="text-right">
                 <p className="text-[9px] text-zinc-500 font-black uppercase">A pagar</p>
-                <p className="text-lg font-black text-primary">R$ {formatarMoeda(item.total)}</p>
+                <p className="text-lg font-black text-primary italic">R$ {formatarMoeda(item.total)}</p>
               </div>
             </Card>
           ))}
