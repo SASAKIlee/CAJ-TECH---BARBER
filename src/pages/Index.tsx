@@ -13,12 +13,12 @@ import {
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesDespesa, useMutacoesAgendamento
 } from "@/hooks/useQueries";
 
-// Função para pegar data local YYYY-MM-DD sem erros de fuso
+// 🔥 FUNÇÃO BLINDADA: Pega YYYY-MM-DD do seu relógio local sem risco de fuso
 const getLocalDate = () => {
-  const data = new Date();
-  const y = data.getFullYear();
-  const m = String(data.getMonth() + 1).padStart(2, '0');
-  const d = String(data.getDate()).padStart(2, '0');
+  const agora = new Date();
+  const y = agora.getFullYear();
+  const m = String(agora.getMonth() + 1).padStart(2, '0');
+  const d = String(agora.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
 
@@ -53,31 +53,32 @@ export default function Index() {
     }
   }, [barbeiros, user?.id, barbeiroSelecionadoId]);
 
-  // --- 📊 LÓGICA FINANCEIRA EVOLUÍDA ---
+  // --- 📊 LÓGICA FINANCEIRA BLINDADA ---
   const { 
     agendamentosNoDia, 
     faturamentoHoje, 
-    faturamentoMensal, // 🚀 NOVO
+    faturamentoMensal, 
     comissoesAPagarHoje, 
     gastosHoje, 
     agendamentosBarbeiroHoje, 
     agMesBarbeiro 
   } = useMemo(() => {
     const hoje = getLocalDate();
-    const prefixoMes = hoje.substring(0, 7); // Pega "2026-04"
+    const prefixoMes = hoje.substring(0, 7); // Ex: "2026-04"
 
-    // FILTROS DO DIA
+    // Filtro do Dia selecionado
     const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro) || [];
     
-    // FILTRO DO MÊS (Agendamentos da barbearia toda para o Dono ver)
+    // Filtro do Mês para o Dono (Barbearia toda)
     const noMesGeral = agendamentos.filter((ag: any) => 
       ag.data.startsWith(prefixoMes) && ag.status === "Finalizado"
     );
 
+    // Soma Faturamento Diário
     const fatHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => sum + Number(servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0), 0);
     
-    // CÁLCULO MENSAL BRUTO
+    // Soma Faturamento Mensal Bruto
     const fatMensal = noMesGeral.reduce((sum: number, ag: any) => {
       const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
       return sum + Number(preco);
@@ -91,7 +92,7 @@ export default function Index() {
 
     const agBarbeiroHoje = isDono ? noDia : noDia.filter((ag: any) => ag.barbeiro_id === user?.id);
     
-    // Dados para a Carteira do Barbeiro logado
+    // Dados para a Carteira do Barbeiro Logado (Apenas o mês dele)
     const mesBarbeiro = agendamentos.filter((ag: any) => 
       ag.barbeiro_id === user?.id && 
       ag.data.startsWith(prefixoMes) && 
@@ -127,7 +128,7 @@ export default function Index() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center dark bg-background text-primary font-bold gap-4">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-        <p className="tracking-widest animate-pulse">CAJ TECH...</p>
+        <p className="tracking-widest animate-pulse uppercase">Sincronizando Agenda...</p>
       </div>
     );
   }
@@ -158,7 +159,7 @@ export default function Index() {
               type="date" 
               value={dataFiltro}
               onChange={(e) => setDataFiltro(e.target.value)}
-              className="bg-background border rounded-full pl-9 pr-4 py-1.5 text-sm font-medium focus:ring-2 focus:ring-primary outline-none transition-all"
+              className="bg-background border rounded-full pl-9 pr-4 py-1.5 text-sm font-medium focus:ring-2 focus:ring-primary outline-none transition-all color-scheme-dark"
             />
           </div>
           <Button 
@@ -205,7 +206,7 @@ export default function Index() {
         {tab === "dono" && (
           <VisaoDono
             faturamentoHoje={faturamentoHoje}
-            faturamentoMensal={faturamentoMensal} // ✅ ENVIANDO O NOVO VALOR
+            faturamentoMensal={faturamentoMensal} 
             comissoesAPagarHoje={comissoesAPagarHoje}
             despesasNoDia={gastosHoje}
             lucroRealHoje={faturamentoHoje - comissoesAPagarHoje - gastosHoje}
@@ -214,7 +215,6 @@ export default function Index() {
             servicos={servicos}
             despesas={despesas}
             dataFiltro={dataFiltro}
-            // ✅ AQUI GARANTIMOS QUE A DESPESA VAI COM A DATA CORRETA
             onAddDespesa={(nova: any) => mutacoesDespesa.adicionarDespesa.mutate({ nova, slug })}
             onRemoveDespesa={(id: string) => mutacoesDespesa.removerDespesa.mutate(id)}
             onAddBarbeiro={(nome: string, comissao: number, email: string, senha: string) => 
