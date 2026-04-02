@@ -41,7 +41,7 @@ export function VisaoBarbeiro({
     if (open) {
       setNovo(prev => ({ 
         ...prev, 
-        barbeiroId: barbeiroSelecionadoId,
+        barbeiroId: barbeiroSelecionadoId || "",
         data: getHojeLocal() 
       }));
     }
@@ -65,44 +65,58 @@ export function VisaoBarbeiro({
       minAtual: agora.getMinutes(), 
       hojeLocal: getHojeLocal() 
     };
-  }, [open]);
+  }, []);
 
   const handleAgendar = async () => {
-    const validacao = agendamentoSchema.safeParse({
+    const toastId = toast.loading("Processando agendamento...");
+    
+    const dataParaValidar = {
       nome: novo.nome,
       telefone: novo.telefone,
       servicoId: novo.servicoId,
       barbeiroId: novo.barbeiroId,
       data: novo.data,
       horario: novo.horario
-    });
+    };
 
-    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
+    const validacao = agendamentoSchema.safeParse(dataParaValidar);
 
-    const res = await onNovoAgendamento({
-      nomeCliente: validacao.data.nome,
-      telefoneCliente: validacao.data.telefone,
-      servicoId: validacao.data.servicoId,
-      barbeiroId: validacao.data.barbeiroId, 
-      data: validacao.data.data,
-      horario: validacao.data.horario
-    });
+    if (!validacao.success) {
+      toast.dismiss(toastId);
+      return toast.error(validacao.error.errors[0].message);
+    }
 
-    if (!res?.error) {
-      setOpen(false);
-      setNovo({ nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId, data: getHojeLocal(), horario: "" });
+    try {
+      const res = await onNovoAgendamento({
+        nomeCliente: validacao.data.nome,
+        telefoneCliente: validacao.data.telefone,
+        servicoId: validacao.data.servicoId,
+        barbeiroId: validacao.data.barbeiroId, 
+        data: validacao.data.data,
+        horario: validacao.data.horario
+      });
+
+      toast.dismiss(toastId);
+
+      if (!res?.error) {
+        setOpen(false);
+        setNovo({ nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId, data: getHojeLocal(), horario: "" });
+        toast.success("Horário agendado com sucesso! ✂️");
+      } else {
+        toast.error(res.error);
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Erro crítico ao salvar. Tente novamente.");
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* HEADER DA AGENDA */}
       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-2">
         <div>
           <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Agenda</h2>
-          {isDono && (
-             <p className="text-[10px] font-bold text-primary uppercase">Visão Administrativa</p>
-          )}
+          {isDono && <p className="text-[10px] font-bold text-primary uppercase">Visão Administrativa</p>}
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
@@ -111,7 +125,10 @@ export function VisaoBarbeiro({
               <Plus className="h-5 w-5 stroke-[3px]"/> Novo Agendamento
             </Button>
           </DialogTrigger>
-          <DialogContent className="dark bg-[#0A0A0A] border-zinc-800 text-white max-w-[95vw] sm:max-w-md p-6 rounded-[2rem]">
+          <DialogContent 
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            className="dark bg-[#0A0A0A] border-zinc-800 text-white max-w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar"
+          >
             <DialogHeader>
               <DialogTitle className="text-white font-black uppercase italic text-xl">Novo Horário</DialogTitle>
             </DialogHeader>
@@ -123,7 +140,7 @@ export function VisaoBarbeiro({
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
-                <Input placeholder="Ex: 11999998888" className="bg-zinc-900 border-zinc-800 h-12" value={novo.telefone} onChange={e => setNovo({...novo, telefone: e.target.value})} />
+                <Input type="tel" placeholder="Ex: 11999998888" className="bg-zinc-900 border-zinc-800 h-12" value={novo.telefone} onChange={e => setNovo({...novo, telefone: e.target.value})} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -170,6 +187,7 @@ export function VisaoBarbeiro({
                     return (
                       <Button 
                         key={h} 
+                        type="button"
                         variant={novo.horario === h ? "default" : "outline"} 
                         disabled={disable} 
                         onClick={() => setNovo({...novo, horario: h})}
@@ -186,7 +204,15 @@ export function VisaoBarbeiro({
                 </div>
               </div>
 
-              <Button className="w-full h-14 bg-primary text-black font-black uppercase rounded-xl mt-2" onClick={handleAgendar}>
+              <Button 
+                type="button"
+                className="w-full h-14 bg-primary text-black font-black uppercase rounded-xl mt-2 active:scale-95 touch-manipulation" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleAgendar();
+                }}
+              >
                 Confirmar
               </Button>
             </div>
@@ -194,7 +220,6 @@ export function VisaoBarbeiro({
         </Dialog>
       </div>
 
-      {/* SELETOR DE BARBEIROS (Mobile friendly) */}
       {isDono && (
         <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar -mx-4 px-4">
           <Button 
@@ -219,8 +244,7 @@ export function VisaoBarbeiro({
         </div>
       )}
 
-      {/* LISTA DE AGENDAMENTOS (Ajustado para cliques mobile) */}
-      <div className="space-y-4 pb-32"> {/* pb-32 garante que o menu de baixo não cubra o último card */}
+      <div className="space-y-4 pb-32">
         {agendamentos.length === 0 ? (
           <div className="text-center py-16 bg-zinc-900/30 rounded-[2rem] border-2 border-dashed border-zinc-800/50">
             <Clock className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
@@ -264,7 +288,6 @@ export function VisaoBarbeiro({
                     </div>
                   </div>
                   
-                  {/* BOTÕES DE AÇÃO: Área de clique expandida para celular (h-12) */}
                   {ag.status === "Pendente" && (
                     <div className="flex items-center gap-3 pt-2 sm:pt-0">
                       <Button 
