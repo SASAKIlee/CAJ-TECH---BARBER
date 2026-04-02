@@ -15,10 +15,11 @@ export default defineConfig({
         short_name: 'CAJBarber',
         description: 'Gestão Profissional para Barbearias',
         theme_color: '#000000',
-        background_color: '#000000', // Cor de fundo ao abrir o app
-        display: 'standalone',       // 🚀 O pulo do gato: Faz o site abrir sem a barra do navegador
+        background_color: '#000000',
+        display: 'standalone',
         orientation: 'portrait',
         icons: [
+          // 🚀 Agora sim, os arquivos físicos existem!
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
@@ -30,10 +31,10 @@ export default defineConfig({
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'pwa-512x512.png', // Usamos o mesmo de 512 para a opção 'maskable'
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable' // Garante que o ícone fique bonito em qualquer celular
+            purpose: 'any maskable'
           }
         ]
       },
