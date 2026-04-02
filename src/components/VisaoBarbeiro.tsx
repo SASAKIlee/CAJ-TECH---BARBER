@@ -41,7 +41,15 @@ export function VisaoBarbeiro({
   }, [open]);
 
   const handleAgendar = async () => {
-    const validacao = agendamentoSchema.safeParse(novo);
+    const validacao = agendamentoSchema.safeParse({
+      nome: novo.nome,
+      telefone: novo.telefone,
+      servicoId: novo.servicoId,
+      barbeiroId: novo.barbeiroId,
+      data: novo.data,
+      horario: novo.horario
+    });
+
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
 
     const res = await onNovoAgendamento({
@@ -63,7 +71,6 @@ export function VisaoBarbeiro({
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-6">
-        {/* Título da Agenda forçado em Branco */}
         <h2 className="text-xl font-black text-white uppercase tracking-tight">Agenda</h2>
         
         <Dialog open={open} onOpenChange={setOpen}>
@@ -72,30 +79,78 @@ export function VisaoBarbeiro({
               <Plus className="h-5 w-5"/> Agendar
             </Button>
           </DialogTrigger>
-          <DialogContent className="dark bg-[#121212] border-zinc-800 text-white">
+          <DialogContent className="dark bg-[#121212] border-zinc-800 text-white max-w-[95vw] sm:max-w-md">
             <DialogHeader><DialogTitle className="text-white font-bold">Novo Horário</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-4">
-              <Input placeholder="Nome do Cliente" className="bg-zinc-900 text-white border-zinc-800 h-12" value={novo.nome} onChange={e => setNovo({...novo, nome: e.target.value})} />
-              <Input placeholder="WhatsApp" className="bg-zinc-900 text-white border-zinc-800 h-12" value={novo.telefone} onChange={e => setNovo({...novo, telefone: e.target.value})} />
-              <Input type="date" className="bg-zinc-900 text-white border-zinc-800 h-12 color-scheme-dark" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value, horario: ""})} />
               
-              <div className="grid grid-cols-4 gap-2">
-                {horarios.map(h => {
-                  const [hH, mH] = h.split(":").map(Number);
-                  const isHoje = novo.data === hojeLocal;
-                  const passes = isHoje && (hH < horaAtual || (hH === horaAtual && mH <= minAtual));
-                  const busy = horariosOcupados(novo.data, novo.barbeiroId).includes(h);
-                  const disable = !novo.barbeiroId || busy || passes;
-
-                  return (
-                    <Button key={h} variant={novo.horario === h ? "default" : "outline"} disabled={disable} onClick={() => setNovo({...novo, horario: h})}
-                      className={`text-[10px] font-bold h-10 ${novo.horario === h ? 'bg-primary text-black' : 'text-white border-zinc-800'} ${disable ? 'opacity-10' : ''}`}>
-                      {h}
-                    </Button>
-                  )
-                })}
+              {/* NOME */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Nome do Cliente</label>
+                <Input placeholder="Ex: João Silva" className="bg-zinc-900 text-white border-zinc-800 h-12" value={novo.nome} onChange={e => setNovo({...novo, nome: e.target.value})} />
               </div>
-              <Button className="w-full h-14 bg-primary text-black font-black" onClick={handleAgendar}>CONFIRMAR</Button>
+
+              {/* WHATSAPP */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
+                <Input placeholder="1799..." className="bg-zinc-900 text-white border-zinc-800 h-12" value={novo.telefone} onChange={e => setNovo({...novo, telefone: e.target.value})} />
+              </div>
+
+              {/* BARBEIRO (VOLTOU!) */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Barbeiro Responsável</label>
+                <Select value={novo.barbeiroId} onValueChange={v => setNovo({...novo, barbeiroId: v, horario: ""})}>
+                  <SelectTrigger className="bg-zinc-900 text-white border-zinc-800 h-12">
+                    <SelectValue placeholder="Selecione o Barbeiro"/>
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                    {barbeiros.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* SERVIÇO (VOLTOU!) */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Serviço</label>
+                <Select value={novo.servicoId} onValueChange={v => setNovo({...novo, servicoId: v})}>
+                  <SelectTrigger className="bg-zinc-900 text-white border-zinc-800 h-12">
+                    <SelectValue placeholder="O que vai fazer?"/>
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                    {servicos.map((s:any) => <SelectItem key={s.id} value={s.id}>{s.nome} - R$ {s.preco}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* DATA */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
+                <Input type="date" className="bg-zinc-900 text-white border-zinc-800 h-12 color-scheme-dark" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value, horario: ""})} />
+              </div>
+              
+              {/* HORÁRIOS */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Horários Disponíveis</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {horarios.map(h => {
+                    const [hH, mH] = h.split(":").map(Number);
+                    const isHoje = novo.data === hojeLocal;
+                    const passes = isHoje && (hH < horaAtual || (hH === horaAtual && mH <= minAtual));
+                    const busy = horariosOcupados(novo.data, novo.barbeiroId).includes(h);
+                    const disable = !novo.barbeiroId || busy || passes;
+
+                    return (
+                      <Button key={h} variant={novo.horario === h ? "default" : "outline"} disabled={disable} onClick={() => setNovo({...novo, horario: h})}
+                        className={`text-[10px] font-bold h-10 ${novo.horario === h ? 'bg-primary text-black' : 'text-white border-zinc-800'} ${disable ? 'opacity-10' : ''}`}>
+                        {h}
+                      </Button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <Button className="w-full h-14 bg-primary text-black font-black uppercase rounded-xl" onClick={handleAgendar}>
+                CONFIRMAR AGENDAMENTO
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -104,7 +159,7 @@ export function VisaoBarbeiro({
       <div className="space-y-3">
         {agendamentosBarbeiroHoje.length === 0 ? (
           <div className="text-center py-20 bg-zinc-900/30 rounded-[2rem] border-2 border-dashed border-zinc-800/50">
-            <p className="text-zinc-500 font-bold uppercase text-xs">Agenda vazia</p>
+            <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Agenda vazia para este dia</p>
           </div>
         ) : (
           agendamentosBarbeiroHoje.map((ag: any) => (
@@ -116,13 +171,10 @@ export function VisaoBarbeiro({
               <div className="flex justify-between items-center">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
-                    {/* Horário: Forçado Branco */}
                     <span className="text-3xl font-black text-white tracking-tighter">{ag.horario}</span>
                     <Badge className="bg-zinc-800 text-zinc-400 border-none text-[8px]">{ag.status.toUpperCase()}</Badge>
                   </div>
-                  {/* Nome do Cliente: Forçado Branco */}
                   <p className="font-bold text-lg text-white uppercase">{ag.nome_cliente}</p>
-                  {/* Serviço: Cor Primária */}
                   <p className="text-xs font-black text-primary uppercase">{servicos_find(ag.servico_id)?.nome}</p>
                 </div>
                 
