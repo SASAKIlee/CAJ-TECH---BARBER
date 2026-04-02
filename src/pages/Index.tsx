@@ -6,6 +6,7 @@ import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
 import { VisaoDono } from "@/components/VisaoDono";
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
+import { TermosDeUso } from "@/components/TermosDeUso"; // ✅ IMPORTADO
 
 // 🚀 NOSSAS GAVETAS DO REACT QUERY
 import { 
@@ -13,7 +14,7 @@ import {
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesDespesa, useMutacoesAgendamento
 } from "@/hooks/useQueries";
 
-// 🔥 FUNÇÃO BLINDADA: Pega YYYY-MM-DD do seu relógio local sem risco de fuso
+// 🔥 FUNÇÃO BLINDADA: Pega YYYY-MM-DD local
 const getLocalDate = () => {
   const agora = new Date();
   const y = agora.getFullYear();
@@ -53,32 +54,34 @@ export default function Index() {
     }
   }, [barbeiros, user?.id, barbeiroSelecionadoId]);
 
-  // --- 📊 LÓGICA FINANCEIRA BLINDADA ---
+  // --- 📊 LÓGICA FINANCEIRA E FILTROS ---
   const { 
-    agendamentosNoDia, 
     faturamentoHoje, 
     faturamentoMensal, 
     comissoesAPagarHoje, 
     gastosHoje, 
-    agendamentosBarbeiroHoje, 
+    agendamentosParaExibir, 
     agMesBarbeiro 
   } = useMemo(() => {
     const hoje = getLocalDate();
-    const prefixoMes = hoje.substring(0, 7); // Ex: "2026-04"
+    const prefixoMes = hoje.substring(0, 7);
 
-    // Filtro do Dia selecionado
     const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro) || [];
     
-    // Filtro do Mês para o Dono (Barbearia toda)
+    const agParaExibir = isDono 
+      ? (barbeiroSelecionadoId ? noDia.filter(ag => ag.barbeiro_id === barbeiroSelecionadoId) : noDia)
+      : noDia.filter((ag: any) => ag.barbeiro_id === user?.id);
+
     const noMesGeral = agendamentos.filter((ag: any) => 
       ag.data.startsWith(prefixoMes) && ag.status === "Finalizado"
     );
 
-    // Soma Faturamento Diário
     const fatHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
-      .reduce((sum: number, ag: any) => sum + Number(servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0), 0);
+      .reduce((sum: number, ag: any) => {
+        const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
+        return sum + Number(preco);
+      }, 0);
     
-    // Soma Faturamento Mensal Bruto
     const fatMensal = noMesGeral.reduce((sum: number, ag: any) => {
       const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
       return sum + Number(preco);
@@ -90,9 +93,6 @@ export default function Index() {
     const gastos = despesas.filter((d: any) => d.data === dataFiltro)
       .reduce((sum: number, d: any) => sum + Number(d.valor || 0), 0);
 
-    const agBarbeiroHoje = isDono ? noDia : noDia.filter((ag: any) => ag.barbeiro_id === user?.id);
-    
-    // Dados para a Carteira do Barbeiro Logado (Apenas o mês dele)
     const mesBarbeiro = agendamentos.filter((ag: any) => 
       ag.barbeiro_id === user?.id && 
       ag.data.startsWith(prefixoMes) && 
@@ -100,28 +100,29 @@ export default function Index() {
     );
 
     return { 
-      agendamentosNoDia: noDia, 
       faturamentoHoje: fatHoje, 
       faturamentoMensal: fatMensal,
       comissoesAPagarHoje: comissoes, 
       gastosHoje: gastos, 
-      agendamentosBarbeiroHoje: agBarbeiroHoje, 
+      agendamentosParaExibir: agParaExibir, 
       agMesBarbeiro: mesBarbeiro 
     };
-  }, [agendamentos, servicos, despesas, dataFiltro, isDono, user?.id]);
+  }, [agendamentos, servicos, despesas, dataFiltro, isDono, user?.id, barbeiroSelecionadoId]);
 
-  const comissaoPorBarbeiroHoje = barbeiros.map((b: any) => ({
-    barbeiro: b,
-    total: agendamentosNoDia.filter((ag: any) => ag.barbeiro_id === b.id && ag.status === "Finalizado").reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0),
-    cortes: agendamentosNoDia.filter((ag: any) => ag.barbeiro_id === b.id && ag.status === "Finalizado").length
-  }));
+  const comissaoPorBarbeiroHoje = barbeiros.map((b: any) => {
+    const cortesDoBarbeiro = agendamentos.filter(ag => ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado");
+    return {
+      barbeiro: b,
+      total: cortesDoBarbeiro.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0),
+      cortes: cortesDoBarbeiro.length
+    };
+  });
 
   const horariosOcupados = (data: string, bId: string) => 
     agendamentos.filter((ag: any) => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado").map((ag: any) => ag.horario);
 
   const servicos_find = (id: string) => servicos.find((s: any) => s.id === id);
 
-  // --- RENDERIZAÇÃO ---
   const isLoading = loadingBarbearia || loadingBarbeiros || loadingServicos || loadingAgendamentos || (isDono && loadingDespesas);
 
   if (isLoading) {
@@ -165,7 +166,7 @@ export default function Index() {
           <Button 
             variant="secondary" 
             size="sm" 
-            className="rounded-full px-4 h-9"
+            className="rounded-full px-4 h-9 text-xs font-bold uppercase"
             onClick={() => setDataFiltro(getLocalDate())}
           >
             Hoje
@@ -178,20 +179,23 @@ export default function Index() {
           <VisaoBarbeiro
             barbeiros={barbeiros} 
             servicos={servicos}
-            agendamentosBarbeiroHoje={agendamentosBarbeiroHoje}
+            agendamentos={agendamentosParaExibir}
             barbeiroSelecionadoId={barbeiroSelecionadoId}
             setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
             horariosOcupados={horariosOcupados}
             servicos_find={servicos_find}
+            isDono={isDono}
             onNovoAgendamento={(ag: any) => mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug })}
-            onFinalizar={(id: string) => {
-              const agAtual = agendamentos.find((a: any) => a.id === id);
-              const servico = servicos_find(agAtual?.servico_id);
-              const barbeiro = barbeiros.find((b: any) => b.id === agAtual?.barbeiro_id);
-              const valorComissao = (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
-              return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status: "Finalizado", comissaoGanha: valorComissao });
+            onStatusChange={(id: string, status: string) => {
+              if (status === "Finalizado") {
+                const agAtual = agendamentos.find((a: any) => a.id === id);
+                const servico = servicos_find(agAtual?.servico_id);
+                const barbeiro = barbeiros.find((b: any) => b.id === agAtual?.barbeiro_id);
+                const valorComissao = (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
+                return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status: "Finalizado", comissaoGanha: valorComissao });
+              }
+              return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status });
             }}
-            onCancelar={(id: string) => mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status: "Cancelado" })}
           />
         )}
 
@@ -236,10 +240,13 @@ export default function Index() {
               tab === t.id ? "text-primary scale-110 font-bold" : "text-muted-foreground opacity-60"
             )}
           >
-            <t.icon className="h-6 w-6"/><span className="text-[10px] mt-1">{t.label}</span>
+            <t.icon className="h-6 w-6"/><span className="text-[10px] mt-1 uppercase tracking-tighter">{t.label}</span>
           </button>
         ))}
       </nav>
+
+      {/* ✅ MODAL DE TERMOS E COMPROMISSO */}
+      <TermosDeUso />
     </div>
   );
 }
