@@ -53,14 +53,12 @@ export function useAgendamentos(slug?: string) {
       .on(
         'postgres_changes', 
         { 
-          event: '*', // Escuta TUDO: Insert, Update e Delete
+          event: '*', 
           schema: 'public', 
           table: 'agendamentos', 
           filter: `barbearia_slug=eq.${slug}` 
         }, 
         (payload) => {
-          console.log("Realtime: Mudança na agenda detectada!", payload);
-          // Invalida a chave específica para garantir que o reload aconteça
           queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
         }
       )
@@ -91,10 +89,18 @@ export function useMutacoesAgendamento() {
   return {
     adicionarAgendamento: useMutation({
       mutationFn: async ({ ag, slug }: any) => {
+        // DETETIVE LIGADO: Imprime o que estamos enviando pro banco para investigar
+        console.log("DADOS ENVIADOS PRO BANCO:", { ...ag, barbearia_slug: slug, status: "Pendente" });
+
         const { data, error } = await supabase.from("agendamentos").insert({
           ...ag, barbearia_slug: slug, status: "Pendente"
         }).select().single();
-        if (error) throw error;
+        
+        if (error) {
+          // O pulo do gato: o erro exato que o Supabase retornou
+          console.error("💥 ERRO EXATO DO SUPABASE:", error);
+          throw error;
+        }
         return data;
       },
       onSuccess: (_, vars) => {
@@ -111,7 +117,6 @@ export function useMutacoesAgendamento() {
         if (error) throw error;
       },
       onSuccess: (_, vars) => {
-        // ✅ IMPORTANTE: Invalida usando o slug para o Realtime do outro lado reagir
         queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
         toast.success(`Status atualizado para ${vars.status}`);
       }
@@ -138,13 +143,15 @@ export function useMutacoesBarbeiro() {
   const queryClient = useQueryClient();
   return {
     adicionarBarbeiro: useMutation({
-      mutationFn: async ({ nome, comissao, email, senha, slug }: any) => {
+      // ✅ CORREÇÃO: Recebendo comissao_pct ao invés de comissao
+      mutationFn: async ({ nome, comissao_pct, email, senha, slug }: any) => {
         const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
         const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email, password: senha });
         if (authError) throw authError;
         const userId = authData.user!.id;
+        
         await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
-        await supabase.from("barbeiros").insert({ id: userId, nome, comissao_pct: comissao, barbearia_slug: slug });
+        await supabase.from("barbeiros").insert({ id: userId, nome, comissao_pct, barbearia_slug: slug });
       },
       onSuccess: (_, vars) => {
         queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
