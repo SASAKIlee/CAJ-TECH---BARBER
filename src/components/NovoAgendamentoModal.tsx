@@ -11,47 +11,21 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Horários de 30 em 30 min (conforme seu código original)
 const HORARIOS = Array.from({ length: 21 }, (_, i) => {
   const h = Math.floor(i / 2) + 9;
   const m = i % 2 === 0 ? "00" : "30";
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-interface BarbeiroView {
-  id: string;
-  nome: string;
-  comissao_pct: number;
-}
-
-interface ServicoView {
-  id: string;
-  nome: string;
-  preco: number;
-}
-
 interface NovoAgendamentoProps {
-  barbeiros: BarbeiroView[];
-  servicos: ServicoView[];
+  barbeiros: any[];
+  servicos: any[];
   horariosOcupados: (data: string, barbeiroId: string) => string[];
-  onSalvar: (ag: { 
-    data: string; 
-    horario: string; 
-    nomeCliente: string; 
-    telefoneCliente: string; 
-    barbeiroId: string; 
-    servicoId: string 
-  }) => void;
+  onSalvar: (ag: any) => void;
   defaultBarbeiroId?: string;
 }
 
-export function NovoAgendamentoModal({ 
-  barbeiros, 
-  servicos, 
-  horariosOcupados, 
-  onSalvar, 
-  defaultBarbeiroId 
-}: NovoAgendamentoProps) {
+export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, onSalvar, defaultBarbeiroId }: NovoAgendamentoProps) {
   const [open, setOpen] = useState(false);
   const [nomeCliente, setNomeCliente] = useState("");
   const [telefoneCliente, setTelefoneCliente] = useState("");
@@ -65,32 +39,26 @@ export function NovoAgendamentoModal({
   }, [defaultBarbeiroId, open]);
 
   // ==========================================================
-  // 🛡️ LÓGICA DE DATA - A PROVA DE ERROS (LOCAL SÃO PAULO)
+  // 🛡️ LÓGICA BLINDADA CONTRA FUSO HORÁRIO
   // ==========================================================
   const { isHoje, dataStr } = useMemo(() => {
-    // Pegamos a data atual do computador do usuário (S.J. Rio Preto)
     const agora = new Date();
-    const hojeAno = agora.getFullYear();
-    const hojeMes = agora.getMonth();
-    const hojeDia = agora.getDate();
+    
+    // Pega "hoje" no formato 2026-04-01 baseado no relógio local, sem UTC
+    const hojeLocal = agora.toLocaleDateString('sv-SE'); 
 
     if (!data) return { isHoje: false, dataStr: "" };
 
-    // Pegamos a data selecionada no calendário
-    const selAno = data.getFullYear();
-    const selMes = data.getMonth();
-    const selDia = data.getDate();
+    // Pega a data selecionada também como string local 2026-04-02
+    // Isso ignora se a data interna está em UTC ou 00:00
+    const dataSelLocal = data.toLocaleDateString('sv-SE');
 
-    // Compara apenas os números do calendário local
-    const checkHoje = hojeAno === selAno && hojeMes === selMes && hojeDia === selDia;
-    
-    // Formata a string YYYY-MM-DD para o banco de dados
-    const sStr = `${selAno}-${String(selMes + 1).padStart(2, '0')}-${String(selDia).padStart(2, '0')}`;
-
-    return { isHoje: checkHoje, dataStr: sStr };
+    return { 
+      isHoje: hojeLocal === dataSelLocal, 
+      dataStr: dataSelLocal 
+    };
   }, [data]);
 
-  // Hora e minuto atual para bloquear horários que já passaram HOJE
   const agora = new Date();
   const horaAtual = agora.getHours();
   const minAtual = agora.getMinutes();
@@ -112,13 +80,8 @@ export function NovoAgendamentoModal({
       barbeiroId, 
       servicoId 
     });
-    
-    // Limpeza
-    setNomeCliente("");
-    setTelefoneCliente("");
-    setServicoId("");
-    setHorario("");
     setOpen(false);
+    setHorario("");
   }
 
   return (
@@ -135,28 +98,26 @@ export function NovoAgendamentoModal({
         </DialogHeader>
         
         <div className="space-y-4 pt-2">
-          {/* CAMPOS DE TEXTO */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Nome do Cliente</Label>
             <Input 
               placeholder="Nome completo" 
               value={nomeCliente} 
               onChange={(e) => setNomeCliente(e.target.value)}
-              className="bg-[#1A1A1A] border-white/10"
+              className="bg-[#1A1A1A] border-white/10 focus:ring-primary"
             />
           </div>
 
           <div className="space-y-2">
             <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">WhatsApp (DDD + Número)</Label>
             <Input 
-              placeholder="Ex: 17999998888" 
+              placeholder="Ex: 11999998888" 
               value={telefoneCliente} 
               onChange={(e) => setTelefoneCliente(e.target.value)}
               className="bg-[#1A1A1A] border-white/10"
             />
           </div>
 
-          {/* SELETORES */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Barbeiro Responsável</Label>
             <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
@@ -185,30 +146,34 @@ export function NovoAgendamentoModal({
             </Select>
           </div>
 
-          {/* CALENDÁRIO */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Data</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left bg-[#1A1A1A] border-white/10">
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {data ? format(data, "dd/MM/yyyy", { locale: ptBR }) : "Selecione"}
+                  {data ? format(data, "dd/MM/yyyy") : "Selecione a data"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10" align="start">
+              <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10">
                 <Calendar
                   mode="single"
                   selected={data}
-                  onSelect={(d) => { setData(d); setHorario(""); }}
+                  onSelect={(d) => { 
+                    if (d) {
+                      // Mata qualquer chance de fuso horário pulando o dia
+                      const safeDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+                      setData(safeDate); 
+                      setHorario(""); 
+                    }
+                  }}
                   locale={ptBR}
                   className="p-3"
-                  initialFocus
                 />
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* GRID DE HORÁRIOS */}
           {dataStr && barbeiroId && (
             <div className="space-y-3">
               <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Horários Disponíveis</Label>
@@ -217,8 +182,7 @@ export function NovoAgendamentoModal({
                   const ocupadoNoBanco = ocupados.includes(h);
                   const [hPart, mPart] = h.split(":").map(Number);
                   
-                  // TRAVA DEFINITIVA: 
-                  // Só bloqueia por horário se a data selecionada for HOJE no calendário do usuário.
+                  // TRAVA REAL: Só bloqueia se a string da data for IGUAL a de hoje
                   const isPassado = isHoje && (hPart < horaAtual || (hPart === horaAtual && mPart <= minAtual));
                   const isBloqueado = ocupadoNoBanco || isPassado;
 
@@ -231,7 +195,7 @@ export function NovoAgendamentoModal({
                       disabled={isBloqueado}
                       onClick={() => setHorario(h)}
                       className={cn(
-                        "text-xs transition-all border-white/5", 
+                        "text-xs border-white/5", 
                         horario === h ? "bg-primary text-black font-bold" : "bg-[#1A1A1A]",
                         isBloqueado && "opacity-10 line-through cursor-not-allowed"
                       )}
