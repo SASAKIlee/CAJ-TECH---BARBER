@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DollarSign, TrendingDown, Wallet, Plus, Trash2, Users, Scissors, Briefcase } from "lucide-react";
+import { DollarSign, TrendingDown, Wallet, Plus, Trash2, Users, Scissors, Briefcase, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { barbeiroSchema, servicoSchema, despesaSchema } from "@/lib/schemas";
 import { toast } from "sonner";
 
 export function VisaoDono({ 
-  faturamentoHoje = 0, comissoesAPagarHoje = 0, despesasNoDia = 0, lucroRealHoje = 0, 
+  faturamentoHoje = 0, faturamentoMensal = 0, comissoesAPagarHoje = 0, despesasNoDia = 0, lucroRealHoje = 0, 
   despesas = [], onAddDespesa, onRemoveDespesa, 
   comissaoPorBarbeiroHoje = [], dataFiltro,
   barbeiros = [], servicos = [], 
@@ -80,19 +80,33 @@ export function VisaoDono({
   };
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-6 pb-20">
       
-      {/* 1. DASHBOARD FINANCEIRO */}
+      {/* 1. RESUMO DIÁRIO (MANTIDO) */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-4 bg-[#161616] border-zinc-800">
-          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Entradas</p>
+          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Hoje (Bruto)</p>
           <p className="text-2xl font-black text-white">R$ {formatarMoeda(faturamentoHoje)}</p>
         </Card>
         <Card className="p-4 bg-primary border-none">
-          <p className="text-[10px] uppercase font-black text-black/60 tracking-widest mb-1">Lucro Real</p>
+          <p className="text-[10px] uppercase font-black text-black/60 tracking-widest mb-1">Hoje (Lucro)</p>
           <p className="text-2xl font-black text-black">R$ {formatarMoeda(lucroRealHoje)}</p>
         </Card>
       </div>
+
+      {/* 🚀 2. NOVO: RESUMO MENSAL ACUMULADO */}
+      <Card className="p-5 bg-zinc-900/40 border-2 border-dashed border-zinc-800 flex justify-between items-center overflow-hidden relative">
+        <div className="space-y-1 relative z-10">
+          <p className="text-[10px] uppercase font-black text-primary tracking-[0.2em]">Faturamento Mensal</p>
+          <p className="text-4xl font-black text-white tracking-tighter">
+            R$ {formatarMoeda(faturamentoMensal)}
+          </p>
+          <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+            Total acumulado desde o dia 01
+          </p>
+        </div>
+        <TrendingUp className="h-12 w-12 text-primary/10 absolute -right-2 -bottom-2 rotate-12" />
+      </Card>
 
       {/* 2. GESTÃO DE EQUIPE (BARBEIROS) */}
       <section className="space-y-4">

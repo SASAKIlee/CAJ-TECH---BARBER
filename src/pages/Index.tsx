@@ -52,12 +52,29 @@ export default function Index() {
 
   // --- LÓGICA FINANCEIRA (Memorizada para não recalcular a toa) ---
   const { 
-    agendamentosNoDia, faturamentoHoje, comissoesAPagarHoje, gastosHoje, agendamentosBarbeiroHoje, agMes 
+    agendamentosNoDia, faturamentoHoje, faturamentoMensal, comissoesAPagarHoje, gastosHoje, agendamentosBarbeiroHoje, agMes 
   } = useMemo(() => {
+    const hoje = getLocalDate();
+    const primeiroDiaDoMes = hoje.substring(0, 7) + "-01"; // Gera algo como "2024-05-01"
+
+    // 1. Agendamentos de HOJE
     const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro) || [];
     
-    const faturamento = noDia.filter((ag: any) => ag.status === "Finalizado")
+    // 2. Agendamentos do MÊS (desde o dia 01 até hoje)
+    const noMes = agendamentos.filter((ag: any) => 
+      ag.data >= primeiroDiaDoMes && 
+      ag.status === "Finalizado"
+    );
+
+    // CÁLCULO HOJE (BRUTO)
+    const fatHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => sum + Number(servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0), 0);
+
+    // 🚀 NOVO: CÁLCULO MENSAL (BRUTO ACUMULADO)
+    const fatMensal = noMes.reduce((sum: number, ag: any) => {
+      const preco = Number(servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0);
+      return sum + preco;
+    }, 0);
     
     const comissoes = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0);
@@ -69,7 +86,7 @@ export default function Index() {
     const mes = agendamentos.filter((ag: any) => ag.barbeiro_id === user?.id && ag.status === "Finalizado");
 
     return { 
-      agendamentosNoDia: noDia, faturamentoHoje: faturamento, comissoesAPagarHoje: comissoes, 
+      agendamentosNoDia: noDia, faturamentoHoje: fatHoje, faturamentoMensal: fatMensal, comissoesAPagarHoje: comissoes, 
       gastosHoje: gastos, agendamentosBarbeiroHoje: agBarbeiroHoje, agMes: mes 
     };
   }, [agendamentos, servicos, despesas, dataFiltro, isDono, user?.id]);
@@ -171,6 +188,7 @@ export default function Index() {
         {tab === "dono" && (
           <VisaoDono
             faturamentoHoje={faturamentoHoje}
+            faturamentoMensal={faturamentoMensal}
             comissoesAPagarHoje={comissoesAPagarHoje}
             despesasNoDia={gastosHoje}
             lucroRealHoje={faturamentoHoje - comissoesAPagarHoje - gastosHoje}

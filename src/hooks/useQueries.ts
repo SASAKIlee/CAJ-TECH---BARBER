@@ -201,11 +201,18 @@ export function useAgendamentos(slug?: string) {
   return useQuery({
     queryKey: ["agendamentos", slug],
     queryFn: async () => {
+      // 📅 Pegamos o primeiro dia do mês atual
+      const agora = new Date();
+      const primeiroDiaDoMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+        .toISOString().split('T')[0];
+
       const { data, error } = await (supabase as any)
         .from("agendamentos")
         .select("*")
         .eq("barbearia_slug", slug)
+        .gte("data", primeiroDiaDoMes) // 🚀 FILTRO: "Me dê apenas do dia 01 pra frente"
         .order("horario");
+
       if (error) throw error;
       return data || [];
     },
