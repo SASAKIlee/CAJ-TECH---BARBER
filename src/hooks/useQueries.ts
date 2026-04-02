@@ -40,31 +40,44 @@ export function useBarbearia() {
 }
 
 // ============================================================================
-// 2. AGENDAMENTOS (Realtime)
+// 2. AGENDAMENTOS (Sincronia Total)
 // ============================================================================
 export function useAgendamentos(slug?: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!slug) return;
+    
     const canal = supabase
-      .channel(`agenda-${slug}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'agendamentos', 
-        filter: `barbearia_slug=eq.${slug}` 
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
-      })
+      .channel(`agenda-global-${slug}`)
+      .on(
+        'postgres_changes', 
+        { 
+          event: '*', // Escuta TUDO: Insert, Update e Delete
+          schema: 'public', 
+          table: 'agendamentos', 
+          filter: `barbearia_slug=eq.${slug}` 
+        }, 
+        (payload) => {
+          console.log("Realtime: Mudança na agenda detectada!", payload);
+          // Invalida a chave específica para garantir que o reload aconteça
+          queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
+        }
+      )
       .subscribe();
+      
     return () => { supabase.removeChannel(canal); };
   }, [slug, queryClient]);
 
   return useQuery({
     queryKey: ["agendamentos", slug],
     queryFn: async () => {
-      const { data, error } = await supabase.from("agendamentos").select("*").eq("barbearia_slug", slug).gte("data", getInicioDoMes()).order("horario");
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("barbearia_slug", slug)
+        .gte("data", getInicioDoMes())
+        .order("horario");
       if (error) throw error;
       return data || [];
     },
@@ -74,6 +87,7 @@ export function useAgendamentos(slug?: string) {
 
 export function useMutacoesAgendamento() {
   const queryClient = useQueryClient();
+  
   return {
     adicionarAgendamento: useMutation({
       mutationFn: async ({ ag, slug }: any) => {
@@ -83,20 +97,30 @@ export function useMutacoesAgendamento() {
         if (error) throw error;
         return data;
       },
-      onSuccess: (_, vars) => queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] })
+      onSuccess: (_, vars) => {
+        queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
+      }
     }),
+
     atualizarStatusAgendamento: useMutation({
-      mutationFn: async ({ id, status, comissaoGanha = 0 }: any) => {
-        const { error } = await supabase.from("agendamentos").update({ status, comissao_ganha: comissaoGanha }).eq("id", id);
+      mutationFn: async ({ id, status, comissaoGanha = 0, slug }: any) => {
+        const { error } = await supabase
+          .from("agendamentos")
+          .update({ status, comissao_ganha: comissaoGanha })
+          .eq("id", id);
         if (error) throw error;
       },
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agendamentos"] })
+      onSuccess: (_, vars) => {
+        // ✅ IMPORTANTE: Invalida usando o slug para o Realtime do outro lado reagir
+        queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
+        toast.success(`Status atualizado para ${vars.status}`);
+      }
     })
   };
 }
 
 // ============================================================================
-// 3. BARBEIROS
+// 3. BARBEIROS (Com Remover)
 // ============================================================================
 export function useBarbeiros(slug?: string) {
   return useQuery({
@@ -128,12 +152,12 @@ export function useMutacoesBarbeiro() {
       }
     }),
     removerBarbeiro: useMutation({
-      mutationFn: async (id: string) => {
+      mutationFn: async ({ id, slug }: any) => {
         const { error } = await supabase.from("barbeiros").delete().eq("id", id);
         if (error) throw error;
       },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["barbeiros"] });
+      onSuccess: (_, vars) => {
+        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
         toast.success("Barbeiro removido!");
       }
     })
@@ -169,12 +193,12 @@ export function useMutacoesServico() {
       }
     }),
     removerServico: useMutation({
-      mutationFn: async (id: string) => {
+      mutationFn: async ({ id, slug }: any) => {
         const { error } = await supabase.from("servicos").delete().eq("id", id);
         if (error) throw error;
       },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["servicos"] });
+      onSuccess: (_, vars) => {
+        queryClient.invalidateQueries({ queryKey: ["servicos", vars.slug] });
         toast.success("Serviço removido!");
       }
     })
@@ -207,11 +231,11 @@ export function useMutacoesDespesa() {
       onSuccess: (_, vars) => queryClient.invalidateQueries({ queryKey: ["despesas", vars.slug] })
     }),
     removerDespesa: useMutation({
-      mutationFn: async (id: string) => {
+      mutationFn: async ({ id, slug }: any) => {
         const { error } = await supabase.from("despesas").delete().eq("id", id);
         if (error) throw error;
       },
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["despesas"] })
+      onSuccess: (_, vars) => queryClient.invalidateQueries({ queryKey: ["despesas", vars.slug] })
     })
   };
 }

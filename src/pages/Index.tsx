@@ -6,15 +6,15 @@ import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
 import { VisaoDono } from "@/components/VisaoDono";
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
-import { TermosDeUso } from "@/components/TermosDeUso"; // ✅ IMPORTADO
+import { TermosDeUso } from "@/components/TermosDeUso";
 
-// 🚀 NOSSAS GAVETAS DO REACT QUERY
+// 🚀 NOSSAS GAVETAS DO REACT QUERY (Puxando os hooks que corrigimos)
 import { 
   useBarbearia, useBarbeiros, useServicos, useDespesas, useAgendamentos,
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesDespesa, useMutacoesAgendamento
 } from "@/hooks/useQueries";
 
-// 🔥 FUNÇÃO BLINDADA: Pega YYYY-MM-DD local
+// 🔥 FUNÇÃO AUXILIAR: Pega a data de hoje no formato YYYY-MM-DD
 const getLocalDate = () => {
   const agora = new Date();
   const y = agora.getFullYear();
@@ -30,7 +30,7 @@ export default function Index() {
 
   const { signOut, userRole, user } = useAuth();
 
-  // 1. CARREGANDO OS DADOS
+  // 1. CARREGANDO OS DADOS DO BANCO (Usando o cache inteligente)
   const { data: barbearia, isLoading: loadingBarbearia } = useBarbearia();
   const slug = barbearia?.slug;
   const isDono = barbearia?.isDono;
@@ -40,60 +40,53 @@ export default function Index() {
   const { data: agendamentos = [], isLoading: loadingAgendamentos } = useAgendamentos(slug);
   const { data: despesas = [], isLoading: loadingDespesas } = useDespesas(isDono ? slug : undefined);
 
-  // 2. MUTAÇÕES
+  // 2. MUTAÇÕES (Ações de escrita no banco)
   const mutacoesBarbeiro = useMutacoesBarbeiro();
   const mutacoesServico = useMutacoesServico();
   const mutacoesDespesa = useMutacoesDespesa();
   const mutacoesAgendamento = useMutacoesAgendamento();
 
-  // Ajusta o barbeiro selecionado inicial
+  // Ajusta o barbeiro selecionado inicial para ser o usuário logado
   useEffect(() => {
     if (barbeiros.length > 0 && !barbeiroSelecionadoId) {
-      const defaultBarber = barbeiros.find((b: any) => b.id === user?.id) || barbeiros[0];
-      setBarbeiroSelecionadoId(defaultBarber.id);
+      const meuPerfil = barbeiros.find((b: any) => b.id === user?.id) || barbeiros[0];
+      setBarbeiroSelecionadoId(meuPerfil.id);
     }
   }, [barbeiros, user?.id, barbeiroSelecionadoId]);
 
-  // --- 📊 LÓGICA FINANCEIRA E FILTROS ---
-  const { 
-    faturamentoHoje, 
-    faturamentoMensal, 
-    comissoesAPagarHoje, 
-    gastosHoje, 
-    agendamentosParaExibir, 
-    agMesBarbeiro 
-  } = useMemo(() => {
+  // --- 📊 LÓGICA FINANCEIRA E FILTROS (useMemo para não travar o app) ---
+  const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
 
-    const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro) || [];
+    // Filtros de Data e Papel
+    const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro);
     
     const agParaExibir = isDono 
       ? (barbeiroSelecionadoId ? noDia.filter(ag => ag.barbeiro_id === barbeiroSelecionadoId) : noDia)
       : noDia.filter((ag: any) => ag.barbeiro_id === user?.id);
 
-    const noMesGeral = agendamentos.filter((ag: any) => 
-      ag.data.startsWith(prefixoMes) && ag.status === "Finalizado"
-    );
-
+    // Cálculos Financeiros
     const fatHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => {
         const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
         return sum + Number(preco);
       }, 0);
     
-    const fatMensal = noMesGeral.reduce((sum: number, ag: any) => {
+    const fatMensal = agendamentos.filter((ag: any) => 
+      ag.data.startsWith(prefixoMes) && ag.status === "Finalizado"
+    ).reduce((sum: number, ag: any) => {
       const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
       return sum + Number(preco);
     }, 0);
 
-    const comissoes = noDia.filter((ag: any) => ag.status === "Finalizado")
+    const comissoesHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0);
     
-    const gastos = despesas.filter((d: any) => d.data === dataFiltro)
+    const gastosHoje = despesas.filter((d: any) => d.data === dataFiltro)
       .reduce((sum: number, d: any) => sum + Number(d.valor || 0), 0);
 
-    const mesBarbeiro = agendamentos.filter((ag: any) => 
+    const agMesMeuBarbeiro = agendamentos.filter((ag: any) => 
       ag.barbeiro_id === user?.id && 
       ag.data.startsWith(prefixoMes) && 
       ag.status === "Finalizado"
@@ -102,19 +95,20 @@ export default function Index() {
     return { 
       faturamentoHoje: fatHoje, 
       faturamentoMensal: fatMensal,
-      comissoesAPagarHoje: comissoes, 
-      gastosHoje: gastos, 
+      comissoesAPagarHoje: comissoesHoje, 
+      gastosHoje: gastosHoje, 
       agendamentosParaExibir: agParaExibir, 
-      agMesBarbeiro: mesBarbeiro 
+      agMesBarbeiro: agMesMeuBarbeiro 
     };
   }, [agendamentos, servicos, despesas, dataFiltro, isDono, user?.id, barbeiroSelecionadoId]);
 
+  // Auxiliares de UI
   const comissaoPorBarbeiroHoje = barbeiros.map((b: any) => {
-    const cortesDoBarbeiro = agendamentos.filter(ag => ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado");
+    const cortes = agendamentos.filter(ag => ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado");
     return {
       barbeiro: b,
-      total: cortesDoBarbeiro.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0),
-      cortes: cortesDoBarbeiro.length
+      total: cortes.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0),
+      cortes: cortes.length
     };
   });
 
@@ -123,13 +117,13 @@ export default function Index() {
 
   const servicos_find = (id: string) => servicos.find((s: any) => s.id === id);
 
-  const isLoading = loadingBarbearia || loadingBarbeiros || loadingServicos || loadingAgendamentos || (isDono && loadingDespesas);
+  // --- RENDERS ---
 
-  if (isLoading) {
+  if (loadingBarbearia || loadingBarbeiros || loadingServicos || loadingAgendamentos) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center dark bg-background text-primary font-bold gap-4">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-        <p className="tracking-widest animate-pulse uppercase">Sincronizando Agenda...</p>
+        <p className="tracking-widest animate-pulse uppercase text-sm">Sincronizando CAJ TECH...</p>
       </div>
     );
   }
@@ -149,7 +143,7 @@ export default function Index() {
           <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
           <h1 className="font-bold text-lg tracking-tight">CAJ TECH</h1>
         </div>
-        <Button variant="ghost" size="icon" onClick={signOut}><LogOut className="h-5 w-5"/></Button>
+        <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
       </header>
 
       {tab !== "carteira" && (
@@ -179,53 +173,58 @@ export default function Index() {
           <VisaoBarbeiro
             barbeiros={barbeiros} 
             servicos={servicos}
-            agendamentos={agendamentosParaExibir}
+            agendamentos={stats.agendamentosParaExibir}
             barbeiroSelecionadoId={barbeiroSelecionadoId}
             setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
             horariosOcupados={horariosOcupados}
             servicos_find={servicos_find}
-            isDono={isDono}
+            isDono={isDono || false}
             onNovoAgendamento={(ag: any) => mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug })}
             onStatusChange={(id: string, status: string) => {
+              // Se for finalizar, calculamos a comissão no ato para salvar no banco
               if (status === "Finalizado") {
                 const agAtual = agendamentos.find((a: any) => a.id === id);
                 const servico = servicos_find(agAtual?.servico_id);
                 const barbeiro = barbeiros.find((b: any) => b.id === agAtual?.barbeiro_id);
                 const valorComissao = (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
-                return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status: "Finalizado", comissaoGanha: valorComissao });
+                
+                return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ 
+                  id, status: "Finalizado", comissaoGanha: valorComissao, slug 
+                });
               }
-              return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status });
+              // Senão, apenas atualizamos o status (Pendente/Confirmado/Cancelado)
+              return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({ id, status, slug });
             }}
           />
         )}
 
         {tab === "carteira" && (
           <CarteiraBarbeiro 
-            comissaoTotalMes={agMesBarbeiro.reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0)}
-            totalCortesMes={agMesBarbeiro.length}
+            comissaoTotalMes={stats.agMesBarbeiro.reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0)}
+            totalCortesMes={stats.agMesBarbeiro.length}
             nomeBarbeiro={barbeiros.find((b: any) => b.id === user?.id)?.nome || "Barbeiro"}
           />
         )}
 
         {tab === "dono" && (
           <VisaoDono
-            faturamentoHoje={faturamentoHoje}
-            faturamentoMensal={faturamentoMensal} 
-            comissoesAPagarHoje={comissoesAPagarHoje}
-            despesasNoDia={gastosHoje}
-            lucroRealHoje={faturamentoHoje - comissoesAPagarHoje - gastosHoje}
+            faturamentoHoje={stats.faturamentoHoje}
+            faturamentoMensal={stats.faturamentoMensal} 
+            comissoesAPagarHoje={stats.comissoesAPagarHoje}
+            despesasNoDia={stats.gastosHoje}
+            lucroRealHoje={stats.faturamentoHoje - stats.comissoesAPagarHoje - stats.gastosHoje}
             comissaoPorBarbeiroHoje={comissaoPorBarbeiroHoje}
             barbeiros={barbeiros}
             servicos={servicos}
             despesas={despesas}
             dataFiltro={dataFiltro}
             onAddDespesa={(nova: any) => mutacoesDespesa.adicionarDespesa.mutate({ nova, slug })}
-            onRemoveDespesa={(id: string) => mutacoesDespesa.removerDespesa.mutate(id)}
+            onRemoveDespesa={(id: string) => mutacoesDespesa.removerDespesa.mutate({ id, slug })}
             onAddBarbeiro={(nome: string, comissao: number, email: string, senha: string) => 
               mutacoesBarbeiro.adicionarBarbeiro.mutate({ nome, comissao, email, senha, slug })}
-            onRemoveBarbeiro={(id: string) => mutacoesBarbeiro.removerBarbeiro.mutate(id)}
+            onRemoveBarbeiro={(id: string) => mutacoesBarbeiro.removerBarbeiro.mutate({ id, slug })}
             onAddServico={(nome: string, preco: number) => mutacoesServico.adicionarServico.mutate({ nome, preco, slug })}
-            onRemoveServico={(id: string) => mutacoesServico.removerServico.mutate(id)}
+            onRemoveServico={(id: string) => mutacoesServico.removerServico.mutate({ id, slug })}
           />
         )}
       </main>
@@ -236,7 +235,7 @@ export default function Index() {
             key={t.id} 
             onClick={() => setTab(t.id as any)} 
             className={cn(
-              "flex flex-col items-center p-2 transition-all duration-300", 
+              "flex flex-col items-center p-2 transition-all duration-300 outline-none", 
               tab === t.id ? "text-primary scale-110 font-bold" : "text-muted-foreground opacity-60"
             )}
           >
@@ -245,7 +244,6 @@ export default function Index() {
         ))}
       </nav>
 
-      {/* ✅ MODAL DE TERMOS E COMPROMISSO */}
       <TermosDeUso />
     </div>
   );
