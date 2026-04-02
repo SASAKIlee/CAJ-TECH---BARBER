@@ -7,7 +7,6 @@ import { useEffect } from "react";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Auxiliar para buscar apenas dados do mês atual em diante
 const getInicioDoMes = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
@@ -23,12 +22,10 @@ export function useBarbearia() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não logado");
 
-      // Tenta achar como dono
       const { data: bList } = await supabase.from("barbearias").select("slug").eq("dono_id", user.id);
       let slug = bList?.[0]?.slug;
       let isDono = !!slug;
 
-      // Se não for dono, tenta achar como barbeiro funcionário
       if (!slug) {
         const { data: barbList } = await supabase.from("barbeiros").select("barbearia_slug").eq("id", user.id);
         slug = barbList?.[0]?.barbearia_slug;
@@ -114,13 +111,18 @@ export function useMutacoesAgendamento() {
 }
 
 // ============================================================================
-// 3. BARBEIROS (EQUIPE)
+// 3. BARBEIROS (EQUIPE COM REMOÇÃO PROTEGIDA)
 // ============================================================================
 export function useBarbeiros(slug?: string) {
   return useQuery({
     queryKey: ["barbeiros", slug],
     queryFn: async () => {
-      const { data, error } = await supabase.from("barbeiros").select("*").eq("barbearia_slug", slug).order("nome");
+      // Agora buscamos a coluna 'ativo' também
+      const { data, error } = await supabase
+        .from("barbeiros")
+        .select("*")
+        .eq("barbearia_slug", slug)
+        .order("nome");
       if (error) throw error;
       return data || [];
     },
@@ -136,7 +138,6 @@ export function useMutacoesBarbeiro() {
         if (!email || !email.includes("@")) throw new Error("E-mail inválido.");
         if (!senha || senha.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres.");
 
-        // Cliente temporário para criar auth sem deslogar o admin
         const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
         
         const { data: authData, error: authError } = await tempSupabase.auth.signUp({ 
@@ -147,12 +148,11 @@ export function useMutacoesBarbeiro() {
         if (authError) throw authError;
         const userId = authData.user!.id;
         
-        // Define papel e cria perfil do barbeiro
         const { error: roleError } = await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
         if (roleError) throw roleError;
 
         const { error: barbError } = await supabase.from("barbeiros").insert({ 
-          id: userId, nome, comissao_pct, barbearia_slug: slug 
+          id: userId, nome, comissao_pct, barbearia_slug: slug, ativo: true 
         });
         if (barbError) throw barbError;
       },
@@ -162,15 +162,37 @@ export function useMutacoesBarbeiro() {
       },
       onError: (err: any) => toast.error(`Falha no cadastro: ${err.message}`)
     }),
+
+    // NOVA LÓGICA: ATIVAR/DESATIVAR
+    alternarStatusBarbeiro: useMutation({
+      mutationFn: async ({ id, novoStatus, slug }: any) => {
+        const { error } = await supabase
+          .from("barbeiros")
+          .update({ ativo: novoStatus })
+          .eq("id", id);
+        if (error) throw error;
+      },
+      onSuccess: (_, vars) => {
+        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
+        toast.success(vars.novoStatus ? "Barbeiro ativado!" : "Barbeiro desativado!");
+      }
+    }),
+
+    // REMOÇÃO PROTEGIDA: SÓ DELETA SE ESTIVER DESATIVADO
     removerBarbeiro: useMutation({
-      mutationFn: async ({ id, slug }: any) => {
+      mutationFn: async ({ id, estaAtivo, slug }: any) => {
+        if (estaAtivo) {
+          throw new Error("Não é possível remover um barbeiro ATIVO. Desative-o primeiro.");
+        }
+        
         const { error } = await supabase.from("barbeiros").delete().eq("id", id);
         if (error) throw error;
       },
       onSuccess: (_, vars) => {
         queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
-        toast.success("Barbeiro removido.");
-      }
+        toast.success("Barbeiro e agenda removidos com sucesso.");
+      },
+      onError: (err: any) => toast.error(err.message)
     })
   };
 }

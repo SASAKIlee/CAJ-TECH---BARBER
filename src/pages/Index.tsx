@@ -8,13 +8,11 @@ import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
 
-// 🚀 HOOKS CORRIGIDOS (Removido Despesas)
 import { 
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento
 } from "@/hooks/useQueries";
 
-// 🔥 FUNÇÃO AUXILIAR: Pega a data de hoje no formato YYYY-MM-DD
 const getLocalDate = () => {
   const agora = new Date();
   const y = agora.getFullYear();
@@ -30,7 +28,6 @@ export default function Index() {
 
   const { signOut, userRole, user } = useAuth();
 
-  // 1. CARREGANDO OS DADOS DO BANCO
   const { data: barbearia, isLoading: loadingBarbearia } = useBarbearia();
   const slug = barbearia?.slug;
   const isDono = barbearia?.isDono;
@@ -39,42 +36,34 @@ export default function Index() {
   const { data: servicos = [] } = useServicos(slug);
   const { data: agendamentos = [] } = useAgendamentos(slug);
 
-  // 2. MUTAÇÕES (Ações de escrita)
   const mutacoesBarbeiro = useMutacoesBarbeiro();
   const mutacoesServico = useMutacoesServico();
   const mutacoesAgendamento = useMutacoesAgendamento();
 
-  // 🛡️ GARANTE QUE O BARBEIRO SÓ VEJA ELE MESMO
   useEffect(() => {
     if (!isDono && user?.id) {
       setBarbeiroSelecionadoId(user.id);
     } else if (isDono && barbeiros.length > 0 && !barbeiroSelecionadoId) {
-      // Dono começa vendo "Todos" (ID vazio)
       setBarbeiroSelecionadoId(""); 
     }
   }, [isDono, user?.id, barbeiros]);
 
-  // --- 📊 LÓGICA FINANCEIRA E FILTROS BLINDADOS ---
   const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
     const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro);
-    
-    // 🛡️ TRAVA DE SEGURANÇA: Se não for dono, ignora o estado e usa o ID do User logado
     const idParaFiltrar = isDono ? barbeiroSelecionadoId : user?.id;
     
     const agParaExibir = idParaFiltrar 
       ? noDia.filter((ag: any) => ag.barbeiro_id === idParaFiltrar)
-      : noDia; // Se for dono e ID estiver vazio, mostra todos do dia
+      : noDia;
 
-    // Faturamento do dia (apenas finalizados)
     const fatHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => {
         const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
         return sum + Number(preco);
       }, 0);
     
-    // Faturamento mensal total da barbearia
     const fatMensal = agendamentos.filter((ag: any) => 
       ag.data.startsWith(prefixoMes) && ag.status === "Finalizado"
     ).reduce((sum: number, ag: any) => {
@@ -82,11 +71,9 @@ export default function Index() {
       return sum + Number(preco);
     }, 0);
 
-    // Soma das comissões do dia (quanto o dono deve pagar)
     const comissoesHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
       .reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0);
     
-    // Produção individual para a "Carteira" do barbeiro
     const agMesMeuBarbeiro = agendamentos.filter((ag: any) => 
       ag.barbeiro_id === user?.id && 
       ag.data.startsWith(prefixoMes) && 
@@ -102,7 +89,6 @@ export default function Index() {
     };
   }, [agendamentos, servicos, dataFiltro, isDono, user?.id, barbeiroSelecionadoId]);
 
-  // Auxiliar para Dashboard do Dono
   const comissaoPorBarbeiroHoje = barbeiros.map((b: any) => {
     const cortes = agendamentos.filter((ag: any) => ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado");
     return {
@@ -121,7 +107,7 @@ export default function Index() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center dark bg-background text-primary font-bold gap-4">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-        <p className="tracking-widest animate-pulse uppercase text-sm">Sincronizando CAJ TECH...</p>
+        <p className="tracking-widest animate-pulse uppercase text-sm">Sincronizando...</p>
       </div>
     );
   }
@@ -151,7 +137,7 @@ export default function Index() {
             type="date" 
             value={dataFiltro}
             onChange={(e) => setDataFiltro(e.target.value)}
-            className="bg-background border rounded-full px-4 py-1 text-sm outline-none focus:ring-1 focus:ring-primary color-scheme-dark"
+            className="bg-background border rounded-full px-4 py-1 text-sm outline-none focus:ring-1 focus:ring-primary color-scheme-dark text-white"
           />
           <Button variant="secondary" size="sm" className="rounded-full px-4 h-8 text-[10px] font-bold uppercase" onClick={() => setDataFiltro(getLocalDate())}> Hoje </Button>
         </div>
@@ -168,6 +154,7 @@ export default function Index() {
             horariosOcupados={horariosOcupados}
             servicos_find={servicos_find}
             isDono={isDono || false}
+            userId={user?.id} // 🛡️ CRUCIAL: Para a trava de acesso negado
             onNovoAgendamento={(ag: any) => mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug })}
             onStatusChange={(id: string, status: string) => {
               if (status === "Finalizado") {
@@ -201,10 +188,21 @@ export default function Index() {
             servicos={servicos}
             onAddBarbeiro={(nome: string, comissao_pct: number, email: string, senha: string) => 
               mutacoesBarbeiro.adicionarBarbeiro.mutate({ nome, comissao_pct, email, senha, slug })}
-            onRemoveBarbeiro={(id: string) => mutacoesBarbeiro.removerBarbeiro.mutate({ id, slug })}
+            
+            // 🛡️ REMOÇÃO PROTEGIDA: Passamos o status atual do barbeiro
+            onRemoveBarbeiro={(id: string) => {
+              const b = barbeiros.find((x: any) => x.id === id);
+              mutacoesBarbeiro.removerBarbeiro.mutate({ id, estaAtivo: b?.ativo, slug });
+            }}
+
+            // 🛡️ NOVA AÇÃO: Ativar/Desativar
+            onToggleBarbeiroStatus={(id: string, novoStatus: boolean) => 
+              mutacoesBarbeiro.alternarStatusBarbeiro.mutate({ id, novoStatus, slug })}
+
             onAddServico={(nome: string, preco: number) => 
               mutacoesServico.adicionarServico.mutate({ nome, preco, slug })}
-            onRemoveServico={(id: string) => mutacoesServico.removerServico.mutate({ id, slug })}
+            onRemoveServico={(id: string) => 
+              mutacoesServico.removerServico.mutate({ id, slug })}
           />
         )}
       </main>
