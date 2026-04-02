@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,24 +34,34 @@ interface Props {
   servicos: ServicoView[];
   horariosOcupados: (data: string, barbeiroId: string) => string[];
   onSalvar: (ag: { data: string; horario: string; nomeCliente: string; telefoneCliente: string; barbeiroId: string; servicoId: string }) => void;
-  defaultBarbeiroId?: string; // Adicionado para facilitar a vida do dono
+  defaultBarbeiroId?: string;
 }
 
 export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, onSalvar, defaultBarbeiroId }: Props) {
   const [open, setOpen] = useState(false);
   const [nomeCliente, setNomeCliente] = useState("");
-  const [telefoneCliente, setTelefoneCliente] = useState(""); // Campo que estava no seu print
+  const [telefoneCliente, setTelefoneCliente] = useState("");
   const [servicoId, setServicoId] = useState("");
   const [barbeiroId, setBarbeiroId] = useState(defaultBarbeiroId || "");
   const [data, setData] = useState<Date | undefined>(new Date());
   const [horario, setHorario] = useState("");
 
-  // Sincroniza o barbeiro se o dono mudar o filtro lá fora
   useEffect(() => {
     if (defaultBarbeiroId) setBarbeiroId(defaultBarbeiroId);
   }, [defaultBarbeiroId]);
 
+  // --- LÓGICA DE DATA BLINDADA ---
+  // Usamos format(d, "yyyy-MM-dd") para garantir que estamos falando de "strings de data" e não objetos Date com fuso
   const dataStr = data ? format(data, "yyyy-MM-dd") : "";
+  
+  const agora = new Date();
+  const hojeStr = format(agora, "yyyy-MM-dd");
+  
+  // Se a data selecionada no calendário não for IGUAL a string de hoje, amanhã não é hoje!
+  const isHoje = dataStr === hojeStr;
+  
+  const horaAtual = agora.getHours();
+  const minAtual = agora.getMinutes();
 
   const ocupados = useMemo(
     () => (dataStr && barbeiroId ? horariosOcupados(dataStr, barbeiroId) : []),
@@ -66,24 +76,17 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
       data: dataStr, 
       horario, 
       nomeCliente: nomeCliente.trim(), 
-      telefoneCliente, // Enviando o telefone para o banco
+      telefoneCliente, 
       barbeiroId, 
       servicoId 
     });
     
-    // Limpa o formulário
     setNomeCliente("");
     setTelefoneCliente("");
     setServicoId("");
     setHorario("");
     setOpen(false);
   }
-
-  const agora = new Date();
-  const hojeStr = format(agora, "yyyy-MM-dd");
-  const isHoje = dataStr === hojeStr;
-  const horaAtual = agora.getHours();
-  const minAtual = agora.getMinutes();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -99,7 +102,6 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
         </DialogHeader>
         
         <div className="space-y-4 pt-2">
-          {/* NOME DO CLIENTE */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-muted-foreground font-bold">Nome do Cliente</Label>
             <Input 
@@ -110,7 +112,6 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             />
           </div>
 
-          {/* WHATSAPP */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-muted-foreground font-bold">WhatsApp (DDD + Número)</Label>
             <Input 
@@ -121,7 +122,6 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             />
           </div>
 
-          {/* SELEÇÃO DE BARBEIRO (O que você precisava!) */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-muted-foreground font-bold">Barbeiro</Label>
             <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
@@ -136,11 +136,12 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             </Select>
           </div>
 
-          {/* SERVIÇO */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-muted-foreground font-bold">Serviço</Label>
             <Select value={servicoId} onValueChange={setServicoId}>
-              <SelectTrigger className="bg-[#1A1A1A] border-white/10"><SelectValue placeholder="Selecione o que será feito" /></SelectTrigger>
+              <SelectTrigger className="bg-[#1A1A1A] border-white/10">
+                <SelectValue placeholder="Selecione o que será feito" />
+              </SelectTrigger>
               <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
                 {servicos.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.nome} — R$ {s.preco.toFixed(2)}</SelectItem>
@@ -149,7 +150,6 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             </Select>
           </div>
 
-          {/* DATA */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-muted-foreground font-bold">Data</Label>
             <Popover>
@@ -163,7 +163,11 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
                 <Calendar
                   mode="single"
                   selected={data}
-                  onSelect={(d) => { setData(d); setHorario(""); }}
+                  onSelect={(d) => { 
+                    // Forçamos a data para o início do dia para evitar problemas de fuso
+                    setData(d ? startOfDay(d) : undefined); 
+                    setHorario(""); 
+                  }}
                   locale={ptBR}
                   className="p-3"
                 />
@@ -171,15 +175,19 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             </Popover>
           </div>
 
-          {/* HORÁRIOS */}
+          {/* HORÁRIOS - AQUI A MÁGICA ACONTECE */}
           {dataStr && barbeiroId && (
             <div className="space-y-2">
               <Label className="text-xs uppercase text-muted-foreground font-bold">Horários Disponíveis</Label>
               <div className="grid grid-cols-4 gap-2">
                 {HORARIOS.map((h) => {
                   const ocupadoNoBanco = ocupados.includes(h);
-                  const [horaH, minH] = h.split(":");
-                  const isPassado = isHoje && (parseInt(horaH) < horaAtual || (parseInt(horaH) === horaAtual && parseInt(minH) <= minAtual));
+                  const [horaH, minH] = h.split(":").map(Number);
+                  
+                  // CORREÇÃO CRÍTICA: 
+                  // isPassado só pode ser true se isHoje for true. 
+                  // Se for amanhã, isHoje é false, logo isPassado nunca bloqueia o horário.
+                  const isPassado = isHoje && (horaH < horaAtual || (horaH === horaAtual && minH <= minAtual));
                   const isBloqueado = ocupadoNoBanco || isPassado;
 
                   return (
