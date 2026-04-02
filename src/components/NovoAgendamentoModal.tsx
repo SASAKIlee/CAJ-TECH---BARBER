@@ -1,204 +1,226 @@
-import { useState, useMemo, useEffect } from "react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { DollarSign, TrendingDown, Wallet, Plus, Trash2, Users, Scissors, Briefcase } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
-const HORARIOS = Array.from({ length: 21 }, (_, i) => {
-  const h = Math.floor(i / 2) + 9;
-  const m = i % 2 === 0 ? "00" : "30";
-  return `${String(h).padStart(2, "0")}:${m}`;
-});
+import { barbeiroSchema, servicoSchema, despesaSchema } from "@/lib/schemas";
+import { toast } from "sonner";
 
-export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, onSalvar, defaultBarbeiroId }: any) {
-  const [open, setOpen] = useState(false);
-  const [nomeCliente, setNomeCliente] = useState("");
-  const [telefoneCliente, setTelefoneCliente] = useState("");
-  const [servicoId, setServicoId] = useState("");
-  const [barbeiroId, setBarbeiroId] = useState(defaultBarbeiroId || "");
-  const [data, setData] = useState<Date | undefined>(new Date());
-  const [horario, setHorario] = useState("");
+export function VisaoDono({ 
+  faturamentoHoje = 0, 
+  comissoesAPagarHoje = 0, 
+  despesasNoDia = 0, 
+  lucroRealHoje = 0, 
+  despesas = [], 
+  onAddDespesa, 
+  onRemoveDespesa, 
+  comissaoPorBarbeiroHoje = [], 
+  dataFiltro, // mantido, mas não usado na adição de despesa
+  barbeiros = [], 
+  servicos = [], 
+  onAddBarbeiro, 
+  onRemoveBarbeiro, 
+  onAddServico, 
+  onRemoveServico,
+  faturamentoMensal = 0 // adicionado como prop com valor padrão
+}: any) {
+  
+  // States para os formulários
+  const [novaDesc, setNovaDesc] = useState("");
+  const [novoValor, setNovoValor] = useState("");
+  const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
+  const [nServico, setNServico] = useState({ nome: "", preco: "" });
 
-  useEffect(() => {
-    if (defaultBarbeiroId) setBarbeiroId(defaultBarbeiroId);
-  }, [defaultBarbeiroId, open]);
+  const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
-  // ==========================================================
-  // 🛡️ LÓGICA DE COMPARAÇÃO MANUAL (IMUNE A FUSO HORÁRIO)
-  // ==========================================================
-  const { isHoje, dataStr } = useMemo(() => {
-    const agora = new Date();
-    
-    // Pegamos Dia, Mês e Ano de HOJE (Local Brasil)
-    const hojeD = agora.getDate();
-    const hojeM = agora.getMonth();
-    const hojeA = agora.getFullYear();
+  // --- FUNÇÕES DE VALIDAÇÃO COM ZOD ---
 
-    if (!data) return { isHoje: false, dataStr: "" };
-
-    // Pegamos Dia, Mês e Ano da DATA CLICADA
-    const selD = data.getDate();
-    const selM = data.getMonth();
-    const selA = data.getFullYear();
-
-    // Comparamos só os números. Se for dia 02 e hoje é 01, isso dá FALSE.
-    const checkHoje = hojeD === selD && hojeM === selM && hojeA === selA;
-    
-    // Montamos a string de texto puro "2026-04-01"
-    const sStr = `${selA}-${String(selM + 1).padStart(2, '0')}-${String(selD).padStart(2, '0')}`;
-
-    return { isHoje: checkHoje, dataStr: sStr };
-  }, [data]);
-
-  // Pegamos a hora do seu computador AGORA
-  const agora = new Date();
-  const horaAgora = agora.getHours();
-  const minAgora = agora.getMinutes();
-
-  const ocupados = useMemo(
-    () => (dataStr && barbeiroId ? horariosOcupados(dataStr, barbeiroId) : []),
-    [dataStr, barbeiroId, horariosOcupados]
-  );
-
-  const canSave = nomeCliente.trim() && servicoId && barbeiroId && dataStr && horario;
-
-  function handleSalvar() {
-    if (!canSave) return;
-    onSalvar({ 
-      data: dataStr, 
-      horario, 
-      nomeCliente: nomeCliente.trim(), 
-      telefoneCliente, 
-      barbeiroId, 
-      servicoId 
+  const handleAddBarbeiro = () => {
+    const validacao = barbeiroSchema.safeParse({
+      nome: nBarbeiro.nome,
+      email: nBarbeiro.email,
+      senha: nBarbeiro.senha,
+      comissao: nBarbeiro.comissao
     });
-    setOpen(false);
-    setHorario("");
-  }
+
+    if (!validacao.success) {
+      return toast.error(validacao.error.errors[0].message);
+    }
+
+    onAddBarbeiro(validacao.data.nome, validacao.data.comissao, validacao.data.email, validacao.data.senha);
+    toast.success("Barbeiro cadastrado com sucesso! ✂️");
+    setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
+  };
+
+  const handleAddServico = () => {
+    const validacao = servicoSchema.safeParse({
+      nome: nServico.nome,
+      preco: nServico.preco
+    });
+
+    if (!validacao.success) {
+      return toast.error(validacao.error.errors[0].message);
+    }
+
+    onAddServico(validacao.data.nome, validacao.data.preco);
+    toast.success("Serviço adicionado com sucesso!");
+    setNServico({ nome: "", preco: "" });
+  };
+
+  const handleAddDespesa = () => {
+    // Usar a data atual (hoje) em vez do dataFiltro
+    const dataAtual = new Date();
+    
+    const validacao = despesaSchema.safeParse({
+      descricao: novaDesc,
+      valor: novoValor,
+      data: dataAtual // passa um objeto Date
+    });
+
+    if (!validacao.success) {
+      return toast.error(validacao.error.errors[0].message);
+    }
+
+    onAddDespesa({
+      descricao: validacao.data.descricao,
+      valor: validacao.data.valor,
+      data: validacao.data.data // data é um Date
+    });
+    toast.success("Despesa registrada no caixa! 💸");
+    setNovaDesc(""); 
+    setNovoValor("");
+  };
+
+  // Função auxiliar para formatar a data de exibição
+  const dataExibicao = dataFiltro ? new Date(dataFiltro) : new Date();
+  const dataFormatada = dataExibicao.toLocaleDateString('pt-BR');
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="lg" className="gap-2 font-semibold shadow-lg shadow-primary/25">
-          <Plus className="h-5 w-5" />
-          Novo Agendamento
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto bg-[#0A0A0A] border-white/10 text-white">
-        <DialogHeader><DialogTitle className="text-xl font-bold">Novo Horário</DialogTitle></DialogHeader>
-        
-        <div className="space-y-4 pt-2">
-          <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold">Nome do Cliente</Label>
-            <Input placeholder="Nome completo" value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} className="bg-[#1A1A1A] border-white/10" />
-          </div>
+    <div className="space-y-8 pb-20">
+      
+      {/* Indicador de data */}
+      <div className="flex justify-between items-center px-1">
+        <p className="text-xs text-zinc-500 uppercase font-bold">Dashboard do Dono</p>
+        <p className="text-xs text-zinc-500">Data referência: {dataFormatada}</p>
+      </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold">WhatsApp</Label>
-            <Input placeholder="17999998888" value={telefoneCliente} onChange={(e) => setTelefoneCliente(e.target.value)} className="bg-[#1A1A1A] border-white/10" />
-          </div>
+      {/* 1. DASHBOARD FINANCEIRO */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="p-4 bg-[#161616] border-zinc-800">
+          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Entradas Hoje</p>
+          <p className="text-2xl font-black text-white">R$ {formatarMoeda(faturamentoHoje)}</p>
+        </Card>
+        <Card className="p-4 bg-primary border-none">
+          <p className="text-[10px] uppercase font-black text-black/60 tracking-widest mb-1">Lucro Real Hoje</p>
+          <p className="text-2xl font-black text-black">R$ {formatarMoeda(lucroRealHoje)}</p>
+        </Card>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800">
+          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Faturamento Mensal</p>
+          <p className="text-xl font-black text-white">R$ {formatarMoeda(faturamentoMensal)}</p>
+        </Card>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800">
+          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Comissões Hoje</p>
+          <p className="text-xl font-black text-white">R$ {formatarMoeda(comissoesAPagarHoje)}</p>
+        </Card>
+      </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500 font-bold">Barbeiro</Label>
-              <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
-                <SelectTrigger className="bg-[#1A1A1A] border-white/10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                  {barbeiros.map((b: any) => (<SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500 font-bold">Data</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left bg-[#1A1A1A] border-white/10">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {data ? format(data, "dd/MM/yyyy") : "Data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10">
-                  <Calendar
-                    mode="single"
-                    selected={data}
-                    onSelect={(d) => { 
-                      if (d) {
-                        // Forçamos o meio-dia para garantir que o fuso não mude o dia
-                        d.setHours(12, 0, 0, 0);
-                        setData(d); 
-                        setHorario(""); 
-                      }
-                    }}
-                    locale={ptBR}
-                    className="p-3"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold">Serviço</Label>
-            <Select value={servicoId} onValueChange={setServicoId}>
-              <SelectTrigger className="bg-[#1A1A1A] border-white/10"><SelectValue placeholder="Serviço" /></SelectTrigger>
-              <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                {servicos.map((s: any) => (<SelectItem key={s.id} value={s.id}>{s.nome} - R${s.preco}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* GRID DE HORÁRIOS - O CORAÇÃO DO BUG ESTAVA AQUI */}
-          {dataStr && barbeiroId && (
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500 font-bold">Horários Disponíveis</Label>
-              <div className="grid grid-cols-4 gap-2">
-                {HORARIOS.map((h) => {
-                  const ocupadoNoBanco = ocupados.includes(h);
-                  const [hPart, mPart] = h.split(":").map(Number);
-                  
-                  // TRAVA REAL: Só bloqueia se isHoje for VERDADEIRO (mesmo dia, mês e ano)
-                  const isPassado = isHoje && (hPart < horaAgora || (hPart === horaAgora && mPart <= minAgora));
-                  const isBloqueado = ocupadoNoBanco || isPassado;
-
-                  return (
-                    <Button
-                      key={h}
-                      type="button"
-                      size="sm"
-                      variant={horario === h ? "default" : "outline"}
-                      disabled={isBloqueado}
-                      onClick={() => setHorario(h)}
-                      className={cn(
-                        "text-xs transition-all border-white/5", 
-                        horario === h ? "bg-primary text-black font-bold" : "bg-[#1A1A1A]",
-                        isBloqueado && "opacity-20 line-through cursor-not-allowed"
-                      )}
-                    >
-                      {h}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <Button 
-            className="w-full h-12 text-lg font-bold uppercase bg-primary text-black hover:bg-primary/90 mt-4" 
-            disabled={!canSave} 
-            onClick={handleSalvar}
-          >
-            Confirmar Agendamento
-          </Button>
+      {/* 2. GESTÃO DE EQUIPE (BARBEIROS) */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Users className="h-4 w-4 text-primary" />
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Gestão de Barbeiros</h3>
         </div>
-      </DialogContent>
-    </Dialog>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-3">
+          <input placeholder="Nome do Barbeiro" className="w-full bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={nBarbeiro.nome} onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} />
+          <div className="flex gap-2">
+            <input placeholder="Email" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+              value={nBarbeiro.email} onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} />
+            <input placeholder="Comissão %" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+              value={nBarbeiro.comissao} onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} />
+          </div>
+          <div className="flex gap-2">
+            <input placeholder="Senha de Acesso" type="password" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+              value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
+            <Button className="bg-primary text-black font-black" onClick={handleAddBarbeiro}>Adicionar</Button>
+          </div>
+        </Card>
+        
+        <div className="grid gap-2">
+          {barbeiros.map((b: any) => (
+            <div key={b.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+              <span className="text-sm font-bold text-white uppercase">{b.nome} ({b.comissao_pct}%)</span>
+              <Button variant="ghost" size="sm" onClick={() => onRemoveBarbeiro(b.id)} className="text-zinc-600 hover:text-red-500">
+                <Trash2 className="h-4 w-4"/>
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 3. GESTÃO DE SERVIÇOS */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <Briefcase className="h-4 w-4 text-primary" />
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Serviços e Preços</h3>
+        </div>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
+          <input placeholder="Nome do Serviço" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={nServico.nome} onChange={e => setNServico({...nServico, nome: e.target.value})} />
+          <input placeholder="Preço" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={nServico.preco} onChange={e => setNServico({...nServico, preco: e.target.value})} />
+          <Button className="bg-primary text-black font-black" onClick={handleAddServico}> <Plus className="h-5 w-5"/> </Button>
+        </Card>
+
+        <div className="grid grid-cols-2 gap-2">
+          {servicos.map((s: any) => (
+            <div key={s.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+              <div className="text-xs">
+                <p className="font-bold text-white uppercase">{s.nome}</p>
+                <p className="text-primary font-black">R$ {formatarMoeda(s.preco)}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => onRemoveServico(s.id)} className="text-zinc-600 hover:text-red-500 h-8 w-8">
+                <Trash2 className="h-4 w-4"/>
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. LANÇAR DESPESA EXTRA */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 px-1">
+          <TrendingDown className="h-4 w-4 text-red-500" />
+          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Despesas do Dia</h3>
+        </div>
+        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
+          <input placeholder="Ex: Aluguel, Luz..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={novaDesc} onChange={e => setNovaDesc(e.target.value)} />
+          <input placeholder="Valor" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
+            value={novoValor} onChange={e => setNovoValor(e.target.value)} />
+          <Button className="bg-red-500 text-white font-black" onClick={handleAddDespesa}> <Plus className="h-5 w-5"/> </Button>
+        </Card>
+      </section>
+
+      {/* 5. PERFORMANCE DA EQUIPE */}
+      <section className="space-y-4">
+        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] ml-1">Produção de Hoje</h3>
+        <div className="grid gap-2">
+          {comissaoPorBarbeiroHoje.map((item: any) => (
+            <Card key={item.barbeiro?.id} className="p-4 bg-[#161616] border-zinc-800 flex justify-between items-center">
+              <div>
+                <p className="font-bold text-white uppercase text-sm">{item.barbeiro?.nome}</p>
+                <p className="text-[10px] text-zinc-500 font-bold">{item.cortes} cortes realizados</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-zinc-500 font-black uppercase">Comissão</p>
+                <p className="text-lg font-black text-primary">R$ {formatarMoeda(item.total)}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
