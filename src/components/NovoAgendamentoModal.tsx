@@ -11,13 +11,48 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+// Configuração dos horários da barbearia
 const HORARIOS = Array.from({ length: 21 }, (_, i) => {
   const h = Math.floor(i / 2) + 9;
   const m = i % 2 === 0 ? "00" : "30";
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, onSalvar, defaultBarbeiroId }: any) {
+// Interfaces para o TypeScript não reclamar (O que a IA de "reforma" exige)
+interface BarbeiroView {
+  id: string;
+  nome: string;
+  comissao_pct: number;
+}
+
+interface ServicoView {
+  id: string;
+  nome: string;
+  preco: number;
+}
+
+interface NovoAgendamentoProps {
+  barbeiros: BarbeiroView[];
+  servicos: ServicoView[];
+  horariosOcupados: (data: string, barbeiroId: string) => string[];
+  onSalvar: (ag: { 
+    data: string; 
+    horario: string; 
+    nomeCliente: string; 
+    telefoneCliente: string; 
+    barbeiroId: string; 
+    servicoId: string 
+  }) => void;
+  defaultBarbeiroId?: string;
+}
+
+export function NovoAgendamentoModal({ 
+  barbeiros, 
+  servicos, 
+  horariosOcupados, 
+  onSalvar, 
+  defaultBarbeiroId 
+}: NovoAgendamentoProps) {
   const [open, setOpen] = useState(false);
   const [nomeCliente, setNomeCliente] = useState("");
   const [telefoneCliente, setTelefoneCliente] = useState("");
@@ -26,35 +61,35 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
   const [data, setData] = useState<Date | undefined>(new Date());
   const [horario, setHorario] = useState("");
 
+  // Sincroniza se o barbeiro mudar externamente
   useEffect(() => {
     if (defaultBarbeiroId) setBarbeiroId(defaultBarbeiroId);
   }, [defaultBarbeiroId]);
 
   // ==========================================================
-  // 🛡️ LÓGICA ANTI-FUSO HORÁRIO (O SEGREDO ESTÁ AQUI)
+  // 🛡️ LÓGICA ANTI-FUSO (Compara strings puras YYYY-MM-DD)
   // ==========================================================
-  
   const { isHoje, dataStr } = useMemo(() => {
     if (!data) return { isHoje: false, dataStr: "" };
 
-    const agora = new Date();
+    const agoraLocal = new Date();
     
-    // Pegamos Ano, Mês e Dia puros do seu navegador
-    const diaAtual = agora.getDate();
-    const mesAtual = agora.getMonth();
-    const anoAtual = agora.getFullYear();
+    // String de Hoje no Brasil
+    const hY = agoraLocal.getFullYear();
+    const hM = String(agoraLocal.getMonth() + 1).padStart(2, '0');
+    const hD = String(agoraLocal.getDate()).padStart(2, '0');
+    const hojeComp = `${hY}-${hM}-${hD}`;
 
-    const diaSel = data.getDate();
-    const mesSel = data.getMonth();
-    const anoSel = data.getFullYear();
+    // String da Data Selecionada
+    const sY = data.getFullYear();
+    const sM = String(data.getMonth() + 1).padStart(2, '0');
+    const sD = String(data.getDate()).padStart(2, '0');
+    const selComp = `${sY}-${sM}-${sD}`;
 
-    // Verificação manual e local de "É hoje?"
-    const checkHoje = diaAtual === diaSel && mesAtual === mesSel && anoAtual === anoSel;
-    
-    // String formatada para o banco (YYYY-MM-DD) sem risco de fuso
-    const dStr = `${anoSel}-${String(mesSel + 1).padStart(2, '0')}-${String(diaSel).padStart(2, '0')}`;
-
-    return { isHoje: checkHoje, dataStr: dStr };
+    return { 
+      isHoje: hojeComp === selComp, 
+      dataStr: selComp 
+    };
   }, [data]);
 
   const agora = new Date();
@@ -78,8 +113,12 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
       barbeiroId, 
       servicoId 
     });
-    setOpen(false);
+    
+    setNomeCliente("");
+    setTelefoneCliente("");
+    setServicoId("");
     setHorario("");
+    setOpen(false);
   }
 
   return (
@@ -96,48 +135,52 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
         </DialogHeader>
         
         <div className="space-y-4 pt-2">
+          {/* NOME */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-zinc-500 font-bold">Nome do Cliente</Label>
             <Input 
-              placeholder="Nome do caboclo" 
+              placeholder="Ex: João Silva" 
               value={nomeCliente} 
               onChange={(e) => setNomeCliente(e.target.value)}
-              className="bg-[#1A1A1A] border-white/10"
+              className="bg-[#1A1A1A] border-white/10 focus:ring-primary"
             />
           </div>
 
+          {/* WHATSAPP */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-zinc-500 font-bold">WhatsApp</Label>
             <Input 
-              placeholder="DDD + Número" 
+              placeholder="Ex: 17999998888" 
               value={telefoneCliente} 
               onChange={(e) => setTelefoneCliente(e.target.value)}
-              className="bg-[#1A1A1A] border-white/10"
+              className="bg-[#1A1A1A] border-white/10 focus:ring-primary"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {/* BARBEIRO */}
             <div className="space-y-2">
               <Label className="text-xs uppercase text-zinc-500 font-bold">Barbeiro</Label>
               <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
                 <SelectTrigger className="bg-[#1A1A1A] border-white/10">
-                  <SelectValue placeholder="Profissional" />
+                  <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                  {barbeiros.map((b: any) => (
+                  {barbeiros.map((b) => (
                     <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {/* DATA */}
             <div className="space-y-2">
               <Label className="text-xs uppercase text-zinc-500 font-bold">Data</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left bg-[#1A1A1A] border-white/10">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {data ? format(data, "dd/MM/yyyy") : "Data"}
+                    {data ? format(data, "dd/MM/yyyy") : "Selecione"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10">
@@ -153,30 +196,31 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             </div>
           </div>
 
+          {/* SERVIÇO */}
           <div className="space-y-2">
             <Label className="text-xs uppercase text-zinc-500 font-bold">Serviço</Label>
             <Select value={servicoId} onValueChange={setServicoId}>
               <SelectTrigger className="bg-[#1A1A1A] border-white/10">
-                <SelectValue placeholder="O que vai fazer?" />
+                <SelectValue placeholder="Selecione o serviço" />
               </SelectTrigger>
               <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                {servicos.map((s: any) => (
-                  <SelectItem key={s.id} value={s.id}>{s.nome} - R${s.preco}</SelectItem>
+                {servicos.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.nome} - R$ {s.preco}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* GRID DE HORÁRIOS */}
+          {/* HORÁRIOS */}
           {dataStr && barbeiroId && (
             <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500 font-bold">Horários</Label>
+              <Label className="text-xs uppercase text-zinc-500 font-bold">Horários Disponíveis</Label>
               <div className="grid grid-cols-4 gap-2">
                 {HORARIOS.map((h) => {
                   const ocupadoNoBanco = ocupados.includes(h);
                   const [horaH, minH] = h.split(":").map(Number);
                   
-                  // AQUI É A TRAVA: Só bloqueia se isHoje for VERDADEIRO.
+                  // Lógica Blindada: isPassado só existe se isHoje for true
                   const isPassado = isHoje && (horaH < horaAtual || (horaH === horaAtual && minH <= minAtual));
                   const isBloqueado = ocupadoNoBanco || isPassado;
 
@@ -190,8 +234,8 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
                       onClick={() => setHorario(h)}
                       className={cn(
                         "text-xs border-white/5", 
-                        horario === h ? "bg-primary text-black" : "bg-[#1A1A1A]",
-                        isBloqueado && "opacity-20 line-through"
+                        horario === h ? "bg-primary text-black font-bold" : "bg-[#1A1A1A]",
+                        isBloqueado && "opacity-20 line-through cursor-not-allowed"
                       )}
                     >
                       {h}
@@ -203,7 +247,7 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
           )}
 
           <Button 
-            className="w-full h-12 text-lg font-bold uppercase bg-primary text-black hover:bg-primary/90 mt-4" 
+            className="w-full h-12 text-lg font-bold uppercase bg-primary text-black hover:bg-primary/90 mt-4 shadow-lg shadow-primary/20" 
             disabled={!canSave} 
             onClick={handleSalvar}
           >
