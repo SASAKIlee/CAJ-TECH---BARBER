@@ -13,9 +13,9 @@ import { cn } from "@/lib/utils";
 export function VisaoBarbeiro({ 
   barbeiros = [], 
   servicos = [], 
-  agendamentos = [], // Recebe a lista filtrada do Index
+  agendamentos = [], 
   onNovoAgendamento, 
-  onStatusChange, // Usando a função unificada que criamos no Index
+  onStatusChange, 
   barbeiroSelecionadoId, 
   setBarbeiroSelecionadoId, 
   horariosOcupados, 
@@ -28,11 +28,10 @@ export function VisaoBarbeiro({
     telefone: "", 
     servicoId: "", 
     barbeiroId: barbeiroSelecionadoId || "", 
-    data: "", // Será preenchido pelo useEffect
+    data: "", 
     horario: "" 
   });
 
-  // Função para pegar data local padrão do banco (YYYY-MM-DD)
   const getHojeLocal = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -48,12 +47,11 @@ export function VisaoBarbeiro({
     }
   }, [open, barbeiroSelecionadoId]);
 
-  // 🕒 GERADOR DE SLOTS DE 30 MINUTOS
   const horarios = useMemo(() => {
     const slots = [];
     for (let h = 9; h <= 19; h++) {
       slots.push(`${String(h).padStart(2, '0')}:00`);
-      if (h !== 12 && h !== 19) { // Remove 12:30 (almoço) e 19:30 (fechamento) se quiser
+      if (h !== 12 && h !== 19) {
          slots.push(`${String(h).padStart(2, '0')}:30`);
       }
     }
@@ -92,37 +90,35 @@ export function VisaoBarbeiro({
 
     if (!res?.error) {
       setOpen(false);
-      toast.success("Agendado com sucesso!");
       setNovo({ nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId, data: getHojeLocal(), horario: "" });
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* CABEÇALHO DA AGENDA */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-4">
+      {/* HEADER DA AGENDA */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-2">
         <div>
           <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Agenda</h2>
           {isDono && (
-             <p className="text-[10px] font-bold text-primary uppercase">Visão do Administrador</p>
+             <p className="text-[10px] font-bold text-primary uppercase">Visão Administrativa</p>
           )}
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="rounded-full shadow-lg gap-2 h-12 px-8 bg-primary text-black font-black uppercase text-xs hover:scale-105 transition-transform">
+            <Button className="rounded-full shadow-lg gap-2 h-12 px-8 bg-primary text-black font-black uppercase text-xs active:scale-95 transition-transform">
               <Plus className="h-5 w-5 stroke-[3px]"/> Novo Agendamento
             </Button>
           </DialogTrigger>
-          <DialogContent className="dark bg-[#0A0A0A] border-zinc-800 text-white max-w-[95vw] sm:max-w-md p-6">
+          <DialogContent className="dark bg-[#0A0A0A] border-zinc-800 text-white max-w-[95vw] sm:max-w-md p-6 rounded-[2rem]">
             <DialogHeader>
               <DialogTitle className="text-white font-black uppercase italic text-xl">Novo Horário</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
-              
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
-                <Input placeholder="Nome completo" className="bg-zinc-900 border-zinc-800 h-12 focus:border-primary" value={novo.nome} onChange={e => setNovo({...novo, nome: e.target.value})} />
+                <Input placeholder="Nome do cliente" className="bg-zinc-900 border-zinc-800 h-12" value={novo.nome} onChange={e => setNovo({...novo, nome: e.target.value})} />
               </div>
 
               <div className="space-y-1.5">
@@ -150,20 +146,20 @@ export function VisaoBarbeiro({
                       <SelectValue placeholder="Serviço"/>
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                      {servicos.map((s:any) => <SelectItem key={s.id} value={s.id}>{s.nome} - R${s.preco}</SelectItem>)}
+                      {servicos.map((s:any) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data do Corte</label>
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
                 <Input type="date" className="bg-zinc-900 border-zinc-800 h-12 color-scheme-dark" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value, horario: ""})} />
               </div>
               
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Escolha o Horário (30 min)</label>
-                <div className="grid grid-cols-4 gap-2 h-40 overflow-y-auto pr-2 custom-scrollbar">
+                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Horário</label>
+                <div className="grid grid-cols-4 gap-2 h-32 overflow-y-auto pr-2 custom-scrollbar">
                   {horarios.map(h => {
                     const [hH, mH] = h.split(":").map(Number);
                     const isHoje = novo.data === hojeLocal;
@@ -178,8 +174,8 @@ export function VisaoBarbeiro({
                         disabled={disable} 
                         onClick={() => setNovo({...novo, horario: h})}
                         className={cn(
-                          "text-[11px] font-bold h-10 border-zinc-800",
-                          novo.horario === h ? 'bg-primary text-black' : 'text-white bg-zinc-900/50',
+                          "text-[11px] font-bold h-10",
+                          novo.horario === h ? 'bg-primary text-black' : 'text-white bg-zinc-900',
                           disable && 'opacity-20 strike-through'
                         )}
                       >
@@ -190,22 +186,22 @@ export function VisaoBarbeiro({
                 </div>
               </div>
 
-              <Button className="w-full h-14 bg-primary text-black font-black uppercase rounded-xl mt-4" onClick={handleAgendar}>
-                Confirmar Agendamento
+              <Button className="w-full h-14 bg-primary text-black font-black uppercase rounded-xl mt-2" onClick={handleAgendar}>
+                Confirmar
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* 👤 SELETOR DE BARBEIROS (APENAS PARA O DONO) */}
+      {/* SELETOR DE BARBEIROS (Mobile friendly) */}
       {isDono && (
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar -mx-4 px-4">
           <Button 
             variant={barbeiroSelecionadoId === "" ? "default" : "outline"}
             size="sm"
             onClick={() => setBarbeiroSelecionadoId("")}
-            className="rounded-full text-[10px] font-black uppercase h-8"
+            className="rounded-full text-[10px] font-black uppercase h-8 px-4"
           >
             Todos
           </Button>
@@ -215,7 +211,7 @@ export function VisaoBarbeiro({
               variant={barbeiroSelecionadoId === b.id ? "default" : "outline"}
               size="sm"
               onClick={() => setBarbeiroSelecionadoId(b.id)}
-              className="rounded-full text-[10px] font-black uppercase h-8 whitespace-nowrap"
+              className="rounded-full text-[10px] font-black uppercase h-8 px-4 whitespace-nowrap"
             >
               {b.nome}
             </Button>
@@ -223,12 +219,12 @@ export function VisaoBarbeiro({
         </div>
       )}
 
-      {/* 📅 LISTA DE CARDS DA AGENDA */}
-      <div className="space-y-3">
+      {/* LISTA DE AGENDAMENTOS (Ajustado para cliques mobile) */}
+      <div className="space-y-4 pb-32"> {/* pb-32 garante que o menu de baixo não cubra o último card */}
         {agendamentos.length === 0 ? (
-          <div className="text-center py-20 bg-zinc-900/30 rounded-[2rem] border-2 border-dashed border-zinc-800/50">
+          <div className="text-center py-16 bg-zinc-900/30 rounded-[2rem] border-2 border-dashed border-zinc-800/50">
             <Clock className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
-            <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Nenhum serviço para exibir</p>
+            <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Nenhum agendamento hoje</p>
           </div>
         ) : (
           agendamentos.map((ag: any) => {
@@ -237,12 +233,12 @@ export function VisaoBarbeiro({
             
             return (
               <Card key={ag.id} className={cn(
-                "p-5 border-l-[6px] transition-all bg-[#161616] border-zinc-800 shadow-xl",
-                ag.status === "Finalizado" && "border-l-green-600 opacity-40 grayscale-[0.5]",
+                "p-5 border-l-[6px] bg-[#161616] border-zinc-800 shadow-xl transition-all active:scale-[0.98]",
+                ag.status === "Finalizado" && "border-l-green-600 opacity-40 grayscale",
                 ag.status === "Cancelado" && "border-l-red-600 opacity-40 strike-through",
                 ag.status === "Pendente" && "border-l-primary"
               )}>
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
                       <span className="text-3xl font-black text-white tracking-tighter">{ag.horario}</span>
@@ -263,30 +259,41 @@ export function VisaoBarbeiro({
                         <Users className="h-3 w-3 text-primary" /> {barbeiro?.nome || "Profissional"}
                       </span>
                       <span className="text-[10px] font-black text-primary uppercase italic">
-                        {servico?.nome || "Serviço"} • R${servico?.preco || 0}
+                        {servico?.nome || "Corte"} • R${servico?.preco || 0}
                       </span>
                     </div>
                   </div>
                   
+                  {/* BOTÕES DE AÇÃO: Área de clique expandida para celular (h-12) */}
                   {ag.status === "Pendente" && (
-                    <div className="flex gap-2">
-                      <Button size="icon" className="h-10 w-10 text-green-500 bg-green-500/10 hover:bg-green-500 hover:text-black rounded-full" 
+                    <div className="flex items-center gap-3 pt-2 sm:pt-0">
+                      <Button 
+                        size="icon" 
+                        className="h-12 w-12 text-green-500 bg-green-500/10 active:bg-green-500 active:text-black rounded-full transition-all" 
                         onClick={() => {
                           const n = ag.telefone_cliente?.replace(/\D/g, "");
-                          const msg = `Fala ${ag.nome_cliente}! ✂️\nPassando para confirmar seu horário às ${ag.horario}.\nEstaremos te esperando na *CAJ TECH*!`;
+                          const msg = `Fala ${ag.nome_cliente}! ✂️ Passando para confirmar seu horário hoje às ${ag.horario}. Estaremos te esperando na CAJ TECH!`;
                           window.open(`https://api.whatsapp.com/send?phone=55${n}&text=${encodeURIComponent(msg)}`, "_blank");
-                        }}>
-                        <MessageCircle className="h-5 w-5 fill-current opacity-20" />
+                        }}
+                      >
+                        <MessageCircle className="h-6 w-6" />
                       </Button>
                       
-                      <Button size="icon" className="h-10 w-10 text-white bg-green-600 hover:bg-green-500 rounded-full" 
-                        onClick={() => onStatusChange(ag.id, "Finalizado")}>
-                        <Check className="h-5 w-5 stroke-[3px]" />
+                      <Button 
+                        size="icon" 
+                        className="h-12 w-12 text-white bg-green-600 active:bg-green-400 rounded-full shadow-lg transition-all" 
+                        onClick={() => onStatusChange(ag.id, "Finalizado")}
+                      >
+                        <Check className="h-6 w-6 stroke-[3px]" />
                       </Button>
                       
-                      <Button size="icon" variant="ghost" className="h-10 w-10 text-zinc-600 hover:text-red-500 rounded-full" 
-                        onClick={() => onStatusChange(ag.id, "Cancelado")}>
-                        <X className="h-5 w-5 stroke-[3px]" />
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-12 w-12 text-zinc-600 active:text-red-500 rounded-full transition-all" 
+                        onClick={() => onStatusChange(ag.id, "Cancelado")}
+                      >
+                        <X className="h-6 w-6 stroke-[3px]" />
                       </Button>
                     </div>
                   )}
