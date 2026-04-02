@@ -8,19 +8,37 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Arquivos que devem ser guardados em cache para funcionar offline
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
         name: 'CAJ Tech - Barber',
         short_name: 'CAJBarber',
         description: 'Gestão Profissional para Barbearias',
         theme_color: '#000000',
+        background_color: '#000000', // Cor de fundo ao abrir o app
+        display: 'standalone',       // 🚀 O pulo do gato: Faz o site abrir sem a barra do navegador
+        orientation: 'portrait',
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' }
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable' // Garante que o ícone fique bonito em qualquer celular
+          }
         ]
       },
       workbox: {
-        // Isso garante que o app funcione offline salvando os arquivos JS/CSS
+        // Cache de arquivos estáticos
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       }
     })
