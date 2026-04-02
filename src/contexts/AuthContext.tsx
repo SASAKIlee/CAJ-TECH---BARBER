@@ -27,40 +27,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<"dono" | "barbeiro" | null>(null);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    let isMounted = true;
+
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
       setSession(session);
       setUser(session?.user ?? null);
-      if (!session?.user) {
-        setUserRole(null);
-        setLoading(false);
-      }
-    });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!session?.user) setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Fetch role when user changes
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setUserRole(data[0].role as "dono" | "barbeiro");
-        } else {
-          setUserRole(null);
+      if (session?.user) {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.user.id);
+        if (isMounted) {
+          if (data && data.length > 0) {
+            setUserRole(data[0].role as "dono" | "barbeiro");
+          } else {
+            setUserRole(null);
+          }
         }
-        setLoading(false);
-      });
-  }, [user]);
+      }
+
+      if (isMounted) setLoading(false);
+    };
+
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.user.id);
+        if (isMounted) {
+          if (data && data.length > 0) {
+            setUserRole(data[0].role as "dono" | "barbeiro");
+          } else {
+            setUserRole(null);
+          }
+        }
+      } else {
+        setUserRole(null);
+      }
+
+      if (isMounted) setLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();

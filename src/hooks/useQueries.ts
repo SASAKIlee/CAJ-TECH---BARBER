@@ -6,6 +6,24 @@ import { toast } from "sonner";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Type definitions
+interface Barbearia {
+  slug: string;
+  dono_id: string;
+}
+
+interface Barbeiro {
+  id: string;
+  nome: string;
+  comissao_pct: number;
+  barbearia_slug: string;
+}
+
+interface UserRole {
+  user_id: string;
+  role: "dono" | "barbeiro";
+}
+
 // ============================================================================
 // 1. GAVETA DA BARBEARIA (Descobre quem tá logado e pega o Slug)
 // ============================================================================
@@ -16,22 +34,25 @@ export function useBarbearia() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não logado");
 
-      // Tenta achar como dono (Usando "as any" para o TypeScript parar de chorar)
-      const { data: bList }: any = await (supabase as any)
+      // Tenta achar como dono
+      const { data: bList, error: bError } = await supabase
         .from("barbearias")
         .select("slug")
         .eq("dono_id", user.id);
+      
+      if (bError) throw bError;
         
       let slug = bList?.[0]?.slug;
       let isDono = !!slug;
 
       // Se não for dono, acha como funcionário
       if (!slug) {
-        const { data: barbList }: any = await (supabase as any)
+        const { data: barbList, error: barbError } = await supabase
           .from("barbeiros")
           .select("barbearia_slug")
           .eq("id", user.id);
           
+        if (barbError) throw barbError;
         slug = barbList?.[0]?.barbearia_slug;
         isDono = false;
       }
@@ -50,8 +71,8 @@ export function useBarbearia() {
 export function useBarbeiros(slug?: string) {
   return useQuery({
     queryKey: ["barbeiros", slug],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
+    queryFn: async (): Promise<Barbeiro[]> => {
+      const { data, error } = await supabase
         .from("barbeiros")
         .select("*")
         .eq("barbearia_slug", slug)
@@ -72,14 +93,17 @@ export function useMutacoesBarbeiro() {
   const queryClient = useQueryClient();
 
   const adicionarBarbeiro = useMutation({
-    mutationFn: async ({ nome, comissao, email, senha, slug }: any) => {
+    mutationFn: async ({ nome, comissao, email, senha, slug }: { nome: string; comissao: number; email: string; senha: string; slug: string }) => {
       const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email, password: senha });
       if (authError) throw authError;
+      if (!authData.user) throw new Error("Falha ao criar usuário");
 
-      await (supabase as any).from("user_roles").insert({ user_id: authData.user!.id, role: "barbeiro" });
-      const { data, error }: any = await (supabase as any).from("barbeiros").insert({ 
-        id: authData.user!.id, nome, comissao_pct: comissao, barbearia_slug: slug 
+      const { error: roleError } = await supabase.from("user_roles").insert({ user_id: authData.user.id, role: "barbeiro" });
+      if (roleError) throw roleError;
+
+      const { data, error }: { data: Barbeiro | null; error: any } = await supabase.from("barbeiros").insert({ 
+        id: authData.user.id, nome, comissao_pct: comissao, barbearia_slug: slug 
       }).select().single();
 
       if (error) throw error;

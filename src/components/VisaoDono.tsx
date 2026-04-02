@@ -13,7 +13,8 @@ export function VisaoDono({
   despesas = [], onAddDespesa, onRemoveDespesa, 
   comissaoPorBarbeiroHoje = [], dataFiltro,
   barbeiros = [], servicos = [], 
-  onAddBarbeiro, onRemoveBarbeiro, onAddServico, onRemoveServico 
+  onAddBarbeiro, onRemoveBarbeiro, onAddServico, onRemoveServico,
+  isAddingBarbeiro = false
 }: any) {
   
   // States para os formulários
@@ -113,7 +114,13 @@ export function VisaoDono({
             <input placeholder="Senha de Acesso" type="password" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
               value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
             {/* Trocado o onClick para usar a nossa função validada */}
-            <Button className="bg-primary text-black font-black" onClick={handleAddBarbeiro}>Adicionar</Button>
+            <Button 
+              className="bg-primary text-black font-black" 
+              onClick={handleAddBarbeiro}
+              disabled={isAddingBarbeiro}
+            >
+              {isAddingBarbeiro ? "Adicionando..." : "Adicionar"}
+            </Button>
           </div>
         </Card>
         

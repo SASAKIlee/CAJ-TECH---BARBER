@@ -187,6 +187,7 @@ export default function Index() {
             onRemoveBarbeiro={(id: string) => mutacoesBarbeiro.removerBarbeiro.mutate(id)}
             onAddServico={(nome: string, preco: number) => mutacoesServico.adicionarServico.mutate({ nome, preco, slug })}
             onRemoveServico={(id: string) => mutacoesServico.removerServico.mutate(id)}
+            isAddingBarbeiro={mutacoesBarbeiro.adicionarBarbeiro.isPending}
           />
         )}
       </main>
