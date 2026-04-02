@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Analytics } from "@vercel/analytics/react"; // ✅ O PULO DO GATO PARA O RASTREAMENTO
+import { SpeedInsights } from "@vercel/speed-insights/react"; // ✅ MONITORAMENTO DE PERFORMANCE EM TEMPO REAL
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import SelecionarPapel from "./pages/SelecionarPapel.tsx";
@@ -63,6 +64,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <Analytics /> {/* ✅ AGORA VOCÊ VÊ QUEM ENTRA NO CAJ TECH EM TEMPO REAL! */}
+      <SpeedInsights /> {/* ✅ MONITORAMENTO DE VELOCIDADE E PERFORMANCE DO SITE */}
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
