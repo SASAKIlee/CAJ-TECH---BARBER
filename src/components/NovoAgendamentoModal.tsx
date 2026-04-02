@@ -17,15 +17,7 @@ const HORARIOS = Array.from({ length: 21 }, (_, i) => {
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-interface NovoAgendamentoProps {
-  barbeiros: any[];
-  servicos: any[];
-  horariosOcupados: (data: string, barbeiroId: string) => string[];
-  onSalvar: (ag: any) => void;
-  defaultBarbeiroId?: string;
-}
-
-export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, onSalvar, defaultBarbeiroId }: NovoAgendamentoProps) {
+export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, onSalvar, defaultBarbeiroId }: any) {
   const [open, setOpen] = useState(false);
   const [nomeCliente, setNomeCliente] = useState("");
   const [telefoneCliente, setTelefoneCliente] = useState("");
@@ -39,29 +31,36 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
   }, [defaultBarbeiroId, open]);
 
   // ==========================================================
-  // 🛡️ LÓGICA BLINDADA CONTRA FUSO HORÁRIO
+  // 🛡️ LÓGICA DE COMPARAÇÃO MANUAL (IMUNE A FUSO HORÁRIO)
   // ==========================================================
   const { isHoje, dataStr } = useMemo(() => {
     const agora = new Date();
     
-    // Pega "hoje" no formato 2026-04-01 baseado no relógio local, sem UTC
-    const hojeLocal = agora.toLocaleDateString('sv-SE'); 
+    // Pegamos Dia, Mês e Ano de HOJE (Local Brasil)
+    const hojeD = agora.getDate();
+    const hojeM = agora.getMonth();
+    const hojeA = agora.getFullYear();
 
     if (!data) return { isHoje: false, dataStr: "" };
 
-    // Pega a data selecionada também como string local 2026-04-02
-    // Isso ignora se a data interna está em UTC ou 00:00
-    const dataSelLocal = data.toLocaleDateString('sv-SE');
+    // Pegamos Dia, Mês e Ano da DATA CLICADA
+    const selD = data.getDate();
+    const selM = data.getMonth();
+    const selA = data.getFullYear();
 
-    return { 
-      isHoje: hojeLocal === dataSelLocal, 
-      dataStr: dataSelLocal 
-    };
+    // Comparamos só os números. Se for dia 02 e hoje é 01, isso dá FALSE.
+    const checkHoje = hojeD === selD && hojeM === selM && hojeA === selA;
+    
+    // Montamos a string de texto puro "2026-04-01"
+    const sStr = `${selA}-${String(selM + 1).padStart(2, '0')}-${String(selD).padStart(2, '0')}`;
+
+    return { isHoje: checkHoje, dataStr: sStr };
   }, [data]);
 
+  // Pegamos a hora do seu computador AGORA
   const agora = new Date();
-  const horaAtual = agora.getHours();
-  const minAtual = agora.getMinutes();
+  const horaAgora = agora.getHours();
+  const minAgora = agora.getMinutes();
 
   const ocupados = useMemo(
     () => (dataStr && barbeiroId ? horariosOcupados(dataStr, barbeiroId) : []),
@@ -93,97 +92,80 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto bg-[#0A0A0A] border-white/10 text-white">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Novo Horário</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle className="text-xl font-bold">Novo Horário</DialogTitle></DialogHeader>
         
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Nome do Cliente</Label>
-            <Input 
-              placeholder="Nome completo" 
-              value={nomeCliente} 
-              onChange={(e) => setNomeCliente(e.target.value)}
-              className="bg-[#1A1A1A] border-white/10 focus:ring-primary"
-            />
+            <Label className="text-xs uppercase text-zinc-500 font-bold">Nome do Cliente</Label>
+            <Input placeholder="Nome completo" value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} className="bg-[#1A1A1A] border-white/10" />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">WhatsApp (DDD + Número)</Label>
-            <Input 
-              placeholder="Ex: 11999998888" 
-              value={telefoneCliente} 
-              onChange={(e) => setTelefoneCliente(e.target.value)}
-              className="bg-[#1A1A1A] border-white/10"
-            />
+            <Label className="text-xs uppercase text-zinc-500 font-bold">WhatsApp</Label>
+            <Input placeholder="17999998888" value={telefoneCliente} onChange={(e) => setTelefoneCliente(e.target.value)} className="bg-[#1A1A1A] border-white/10" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase text-zinc-500 font-bold">Barbeiro</Label>
+              <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
+                <SelectTrigger className="bg-[#1A1A1A] border-white/10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
+                  {barbeiros.map((b: any) => (<SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase text-zinc-500 font-bold">Data</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left bg-[#1A1A1A] border-white/10">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {data ? format(data, "dd/MM/yyyy") : "Data"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10">
+                  <Calendar
+                    mode="single"
+                    selected={data}
+                    onSelect={(d) => { 
+                      if (d) {
+                        // Forçamos o meio-dia para garantir que o fuso não mude o dia
+                        d.setHours(12, 0, 0, 0);
+                        setData(d); 
+                        setHorario(""); 
+                      }
+                    }}
+                    locale={ptBR}
+                    className="p-3"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Barbeiro Responsável</Label>
-            <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
-              <SelectTrigger className="bg-[#1A1A1A] border-white/10">
-                <SelectValue placeholder="Selecione o profissional" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                {barbeiros.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Serviço</Label>
+            <Label className="text-xs uppercase text-zinc-500 font-bold">Serviço</Label>
             <Select value={servicoId} onValueChange={setServicoId}>
-              <SelectTrigger className="bg-[#1A1A1A] border-white/10">
-                <SelectValue placeholder="Selecione o serviço" />
-              </SelectTrigger>
+              <SelectTrigger className="bg-[#1A1A1A] border-white/10"><SelectValue placeholder="Serviço" /></SelectTrigger>
               <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                {servicos.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.nome} - R$ {s.preco}</SelectItem>
-                ))}
+                {servicos.map((s: any) => (<SelectItem key={s.id} value={s.id}>{s.nome} - R${s.preco}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Data</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left bg-[#1A1A1A] border-white/10">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {data ? format(data, "dd/MM/yyyy") : "Selecione a data"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10">
-                <Calendar
-                  mode="single"
-                  selected={data}
-                  onSelect={(d) => { 
-                    if (d) {
-                      // Mata qualquer chance de fuso horário pulando o dia
-                      const safeDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
-                      setData(safeDate); 
-                      setHorario(""); 
-                    }
-                  }}
-                  locale={ptBR}
-                  className="p-3"
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
+          {/* GRID DE HORÁRIOS - O CORAÇÃO DO BUG ESTAVA AQUI */}
           {dataStr && barbeiroId && (
-            <div className="space-y-3">
-              <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Horários Disponíveis</Label>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase text-zinc-500 font-bold">Horários Disponíveis</Label>
               <div className="grid grid-cols-4 gap-2">
                 {HORARIOS.map((h) => {
                   const ocupadoNoBanco = ocupados.includes(h);
                   const [hPart, mPart] = h.split(":").map(Number);
                   
-                  // TRAVA REAL: Só bloqueia se a string da data for IGUAL a de hoje
-                  const isPassado = isHoje && (hPart < horaAtual || (hPart === horaAtual && mPart <= minAtual));
+                  // TRAVA REAL: Só bloqueia se isHoje for VERDADEIRO (mesmo dia, mês e ano)
+                  const isPassado = isHoje && (hPart < horaAgora || (hPart === horaAgora && mPart <= minAgora));
                   const isBloqueado = ocupadoNoBanco || isPassado;
 
                   return (
@@ -195,9 +177,9 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
                       disabled={isBloqueado}
                       onClick={() => setHorario(h)}
                       className={cn(
-                        "text-xs border-white/5", 
+                        "text-xs transition-all border-white/5", 
                         horario === h ? "bg-primary text-black font-bold" : "bg-[#1A1A1A]",
-                        isBloqueado && "opacity-10 line-through cursor-not-allowed"
+                        isBloqueado && "opacity-20 line-through cursor-not-allowed"
                       )}
                     >
                       {h}
@@ -209,7 +191,7 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
           )}
 
           <Button 
-            className="w-full h-12 text-lg font-bold uppercase bg-primary text-black hover:bg-primary/90 mt-4 shadow-lg shadow-primary/20" 
+            className="w-full h-12 text-lg font-bold uppercase bg-primary text-black hover:bg-primary/90 mt-4" 
             disabled={!canSave} 
             onClick={handleSalvar}
           >
