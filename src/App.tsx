@@ -4,17 +4,18 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { Analytics } from "@vercel/analytics/react"; // ✅ O PULO DO GATO PARA O RASTREAMENTO
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import SelecionarPapel from "./pages/SelecionarPapel.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
-// AQUI ESTÁ O PULO DO GATO: Configuração do motor de Cache!
+// Configuração do motor de Cache
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // Os dados ficam no cache sem precisar baixar de novo por 5 minutos
-      refetchOnWindowFocus: false, // Não faz requisição no banco só de trocar de aba no navegador
+      staleTime: 1000 * 60 * 5, 
+      refetchOnWindowFocus: false, 
     },
   },
 });
@@ -22,7 +23,6 @@ const queryClient = new QueryClient({
 function AppRoutes() {
   const { user, loading, userRole } = useAuth();
 
-  // 1. Enquanto estiver carregando as informações do banco
   if (loading) {
     return (
       <div className="dark min-h-screen bg-background flex items-center justify-center">
@@ -31,7 +31,6 @@ function AppRoutes() {
     );
   }
 
-  // 2. Se NÃO estiver logado: Só conhece a tela de Auth
   if (!user) {
     return (
       <Routes>
@@ -41,25 +40,18 @@ function AppRoutes() {
     );
   }
 
-  // 3. Se ESTIVER logado: Conhece a Home e a Seleção de Papel
   return (
     <Routes>
-      {/* Rota Principal */}
       <Route 
         path="/" 
         element={userRole ? <Index /> : <Navigate to="/selecionar-papel" replace />} 
       />
       
-      {/* Tela de escolha de função */}
       <Route 
         path="/selecionar-papel" 
         element={!userRole ? <SelecionarPapel /> : <Navigate to="/" replace />} 
       />
 
-      {/* O PULO DO GATO: 
-          Se sobrar qualquer outro endereço (tipo o /auth depois que logou),
-          nós redirecionamos para a raiz (/) em vez de mostrar o 404.
-      */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -70,6 +62,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <Analytics /> {/* ✅ AGORA VOCÊ VÊ QUEM ENTRA NO CAJ TECH EM TEMPO REAL! */}
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
