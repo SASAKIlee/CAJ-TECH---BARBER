@@ -39,7 +39,14 @@ export function VisaoDono({
   const handleAddBarbeiro = () => {
     const validacao = barbeiroSchema.safeParse(nBarbeiro);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
-    onAddBarbeiro(validacao.data.nome, validacao.data.comissao, validacao.data.email, validacao.data.senha);
+    
+    onAddBarbeiro({
+      nome: validacao.data.nome,
+      comissao_pct: validacao.data.comissao, 
+      email: validacao.data.email,
+      senha: validacao.data.senha
+    });
+
     toast.success("Barbeiro cadastrado! ✂️");
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
   };
@@ -47,7 +54,12 @@ export function VisaoDono({
   const handleAddServico = () => {
     const validacao = servicoSchema.safeParse(nServico);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
-    onAddServico(validacao.data.nome, validacao.data.preco);
+    
+    onAddServico({
+      nome: validacao.data.nome,
+      preco: validacao.data.preco
+    });
+
     toast.success("Serviço adicionado!");
     setNServico({ nome: "", preco: "" });
   };
