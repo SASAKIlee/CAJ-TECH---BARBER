@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { format, startOfDay } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,23 +17,11 @@ const HORARIOS = Array.from({ length: 21 }, (_, i) => {
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-interface BarbeiroView {
-  id: string;
-  nome: string;
-  comissao_pct: number;
-}
-
-interface ServicoView {
-  id: string;
-  nome: string;
-  preco: number;
-}
-
 interface Props {
-  barbeiros: BarbeiroView[];
-  servicos: ServicoView[];
+  barbeiros: any[];
+  servicos: any[];
   horariosOcupados: (data: string, barbeiroId: string) => string[];
-  onSalvar: (ag: { data: string; horario: string; nomeCliente: string; telefoneCliente: string; barbeiroId: string; servicoId: string }) => void;
+  onSalvar: (ag: any) => void;
   defaultBarbeiroId?: string;
 }
 
@@ -50,15 +38,19 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
     if (defaultBarbeiroId) setBarbeiroId(defaultBarbeiroId);
   }, [defaultBarbeiroId]);
 
-  // --- LÓGICA DE DATA BLINDADA ---
-  // Usamos format(d, "yyyy-MM-dd") para garantir que estamos falando de "strings de data" e não objetos Date com fuso
-  const dataStr = data ? format(data, "yyyy-MM-dd") : "";
-  
+  // --- SOLUÇÃO PARA O FUSO HORÁRIO ---
+  // Criamos a string de data (yyyy-MM-dd) de forma manual e local para não ter erro
+  const dataStr = useMemo(() => {
+    if (!data) return "";
+    const y = data.getFullYear();
+    const m = String(data.getMonth() + 1).padStart(2, '0');
+    const d = String(data.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, [data]);
+
+  // Verifica se a data selecionada é HOJE (usando a função segura do date-fns)
   const agora = new Date();
-  const hojeStr = format(agora, "yyyy-MM-dd");
-  
-  // Se a data selecionada no calendário não for IGUAL a string de hoje, amanhã não é hoje!
-  const isHoje = dataStr === hojeStr;
+  const isHoje = data ? isSameDay(data, agora) : false;
   
   const horaAtual = agora.getHours();
   const minAtual = agora.getMinutes();
@@ -113,9 +105,9 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-muted-foreground font-bold">WhatsApp (DDD + Número)</Label>
+            <Label className="text-xs uppercase text-muted-foreground font-bold">WhatsApp</Label>
             <Input 
-              placeholder="Ex: 11999998888" 
+              placeholder="Ex: 17999998888" 
               value={telefoneCliente} 
               onChange={(e) => setTelefoneCliente(e.target.value)}
               className="bg-[#1A1A1A] border-white/10"
@@ -123,7 +115,7 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-muted-foreground font-bold">Barbeiro</Label>
+            <Label className="text-xs uppercase text-muted-foreground font-bold">Barbeiro Responsável</Label>
             <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
               <SelectTrigger className="bg-[#1A1A1A] border-white/10">
                 <SelectValue placeholder="Selecione o profissional" />
@@ -140,11 +132,11 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             <Label className="text-xs uppercase text-muted-foreground font-bold">Serviço</Label>
             <Select value={servicoId} onValueChange={setServicoId}>
               <SelectTrigger className="bg-[#1A1A1A] border-white/10">
-                <SelectValue placeholder="Selecione o que será feito" />
+                <SelectValue placeholder="Selecione o serviço" />
               </SelectTrigger>
               <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
                 {servicos.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.nome} — R$ {s.preco.toFixed(2)}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>{s.nome} - R$ {s.preco}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -163,11 +155,7 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
                 <Calendar
                   mode="single"
                   selected={data}
-                  onSelect={(d) => { 
-                    // Forçamos a data para o início do dia para evitar problemas de fuso
-                    setData(d ? startOfDay(d) : undefined); 
-                    setHorario(""); 
-                  }}
+                  onSelect={(d) => { setData(d); setHorario(""); }}
                   locale={ptBR}
                   className="p-3"
                 />
@@ -175,7 +163,7 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
             </Popover>
           </div>
 
-          {/* HORÁRIOS - AQUI A MÁGICA ACONTECE */}
+          {/* HORÁRIOS - LÓGICA DE TRAVA CORRIGIDA */}
           {dataStr && barbeiroId && (
             <div className="space-y-2">
               <Label className="text-xs uppercase text-muted-foreground font-bold">Horários Disponíveis</Label>
@@ -184,9 +172,8 @@ export function NovoAgendamentoModal({ barbeiros, servicos, horariosOcupados, on
                   const ocupadoNoBanco = ocupados.includes(h);
                   const [horaH, minH] = h.split(":").map(Number);
                   
-                  // CORREÇÃO CRÍTICA: 
-                  // isPassado só pode ser true se isHoje for true. 
-                  // Se for amanhã, isHoje é false, logo isPassado nunca bloqueia o horário.
+                  // Só trava se for HOJE e o horário já passou. 
+                  // Se isHoje for falso (amanhã), isPassado será sempre falso.
                   const isPassado = isHoje && (horaH < horaAtual || (horaH === horaAtual && minH <= minAtual));
                   const isBloqueado = ocupadoNoBanco || isPassado;
 
