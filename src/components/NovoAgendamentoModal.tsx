@@ -11,14 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Configuração dos horários da barbearia
+// Horários de 30 em 30 min (conforme seu código original)
 const HORARIOS = Array.from({ length: 21 }, (_, i) => {
   const h = Math.floor(i / 2) + 9;
   const m = i % 2 === 0 ? "00" : "30";
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-// Interfaces para o TypeScript não reclamar (O que a IA de "reforma" exige)
 interface BarbeiroView {
   id: string;
   nome: string;
@@ -61,37 +60,37 @@ export function NovoAgendamentoModal({
   const [data, setData] = useState<Date | undefined>(new Date());
   const [horario, setHorario] = useState("");
 
-  // Sincroniza se o barbeiro mudar externamente
   useEffect(() => {
     if (defaultBarbeiroId) setBarbeiroId(defaultBarbeiroId);
-  }, [defaultBarbeiroId]);
+  }, [defaultBarbeiroId, open]);
 
   // ==========================================================
-  // 🛡️ LÓGICA ANTI-FUSO (Compara strings puras YYYY-MM-DD)
+  // 🛡️ LÓGICA DE DATA - A PROVA DE ERROS (LOCAL SÃO PAULO)
   // ==========================================================
   const { isHoje, dataStr } = useMemo(() => {
+    // Pegamos a data atual do computador do usuário (S.J. Rio Preto)
+    const agora = new Date();
+    const hojeAno = agora.getFullYear();
+    const hojeMes = agora.getMonth();
+    const hojeDia = agora.getDate();
+
     if (!data) return { isHoje: false, dataStr: "" };
 
-    const agoraLocal = new Date();
+    // Pegamos a data selecionada no calendário
+    const selAno = data.getFullYear();
+    const selMes = data.getMonth();
+    const selDia = data.getDate();
+
+    // Compara apenas os números do calendário local
+    const checkHoje = hojeAno === selAno && hojeMes === selMes && hojeDia === selDia;
     
-    // String de Hoje no Brasil
-    const hY = agoraLocal.getFullYear();
-    const hM = String(agoraLocal.getMonth() + 1).padStart(2, '0');
-    const hD = String(agoraLocal.getDate()).padStart(2, '0');
-    const hojeComp = `${hY}-${hM}-${hD}`;
+    // Formata a string YYYY-MM-DD para o banco de dados
+    const sStr = `${selAno}-${String(selMes + 1).padStart(2, '0')}-${String(selDia).padStart(2, '0')}`;
 
-    // String da Data Selecionada
-    const sY = data.getFullYear();
-    const sM = String(data.getMonth() + 1).padStart(2, '0');
-    const sD = String(data.getDate()).padStart(2, '0');
-    const selComp = `${sY}-${sM}-${sD}`;
-
-    return { 
-      isHoje: hojeComp === selComp, 
-      dataStr: selComp 
-    };
+    return { isHoje: checkHoje, dataStr: sStr };
   }, [data]);
 
+  // Hora e minuto atual para bloquear horários que já passaram HOJE
   const agora = new Date();
   const horaAtual = agora.getHours();
   const minAtual = agora.getMinutes();
@@ -114,6 +113,7 @@ export function NovoAgendamentoModal({
       servicoId 
     });
     
+    // Limpeza
     setNomeCliente("");
     setTelefoneCliente("");
     setServicoId("");
@@ -135,70 +135,44 @@ export function NovoAgendamentoModal({
         </DialogHeader>
         
         <div className="space-y-4 pt-2">
-          {/* NOME */}
+          {/* CAMPOS DE TEXTO */}
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold">Nome do Cliente</Label>
+            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Nome do Cliente</Label>
             <Input 
-              placeholder="Ex: João Silva" 
+              placeholder="Nome completo" 
               value={nomeCliente} 
               onChange={(e) => setNomeCliente(e.target.value)}
-              className="bg-[#1A1A1A] border-white/10 focus:ring-primary"
+              className="bg-[#1A1A1A] border-white/10"
             />
           </div>
 
-          {/* WHATSAPP */}
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold">WhatsApp</Label>
+            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">WhatsApp (DDD + Número)</Label>
             <Input 
               placeholder="Ex: 17999998888" 
               value={telefoneCliente} 
               onChange={(e) => setTelefoneCliente(e.target.value)}
-              className="bg-[#1A1A1A] border-white/10 focus:ring-primary"
+              className="bg-[#1A1A1A] border-white/10"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* BARBEIRO */}
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500 font-bold">Barbeiro</Label>
-              <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
-                <SelectTrigger className="bg-[#1A1A1A] border-white/10">
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                  {barbeiros.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* DATA */}
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500 font-bold">Data</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left bg-[#1A1A1A] border-white/10">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {data ? format(data, "dd/MM/yyyy") : "Selecione"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10">
-                  <Calendar
-                    mode="single"
-                    selected={data}
-                    onSelect={(d) => { setData(d); setHorario(""); }}
-                    locale={ptBR}
-                    className="p-3"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+          {/* SELETORES */}
+          <div className="space-y-2">
+            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Barbeiro Responsável</Label>
+            <Select value={barbeiroId} onValueChange={(v) => { setBarbeiroId(v); setHorario(""); }}>
+              <SelectTrigger className="bg-[#1A1A1A] border-white/10">
+                <SelectValue placeholder="Selecione o profissional" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
+                {barbeiros.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* SERVIÇO */}
           <div className="space-y-2">
-            <Label className="text-xs uppercase text-zinc-500 font-bold">Serviço</Label>
+            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Serviço</Label>
             <Select value={servicoId} onValueChange={setServicoId}>
               <SelectTrigger className="bg-[#1A1A1A] border-white/10">
                 <SelectValue placeholder="Selecione o serviço" />
@@ -211,17 +185,41 @@ export function NovoAgendamentoModal({
             </Select>
           </div>
 
-          {/* HORÁRIOS */}
+          {/* CALENDÁRIO */}
+          <div className="space-y-2">
+            <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Data</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-start text-left bg-[#1A1A1A] border-white/10">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {data ? format(data, "dd/MM/yyyy", { locale: ptBR }) : "Selecione"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-white/10" align="start">
+                <Calendar
+                  mode="single"
+                  selected={data}
+                  onSelect={(d) => { setData(d); setHorario(""); }}
+                  locale={ptBR}
+                  className="p-3"
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* GRID DE HORÁRIOS */}
           {dataStr && barbeiroId && (
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500 font-bold">Horários Disponíveis</Label>
+            <div className="space-y-3">
+              <Label className="text-xs uppercase text-zinc-500 font-bold tracking-widest">Horários Disponíveis</Label>
               <div className="grid grid-cols-4 gap-2">
                 {HORARIOS.map((h) => {
                   const ocupadoNoBanco = ocupados.includes(h);
-                  const [horaH, minH] = h.split(":").map(Number);
+                  const [hPart, mPart] = h.split(":").map(Number);
                   
-                  // Lógica Blindada: isPassado só existe se isHoje for true
-                  const isPassado = isHoje && (horaH < horaAtual || (horaH === horaAtual && minH <= minAtual));
+                  // TRAVA DEFINITIVA: 
+                  // Só bloqueia por horário se a data selecionada for HOJE no calendário do usuário.
+                  const isPassado = isHoje && (hPart < horaAtual || (hPart === horaAtual && mPart <= minAtual));
                   const isBloqueado = ocupadoNoBanco || isPassado;
 
                   return (
@@ -233,9 +231,9 @@ export function NovoAgendamentoModal({
                       disabled={isBloqueado}
                       onClick={() => setHorario(h)}
                       className={cn(
-                        "text-xs border-white/5", 
+                        "text-xs transition-all border-white/5", 
                         horario === h ? "bg-primary text-black font-bold" : "bg-[#1A1A1A]",
-                        isBloqueado && "opacity-20 line-through cursor-not-allowed"
+                        isBloqueado && "opacity-10 line-through cursor-not-allowed"
                       )}
                     >
                       {h}
