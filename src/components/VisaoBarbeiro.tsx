@@ -274,12 +274,12 @@ export function VisaoBarbeiro({
             
             return (
               <Card key={ag.id} className={cn(
-                "p-5 border-l-[6px] bg-[#161616] border-zinc-800 shadow-xl transition-all",
+                "p-5 border-l-[6px] bg-[#161616] border-zinc-800 shadow-xl transition-all flex flex-col gap-4",
                 ag.status === "Finalizado" && "border-l-green-600 opacity-40 grayscale",
                 ag.status === "Cancelado" && "border-l-red-600 opacity-40 strike-through",
                 ag.status === "Pendente" && "border-l-primary"
               )}>
-                <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+                <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
                       <span className="text-3xl font-black text-white tracking-tighter">{ag.horario}</span>
@@ -302,26 +302,41 @@ export function VisaoBarbeiro({
                       </span>
                     </div>
                   </div>
-                  
-                  {ag.status === "Pendente" && (
-                    <div className="flex items-center gap-3 pt-2 sm:pt-0">
-                      <Button size="icon" className="h-12 w-12 text-green-500 bg-green-500/10 rounded-full" 
-                        onClick={() => {
-                          const n = ag.telefone_cliente?.replace(/\D/g, "");
-                          const msg = `Fala ${ag.nome_cliente}! ✂️ Confirmado hoje às ${ag.horario}.`;
-                          window.open(`https://api.whatsapp.com/send?phone=55${n}&text=${encodeURIComponent(msg)}`, "_blank");
-                        }}>
-                        <MessageCircle className="h-6 w-6" />
-                      </Button>
-                      <Button size="icon" className="h-12 w-12 text-white bg-green-600 rounded-full shadow-lg" onClick={() => onStatusChange(ag.id, "Finalizado")}>
-                        <Check className="h-6 w-6 stroke-[3px]" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-12 w-12 text-zinc-600 rounded-full" onClick={() => onStatusChange(ag.id, "Cancelado")}>
-                        <X className="h-6 w-6 stroke-[3px]" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
+
+                {/* BOTÕES DE AÇÃO (AGORA EXPLÍCITOS E GIGANTES) */}
+                {ag.status === "Pendente" && (
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800/50 mt-2">
+                    {/* Botão de WhatsApp */}
+                    <Button size="icon" className="h-10 w-10 text-green-500 bg-green-500/10 hover:bg-green-500/20 rounded-xl shrink-0" 
+                      onClick={() => {
+                        const n = ag.telefone_cliente?.replace(/\D/g, "");
+                        const msg = `Fala ${ag.nome_cliente}! ✂️ Confirmado hoje às ${ag.horario}.`;
+                        window.open(`https://api.whatsapp.com/send?phone=55${n}&text=${encodeURIComponent(msg)}`, "_blank");
+                      }}
+                      title="Avisar no WhatsApp"
+                    >
+                      <MessageCircle className="h-5 w-5" />
+                    </Button>
+
+                    {/* Botão Concluir com Texto */}
+                    <Button 
+                      className="flex-1 h-10 bg-green-600 hover:bg-green-500 text-white font-bold uppercase text-[10px] tracking-widest rounded-xl shadow-lg transition-transform active:scale-95" 
+                      onClick={() => onStatusChange(ag.id, "Finalizado")}
+                    >
+                      <Check className="h-4 w-4 mr-1.5 stroke-[3px]" /> Concluir
+                    </Button>
+
+                    {/* Botão Cancelar com Texto */}
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 h-10 text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500/10 font-bold uppercase text-[10px] tracking-widest rounded-xl transition-transform active:scale-95" 
+                      onClick={() => onStatusChange(ag.id, "Cancelado")}
+                    >
+                      <X className="h-4 w-4 mr-1.5 stroke-[3px]" /> Cancelar
+                    </Button>
+                  </div>
+                )}
               </Card>
             )
           })
