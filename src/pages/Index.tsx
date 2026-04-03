@@ -9,6 +9,7 @@ import { VisaoCEO } from "@/components/VisaoCEO";
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
+import { supabase } from "@/integrations/supabase/client"; // ✅ Importado o supabase
 
 import { 
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
@@ -31,8 +32,40 @@ export default function Index() {
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
 
   // -------------------------------------------------------------------------
-  // 👑 1. VISÃO CEO
+  // 👑 1. VISÃO CEO (COMANDO CENTRAL) - COM DADOS REAIS
   // -------------------------------------------------------------------------
+  const [dadosCEO, setDadosCEO] = useState({ lojas: 0, faturamento: 0, vendedores: [] });
+
+  useEffect(() => {
+    if (userRole !== "ceo") return;
+
+    async function buscarDadosHQ() {
+      // 1. Busca os vendedores ativos no banco
+      const { data: vends } = await supabase.from('perfis_vendedores').select('*').eq('ativo', true);
+      
+      // 2. Busca todas as barbearias cadastradas
+      const { data: lojas } = await supabase.from('barbearias').select('*');
+
+      const totalLojasReal = lojas?.length || 0;
+      
+      // 3. Monta a lista de vendedores para o painel
+      const listaVendedores = vends?.map((v: any) => ({
+        id: v.id,
+        nome: v.nome,
+        total_lojas: 0 // No futuro, faremos o cálculo de quantas lojas ESSE vendedor fechou
+      })) || [];
+
+      // 4. Atualiza a tela
+      setDadosCEO({
+        lojas: totalLojasReal,
+        faturamento: totalLojasReal * 50,
+        vendedores: listaVendedores
+      });
+    }
+
+    buscarDadosHQ();
+  }, [userRole]);
+
   if (userRole === "ceo") {
     return (
       <div className="dark min-h-screen bg-background text-foreground flex flex-col">
@@ -46,9 +79,9 @@ export default function Index() {
         
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
            <VisaoCEO 
-             totalLojas={0} 
-             faturamentoTotal={0} 
-             vendedores={[]} 
+             totalLojas={dadosCEO.lojas} 
+             faturamentoTotal={dadosCEO.faturamento} 
+             vendedores={dadosCEO.vendedores} 
            />
         </main>
         
