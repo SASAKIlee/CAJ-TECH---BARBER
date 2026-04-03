@@ -2,11 +2,12 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
+// 🚀 ADICIONADO "vendedor" NA INTERFACE
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  userRole: "dono" | "barbeiro" | null;
+  userRole: "dono" | "barbeiro" | "vendedor" | null;
   signOut: () => Promise<void>;
 }
 
@@ -24,7 +25,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<"dono" | "barbeiro" | null>(null);
+  
+  // 🚀 ADICIONADO "vendedor" NO ESTADO
+  const [userRole, setUserRole] = useState<"dono" | "barbeiro" | "vendedor" | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -54,7 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("user_id", user.id)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setUserRole(data[0].role as "dono" | "barbeiro");
+          // 🚀 ADICIONADO "vendedor" NO CASTING DE DADOS
+          setUserRole(data[0].role as "dono" | "barbeiro" | "vendedor");
         } else {
           setUserRole(null);
         }

@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
-import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar } from "lucide-react";
+import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
 import { VisaoDono } from "@/components/VisaoDono";
+import { VisaoVendedor } from "@/components/VisaoVendedor"; // ✅ IMPORTADO
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
@@ -22,12 +23,12 @@ const getLocalDate = () => {
 };
 
 export default function Index() {
-  const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira">("barbeiro");
+  const { signOut, userRole, user } = useAuth();
+  const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira" | "vendedor">("barbeiro");
   const [dataFiltro, setDataFiltro] = useState<string>(getLocalDate());
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
 
-  const { signOut, userRole, user } = useAuth();
-
+  // Hooks de Dados (Só serão úteis se NÃO for vendedor)
   const { data: barbearia, isLoading: loadingBarbearia } = useBarbearia();
   const slug = barbearia?.slug;
   const isDono = barbearia?.isDono;
@@ -39,6 +40,32 @@ export default function Index() {
   const mutacoesBarbeiro = useMutacoesBarbeiro();
   const mutacoesServico = useMutacoesServico();
   const mutacoesAgendamento = useMutacoesAgendamento();
+
+  // 1. 🛡️ SE FOR VENDEDOR, RENDERIZA DIRETO O PAINEL DE VENDAS
+  if (userRole === "vendedor") {
+    return (
+      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
+        <header className="p-4 border-b flex justify-between items-center bg-card">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH</h1>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
+        </header>
+        
+        <main className="flex-1 max-w-lg mx-auto w-full">
+           <VisaoVendedor 
+             vendedorNome={user?.email?.split('@')[0] || "Consultor"} 
+             clientesAtivos={[]} // Aqui você passará a lista do banco depois
+             prospectos={[]} 
+           />
+        </main>
+        <TermosDeUso />
+      </div>
+    );
+  }
+
+  // --- ABAIXO SEGUE A LÓGICA NORMAL PARA DONOS E BARBEIROS ---
 
   useEffect(() => {
     if (!isDono && user?.id) {
@@ -154,7 +181,7 @@ export default function Index() {
             horariosOcupados={horariosOcupados}
             servicos_find={servicos_find}
             isDono={isDono || false}
-            userId={user?.id} // 🛡️ CRUCIAL: Para a trava de acesso negado
+            userId={user?.id}
             onNovoAgendamento={(ag: any) => mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug })}
             onStatusChange={(id: string, status: string) => {
               if (status === "Finalizado") {
@@ -188,17 +215,12 @@ export default function Index() {
             servicos={servicos}
             onAddBarbeiro={(nome: string, comissao_pct: number, email: string, senha: string) => 
               mutacoesBarbeiro.adicionarBarbeiro.mutate({ nome, comissao_pct, email, senha, slug })}
-            
-            // 🛡️ REMOÇÃO PROTEGIDA: Passamos o status atual do barbeiro
             onRemoveBarbeiro={(id: string) => {
               const b = barbeiros.find((x: any) => x.id === id);
               mutacoesBarbeiro.removerBarbeiro.mutate({ id, estaAtivo: b?.ativo, slug });
             }}
-
-            // 🛡️ NOVA AÇÃO: Ativar/Desativar
             onToggleBarbeiroStatus={(id: string, novoStatus: boolean) => 
               mutacoesBarbeiro.alternarStatusBarbeiro.mutate({ id, novoStatus, slug })}
-
             onAddServico={(nome: string, preco: number) => 
               mutacoesServico.adicionarServico.mutate({ nome, preco, slug })}
             onRemoveServico={(id: string) => 
