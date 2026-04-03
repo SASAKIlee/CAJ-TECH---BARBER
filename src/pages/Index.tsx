@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
 import { VisaoDono } from "@/components/VisaoDono";
 import { VisaoVendedor } from "@/components/VisaoVendedor";
-import { VisaoCEO } from "@/components/VisaoCEO"; // ✅ Importado
+import { VisaoCEO } from "@/components/VisaoCEO";
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
@@ -31,7 +31,7 @@ export default function Index() {
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
 
   // -------------------------------------------------------------------------
-  // 👑 1. VISÃO CEO (COMANDO CENTRAL)
+  // 👑 1. VISÃO CEO
   // -------------------------------------------------------------------------
   if (userRole === "ceo") {
     return (
@@ -44,7 +44,7 @@ export default function Index() {
           <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
         </header>
         
-        <main className="flex-1 max-w-lg mx-auto w-full">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
            <VisaoCEO 
              totalLojas={0} 
              faturamentoTotal={0} 
@@ -52,7 +52,7 @@ export default function Index() {
            />
         </main>
         
-        <div className="p-8 text-center bg-black">
+        <div className="p-8 text-center bg-black mt-auto">
           <p className="text-zinc-800 text-[8px] font-black uppercase mb-4 tracking-[0.5em]">Sistema Criptografado</p>
         </div>
       </div>
@@ -60,7 +60,7 @@ export default function Index() {
   }
 
   // -------------------------------------------------------------------------
-  // 🛡️ 2. VISÃO VENDEDOR
+  // 🛡️ 2. VISÃO VENDEDOR - Destravado para PC
   // -------------------------------------------------------------------------
   if (userRole === "vendedor") {
     return (
@@ -73,7 +73,7 @@ export default function Index() {
           <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
         </header>
         
-        <main className="flex-1 max-w-lg mx-auto w-full">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
            <VisaoVendedor 
              vendedorNome={user?.email?.split('@')[0] || "Consultor"} 
              clientesAtivos={[]} 
@@ -191,7 +191,7 @@ export default function Index() {
       </header>
 
       {tab !== "carteira" && (
-        <div className="bg-card border-b p-3 flex items-center justify-center gap-3 sticky top-0 z-10">
+        <div className="bg-card border-b p-3 flex items-center justify-center gap-3 sticky top-0 z-10 w-full">
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <input 
             type="date" 
@@ -203,7 +203,8 @@ export default function Index() {
         </div>
       )}
 
-      <main className="flex-1 p-4 pb-24 max-w-lg mx-auto w-full">
+      {/* Donos e Barbeiros - Destravado para PC */}
+      <main className="flex-1 p-4 pb-24 max-w-7xl mx-auto w-full md:px-8">
         {tab === "barbeiro" && (
           <VisaoBarbeiro
             barbeiros={barbeiros} 
