@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
-import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar, Briefcase } from "lucide-react";
+import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
 import { VisaoDono } from "@/components/VisaoDono";
-import { VisaoVendedor } from "@/components/VisaoVendedor"; // ✅ IMPORTADO
+import { VisaoVendedor } from "@/components/VisaoVendedor"; // ✅ Importado
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
@@ -24,11 +24,42 @@ const getLocalDate = () => {
 
 export default function Index() {
   const { signOut, userRole, user } = useAuth();
+  
+  // 1. ESTADOS INICIAIS
   const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira" | "vendedor">("barbeiro");
   const [dataFiltro, setDataFiltro] = useState<string>(getLocalDate());
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
 
-  // Hooks de Dados (Só serão úteis se NÃO for vendedor)
+  // -------------------------------------------------------------------------
+  // 🛡️ BLOCO DE SEGURANÇA: SE FOR VENDEDOR, PARA TUDO E RENDERIZA A TELA DELE
+  // -------------------------------------------------------------------------
+  if (userRole === "vendedor") {
+    return (
+      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
+        {/* Header simplificado para o vendedor */}
+        <header className="p-4 border-b flex justify-between items-center bg-card">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH</h1>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
+        </header>
+        
+        <main className="flex-1 max-w-lg mx-auto w-full">
+           <VisaoVendedor 
+             vendedorNome={user?.email?.split('@')[0] || "Consultor"} 
+             clientesAtivos={[]} // No futuro, buscaremos do banco via vendedor_id
+             prospectos={[]} 
+           />
+        </main>
+        <TermosDeUso />
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 📊 CARREGAMENTO DE DADOS (Só acontece para Donos e Barbeiros)
+  // -------------------------------------------------------------------------
   const { data: barbearia, isLoading: loadingBarbearia } = useBarbearia();
   const slug = barbearia?.slug;
   const isDono = barbearia?.isDono;
@@ -41,32 +72,6 @@ export default function Index() {
   const mutacoesServico = useMutacoesServico();
   const mutacoesAgendamento = useMutacoesAgendamento();
 
-  // 1. 🛡️ SE FOR VENDEDOR, RENDERIZA DIRETO O PAINEL DE VENDAS
-  if (userRole === "vendedor") {
-    return (
-      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
-        <header className="p-4 border-b flex justify-between items-center bg-card">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH</h1>
-          </div>
-          <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
-        </header>
-        
-        <main className="flex-1 max-w-lg mx-auto w-full">
-           <VisaoVendedor 
-             vendedorNome={user?.email?.split('@')[0] || "Consultor"} 
-             clientesAtivos={[]} // Aqui você passará a lista do banco depois
-             prospectos={[]} 
-           />
-        </main>
-        <TermosDeUso />
-      </div>
-    );
-  }
-
-  // --- ABAIXO SEGUE A LÓGICA NORMAL PARA DONOS E BARBEIROS ---
-
   useEffect(() => {
     if (!isDono && user?.id) {
       setBarbeiroSelecionadoId(user.id);
@@ -75,6 +80,7 @@ export default function Index() {
     }
   }, [isDono, user?.id, barbeiros]);
 
+  // Cálculos de estatísticas (Dashboard do Dono)
   const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
@@ -130,6 +136,7 @@ export default function Index() {
 
   const servicos_find = (id: string) => servicos.find((s: any) => s.id === id);
 
+  // Tela de carregamento
   if (loadingBarbearia) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center dark bg-background text-primary font-bold gap-4">
@@ -157,6 +164,7 @@ export default function Index() {
         <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
       </header>
 
+      {/* Filtro de Data (Escondido na carteira) */}
       {tab !== "carteira" && (
         <div className="bg-card border-b p-3 flex items-center justify-center gap-3 sticky top-0 z-10">
           <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -170,6 +178,7 @@ export default function Index() {
         </div>
       )}
 
+      {/* CONTEÚDO PRINCIPAL (Dono ou Barbeiro) */}
       <main className="flex-1 p-4 pb-24 max-w-lg mx-auto w-full">
         {tab === "barbeiro" && (
           <VisaoBarbeiro
@@ -229,6 +238,7 @@ export default function Index() {
         )}
       </main>
 
+      {/* NAVEGAÇÃO INFERIOR */}
       <nav className="fixed bottom-0 w-full bg-card border-t flex justify-around p-2 shadow-2xl z-20">
         {visibleTabs.map(t => (
           <button 
