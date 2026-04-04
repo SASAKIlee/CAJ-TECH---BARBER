@@ -6,8 +6,9 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client"; // Certifique-se do caminho correto
+import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { toast } from "sonner"; // Feedback visual
 
 export function VisaoCEO({ 
   totalLojas = 0, 
@@ -18,24 +19,19 @@ export function VisaoCEO({
   ] 
 }: any) {
   
-  // Estado para armazenar os leads que vêm do banco
   const [leadsRecentes, setLeadsRecentes] = useState<any[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
 
-  // Busca os leads no banco de dados assim que a tela abre
   useEffect(() => {
     async function buscarLeads() {
       try {
         const { data, error } = await supabase
           .from('leads')
-          .select('*, vendedor:vendedor_id(nome)') // Faz um JOIN para pegar o nome do vendedor (se a tabela perfis_vendedores estiver conectada)
+          .select('*, vendedor:vendedor_id(nome)')
           .order('created_at', { ascending: false })
-          .limit(10); // Mostra os 10 mais recentes
+          .limit(10);
 
         if (error) throw error;
-        
-        // Se o JOIN não funcionar devido a estrutura do seu banco, mapearemos os nomes manualmente abaixo, 
-        // mas o Supabase geralmente aceita esse formato se as FKs estiverem corretas.
         setLeadsRecentes(data || []);
       } catch (err) {
         console.error("Erro ao buscar leads:", err);
@@ -46,6 +42,28 @@ export function VisaoCEO({
 
     buscarLeads();
   }, []);
+
+  // 🚀 Função que aprova a venda
+  const handleAprovarLead = async (leadId: string) => {
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ status: 'convertido' })
+        .eq('id', leadId);
+
+      if (error) throw error;
+
+      toast.success("Venda confirmada! Agora ela conta para as metas.");
+      
+      // Atualiza a lista na tela instantaneamente
+      setLeadsRecentes(prev => 
+        prev.map(l => l.id === leadId ? { ...l, status: 'convertido' } : l)
+      );
+    } catch (err) {
+      console.error("Erro ao aprovar lead:", err);
+      toast.error("Erro ao confirmar venda. Tente novamente.");
+    }
+  };
 
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -124,19 +142,25 @@ export function VisaoCEO({
                       <span className="text-zinc-700">•</span>
                       <span className="text-[9px] text-amber-500 font-bold uppercase flex items-center gap-1">
                         <Users className="h-3 w-3" /> 
-                        {/* Se o JOIN de vendedor falhar, exibe o ID parcial. O ideal é o nome vir na query */}
                         {lead.vendedor?.nome || (lead.vendedor_id ? "Consultor Interno" : "Desconhecido")}
                       </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
+                  
+                  {/* ÁREA DOS BOTÕES / STATUS */}
+                  <div className="flex flex-col items-end gap-2">
                     <span className="text-[8px] text-zinc-500 font-bold uppercase">
                       {format(new Date(lead.created_at), "dd/MM 'às' HH:mm")}
                     </span>
+                    
                     {lead.status === 'pendente' ? (
-                      <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[8px] font-black uppercase flex items-center gap-1 border border-blue-500/20">
-                        <Clock className="h-2 w-2" /> Em Negociação
-                      </span>
+                      <Button 
+                        size="sm" 
+                        onClick={() => handleAprovarLead(lead.id)}
+                        className="h-7 bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black uppercase px-3 rounded-lg shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+                      >
+                        Confirmar Venda
+                      </Button>
                     ) : (
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase flex items-center gap-1 border border-emerald-500/20">
                         <CheckCircle className="h-2 w-2" /> Convertido
@@ -209,5 +233,4 @@ export function VisaoCEO({
   );
 }
 
-// 🚀 IMPORTANTE: O export default para evitar erro de build!
 export default VisaoCEO;

@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { Search, Plus, X, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Plus, X, Loader2, Clock, CheckCircle, MapPin } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client"; // Certifique-se de que o caminho do seu supabase está correto
-import { toast } from "sonner"; // Assumindo que você usa o sonner do Shadcn para os alertas bonitos
+import { supabase } from "@/integrations/supabase/client"; // Caminho corrigido
+import { toast } from "sonner"; 
 
 const FORM_NOVO_LEAD_INICIAL = { nome: "", bairro: "" };
 
@@ -13,25 +13,52 @@ function formatarMoeda(valor: number) {
 }
 
 interface VisaoVendedorProps {
-  vendedorId?: string; // Adicionamos o ID para rastrear quem fez a venda
+  vendedorId?: string; 
   vendedorNome?: string;
   clientesAtivos?: unknown[];
-  prospectos?: unknown[];
+  prospectos?: unknown[]; // Mantemos a prop para compatibilidade, mas usaremos o estado local agora
 }
 
 export function VisaoVendedor({
   vendedorId,
   vendedorNome = "Consultor CAJ",
   clientesAtivos = [],
-  prospectos = [],
 }: VisaoVendedorProps) {
   const [busca, setBusca] = useState("");
   const [modalCadastroAberto, setModalCadastroAberto] = useState(false);
   const [formNovoLead, setFormNovoLead] = useState(FORM_NOVO_LEAD_INICIAL);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Estado para o loading do botão
+  const [isSubmitting, setIsSubmitting] = useState(false); 
+
+  // Novos estados para a lista de Leads
+  const [meusLeads, setMeusLeads] = useState<any[]>([]);
+  const [loadingLeads, setLoadingLeads] = useState(true);
+
+  // Função para buscar os leads no banco
+  const carregarMeusLeads = async () => {
+    if (!vendedorId) return;
+    try {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("vendedor_id", vendedorId) // Puxa SÓ os do Allan
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setMeusLeads(data || []);
+    } catch (error) {
+      console.error("Erro ao buscar leads:", error);
+    } finally {
+      setLoadingLeads(false);
+    }
+  };
+
+  // Roda a busca assim que a tela abre
+  useEffect(() => {
+    carregarMeusLeads();
+  }, [vendedorId]);
 
   const recorrenciaMensal = clientesAtivos.length * 25;
-  const totalLeads = prospectos.length;
+  const totalLeads = meusLeads.length; // Agora usa o dado real do banco
   const taxaConversao =
     totalLeads > 0 ? ((clientesAtivos.length / totalLeads) * 100).toFixed(0) : 0;
 
@@ -44,30 +71,25 @@ export function VisaoVendedor({
     setIsSubmitting(true);
 
     try {
-      // 1. Inserção no banco de dados (Tabela leads)
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("leads")
         .insert([
           {
             nome_barbearia: formNovoLead.nome,
             bairro: formNovoLead.bairro,
             status: "pendente",
-            vendedor_id: vendedorId, // Pega o ID de quem está logado
+            vendedor_id: vendedorId,
           },
-        ])
-        .select()
-        .single();
+        ]);
 
       if (error) throw error;
 
-      // 2. Simulação de Webhook (Aviso para o CEO)
-      // Aqui no futuro você coloca um fetch() para o N8N, Make ou API do WhatsApp
-      console.log(`🚀 [WEBHOOK] Avisando o César (CEO): Novo lead ${formNovoLead.nome} cadastrado pelo vendedor ${vendedorNome}!`);
-
-      // 3. Feedback visual padrão Apple
       toast.success("Visita registrada! O CEO já foi notificado.");
       setModalCadastroAberto(false);
       setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
+      
+      // Atualiza a lista na hora para ele ver o card novo!
+      carregarMeusLeads();
 
     } catch (error) {
       console.error("Erro ao salvar lead:", error);
@@ -76,6 +98,12 @@ export function VisaoVendedor({
       setIsSubmitting(false);
     }
   };
+
+  // Filtro de busca
+  const leadsFiltrados = meusLeads.filter(lead => 
+    lead.nome_barbearia.toLowerCase().includes(busca.toLowerCase()) || 
+    (lead.bairro && lead.bairro.toLowerCase().includes(busca.toLowerCase()))
+  );
 
   return (
     <div className="space-y-8 pb-32 w-full max-w-full overflow-x-hidden p-4 bg-black min-h-screen relative">
@@ -121,7 +149,51 @@ export function VisaoVendedor({
         </Button>
       </div>
 
-      <section className="space-y-4">
+      {/* NOVA SEÇÃO: MEU FUNIL */}
+      <section className="space-y-4 pt-2">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="font-black text-white uppercase text-sm italic text-blue-400">Meu Funil (Prospecções)</h3>
+          <span className="text-[10px] font-black text-zinc-500 bg-zinc-900 px-2 py-1 rounded-full">{leadsFiltrados.length}</span>
+        </div>
+        
+        <div className="grid gap-3">
+          {loadingLeads ? (
+            <div className="text-zinc-600 text-[10px] uppercase font-bold text-center py-4 italic animate-pulse">
+              Carregando radar de clientes...
+            </div>
+          ) : leadsFiltrados.length === 0 ? (
+            <p className="text-zinc-600 text-[10px] uppercase font-bold text-center py-4 italic bg-zinc-900/30 rounded-2xl border border-zinc-800/50 border-dashed">
+              Nenhuma prospecção encontrada. Hora de ir pra rua!
+            </p>
+          ) : (
+            leadsFiltrados.map((lead) => (
+              <div key={lead.id} className="bg-zinc-900/40 border border-zinc-800 backdrop-blur-md rounded-2xl p-4 flex justify-between items-center hover:border-primary/30 transition-colors">
+                <div>
+                  <h4 className="font-bold text-white text-sm uppercase italic">{lead.nome_barbearia}</h4>
+                  <div className="flex items-center gap-1 mt-1">
+                    <MapPin className="h-3 w-3 text-zinc-500" />
+                    <span className="text-[9px] text-zinc-400 font-bold uppercase">{lead.bairro || 'Sem Localização'}</span>
+                  </div>
+                </div>
+                <div>
+                  {lead.status === 'pendente' ? (
+                    <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[9px] font-black uppercase flex items-center gap-1 border border-blue-500/20">
+                      <Clock className="h-3 w-3" /> Negociando
+                    </span>
+                  ) : (
+                    <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-[9px] font-black uppercase flex items-center gap-1 border border-primary/20">
+                      <CheckCircle className="h-3 w-3" /> Fechado
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* SEÇÃO: CLIENTES ATIVOS (CONVERTIDOS) */}
+      <section className="space-y-4 pt-4">
         <h3 className="font-black text-white uppercase text-sm italic px-1">Clientes Ativos</h3>
         <div className="grid gap-3">
           {clientesAtivos.length === 0 && (
