@@ -3,7 +3,7 @@ import { Search, Plus, X, Loader2, Clock, CheckCircle, MapPin } from "lucide-rea
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client"; // Caminho corrigido
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner"; 
 
 const FORM_NOVO_LEAD_INICIAL = { nome: "", bairro: "" };
@@ -16,7 +16,6 @@ interface VisaoVendedorProps {
   vendedorId?: string; 
   vendedorNome?: string;
   clientesAtivos?: unknown[];
-  prospectos?: unknown[]; // Mantemos a prop para compatibilidade, mas usaremos o estado local agora
 }
 
 export function VisaoVendedor({
@@ -29,18 +28,21 @@ export function VisaoVendedor({
   const [formNovoLead, setFormNovoLead] = useState(FORM_NOVO_LEAD_INICIAL);
   const [isSubmitting, setIsSubmitting] = useState(false); 
 
-  // Novos estados para a lista de Leads
   const [meusLeads, setMeusLeads] = useState<any[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
 
-  // Função para buscar os leads no banco
+  // 🚀 BUSCA BLINDADA (Pega o ID real direto da sessão)
   const carregarMeusLeads = async () => {
-    if (!vendedorId) return;
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const idReal = session?.user?.id || vendedorId;
+
+      if (!idReal) return;
+
       const { data, error } = await supabase
         .from("leads")
         .select("*")
-        .eq("vendedor_id", vendedorId) // Puxa SÓ os do Allan
+        .eq("vendedor_id", idReal)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -52,16 +54,16 @@ export function VisaoVendedor({
     }
   };
 
-  // Roda a busca assim que a tela abre
   useEffect(() => {
     carregarMeusLeads();
   }, [vendedorId]);
 
   const recorrenciaMensal = clientesAtivos.length * 25;
-  const totalLeads = meusLeads.length; // Agora usa o dado real do banco
+  const totalLeads = meusLeads.length; 
   const taxaConversao =
     totalLeads > 0 ? ((clientesAtivos.length / totalLeads) * 100).toFixed(0) : 0;
 
+  // 🚀 INSERÇÃO BLINDADA (Garante que o ID vai junto)
   const handleRegistrarVisita = async () => {
     if (!formNovoLead.nome) {
       toast.error("O nome da barbearia é obrigatório.");
@@ -71,6 +73,15 @@ export function VisaoVendedor({
     setIsSubmitting(true);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const idReal = session?.user?.id || vendedorId;
+
+      if (!idReal) {
+        toast.error("Erro de autenticação. Faça login novamente.");
+        setIsSubmitting(false);
+        return;
+      }
+
       const { error } = await supabase
         .from("leads")
         .insert([
@@ -78,7 +89,7 @@ export function VisaoVendedor({
             nome_barbearia: formNovoLead.nome,
             bairro: formNovoLead.bairro,
             status: "pendente",
-            vendedor_id: vendedorId,
+            vendedor_id: idReal, // AGORA O ID VAI FORÇADO AQUI
           },
         ]);
 
@@ -88,7 +99,6 @@ export function VisaoVendedor({
       setModalCadastroAberto(false);
       setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
       
-      // Atualiza a lista na hora para ele ver o card novo!
       carregarMeusLeads();
 
     } catch (error) {
@@ -99,7 +109,6 @@ export function VisaoVendedor({
     }
   };
 
-  // Filtro de busca
   const leadsFiltrados = meusLeads.filter(lead => 
     lead.nome_barbearia.toLowerCase().includes(busca.toLowerCase()) || 
     (lead.bairro && lead.bairro.toLowerCase().includes(busca.toLowerCase()))
@@ -149,7 +158,6 @@ export function VisaoVendedor({
         </Button>
       </div>
 
-      {/* NOVA SEÇÃO: MEU FUNIL */}
       <section className="space-y-4 pt-2">
         <div className="flex items-center justify-between px-1">
           <h3 className="font-black text-white uppercase text-sm italic text-blue-400">Meu Funil (Prospecções)</h3>
@@ -192,7 +200,6 @@ export function VisaoVendedor({
         </div>
       </section>
 
-      {/* SEÇÃO: CLIENTES ATIVOS (CONVERTIDOS) */}
       <section className="space-y-4 pt-4">
         <h3 className="font-black text-white uppercase text-sm italic px-1">Clientes Ativos</h3>
         <div className="grid gap-3">
