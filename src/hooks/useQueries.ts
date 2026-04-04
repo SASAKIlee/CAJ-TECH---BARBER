@@ -225,8 +225,14 @@ export function useMutacoesServico() {
   const queryClient = useQueryClient();
   return {
     adicionarServico: useMutation({
-      mutationFn: async ({ nome, preco, slug }: any) => {
-        const { error } = await supabase.from("servicos").insert({ nome, preco, barbearia_slug: slug });
+      // 🚀 AGORA RECEBE A DURAÇÃO
+      mutationFn: async ({ nome, preco, duracao_minutos, slug }: any) => {
+        const { error } = await supabase.from("servicos").insert({ 
+          nome, 
+          preco, 
+          duracao_minutos, 
+          barbearia_slug: slug 
+        });
         if (error) throw error;
       },
       onSuccess: (_, vars) => {

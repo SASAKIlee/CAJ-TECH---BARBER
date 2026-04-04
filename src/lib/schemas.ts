@@ -10,19 +10,18 @@ export const agendamentoSchema = z.object({
   horario: z.string().min(1, "Escolha um horário.")
 });
 
-// 2. Regra para Novo Barbeiro (Refinado para a nova lógica)
+// 2. Regra para Novo Barbeiro
 export const barbeiroSchema = z.object({
   nome: z.string().min(2, "Nome do barbeiro é muito curto."),
   email: z.string().email("Digite um e-mail válido (ex: email@teste.com)."),
   senha: z.string().min(6, "A senha deve ter no mínimo 6 caracteres."),
   comissao: z.coerce.number().min(0).max(100, "A comissão deve ser entre 0 e 100%."),
-  ativo: z.boolean().optional().default(true) // 🛡️ Adicionado para compatibilidade
+  ativo: z.boolean().optional().default(true)
 });
 
-// 3. Regra para Novo Serviço
+// 3. Regra para Novo Serviço (🚀 Turbinado com a duração)
 export const servicoSchema = z.object({
   nome: z.string().min(3, "O nome do serviço precisa de pelo menos 3 letras."),
-  preco: z.coerce.number().positive("O preço do serviço deve ser maior que zero.")
+  preco: z.coerce.number().positive("O preço do serviço deve ser maior que zero."),
+  duracao_minutos: z.coerce.number().min(15, "Tempo mínimo de 15 min.").max(300, "Tempo máximo de 5 horas.").default(30)
 });
-
-// REMOVIDO: despesaSchema (Conforme sua solicitação de limpeza anterior)

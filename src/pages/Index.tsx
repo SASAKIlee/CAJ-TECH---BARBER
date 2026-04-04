@@ -269,10 +269,9 @@ export default function Index() {
 
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
           <VisaoVendedor
-            vendedorId={user?.id} // <-- CONEXÃO FEITA AQUI
+            vendedorId={user?.id}
             vendedorNome={user?.email?.split("@")[0] || "Consultor"}
             clientesAtivos={[]}
-            prospectos={[]}
           />
         </main>
         <TermosDeUso />
@@ -424,6 +423,7 @@ export default function Index() {
                 />
               )}
 
+              {/* 🚀 A MÁGICA DOS CÁLCULOS DO "FEITO HOJE" ACONTECE AQUI NA CARTEIRA */}
               {tab === "carteira" && (
                 <CarteiraBarbeiro
                   comissaoTotalMes={stats.agMesBarbeiro.reduce(
@@ -434,6 +434,11 @@ export default function Index() {
                   nomeBarbeiro={
                     barbeiros.find((b: any) => b.id === user?.id)?.nome || "Barbeiro"
                   }
+                  comissaoHoje={stats.agendamentosParaExibir
+                    .filter((ag: any) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id)
+                    .reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0)}
+                  cortesHoje={stats.agendamentosParaExibir
+                    .filter((ag: any) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id).length}
                 />
               )}
 
@@ -476,8 +481,8 @@ export default function Index() {
                       slug,
                     })
                   }
-                  onAddServico={(nome: string, preco: number) =>
-                    mutacoesServico.adicionarServico.mutate({ nome, preco, slug })
+                  onAddServico={(nome: string, preco: number, duracao_minutos: number) =>
+                    mutacoesServico.adicionarServico.mutate({ nome, preco, duracao_minutos, slug })
                   }
                   onRemoveServico={(id: string) =>
                     mutacoesServico.removerServico.mutate({ id, slug })
