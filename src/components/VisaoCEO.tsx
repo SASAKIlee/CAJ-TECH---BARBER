@@ -8,15 +8,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { toast } from "sonner"; // Feedback visual
+import { toast } from "sonner"; 
 
 export function VisaoCEO({ 
   totalLojas = 0, 
   faturamentoTotal = 0, 
-  vendedores = [
-    { id: 1, nome: "Marcos", total_lojas: 0 },
-    { id: 2, nome: "Rodrigo", total_lojas: 0 }
-  ] 
+  vendedores = [] // O Index já nos manda quem são os vendedores
 }: any) {
   
   const [leadsRecentes, setLeadsRecentes] = useState<any[]>([]);
@@ -25,9 +22,10 @@ export function VisaoCEO({
   useEffect(() => {
     async function buscarLeads() {
       try {
+        // 🔥 REMOVEMOS O JOIN. Buscamos a tabela pura!
         const { data, error } = await supabase
           .from('leads')
-          .select('*, vendedor:vendedor_id(nome)')
+          .select('*') 
           .order('created_at', { ascending: false })
           .limit(10);
 
@@ -43,7 +41,6 @@ export function VisaoCEO({
     buscarLeads();
   }, []);
 
-  // 🚀 Função que aprova a venda
   const handleAprovarLead = async (leadId: string) => {
     try {
       const { error } = await supabase
@@ -55,7 +52,6 @@ export function VisaoCEO({
 
       toast.success("Venda confirmada! Agora ela conta para as metas.");
       
-      // Atualiza a lista na tela instantaneamente
       setLeadsRecentes(prev => 
         prev.map(l => l.id === leadId ? { ...l, status: 'convertido' } : l)
       );
@@ -66,6 +62,13 @@ export function VisaoCEO({
   };
 
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // 🚀 Função inteligente que acha o nome do vendedor baseada no ID
+  const getNomeVendedor = (idDesteLead: string) => {
+    if (!idDesteLead) return "Desconhecido";
+    const vendedorEncontrado = vendedores.find((v: any) => v.id === idDesteLead);
+    return vendedorEncontrado ? vendedorEncontrado.nome : "Consultor Interno";
+  };
 
   return (
     <div className="space-y-8 pb-32 w-full max-w-full overflow-x-hidden p-4 bg-black min-h-screen">
@@ -142,12 +145,12 @@ export function VisaoCEO({
                       <span className="text-zinc-700">•</span>
                       <span className="text-[9px] text-amber-500 font-bold uppercase flex items-center gap-1">
                         <Users className="h-3 w-3" /> 
-                        {lead.vendedor?.nome || (lead.vendedor_id ? "Consultor Interno" : "Desconhecido")}
+                        {/* 🚀 Chama a função que descobre o nome do Vendedor */}
+                        {getNomeVendedor(lead.vendedor_id)}
                       </span>
                     </div>
                   </div>
                   
-                  {/* ÁREA DOS BOTÕES / STATUS */}
                   <div className="flex flex-col items-end gap-2">
                     <span className="text-[8px] text-zinc-500 font-bold uppercase">
                       {format(new Date(lead.created_at), "dd/MM 'às' HH:mm")}
@@ -174,7 +177,7 @@ export function VisaoCEO({
         </Card>
       </section>
 
-      {/* 3. RANKING DE VENDEDORES (QUEM TRÁS DINHEIRO?) */}
+      {/* 3. RANKING DE VENDEDORES */}
       <section className="space-y-4 pt-2">
         <div className="flex items-center gap-2 px-1 text-zinc-400">
           <BarChart3 className="h-4 w-4" />
@@ -222,7 +225,6 @@ export function VisaoCEO({
         </Card>
       </section>
 
-      {/* FOOTER HQ */}
       <div className="p-10 text-center opacity-20">
         <p className="text-zinc-500 text-[8px] font-black uppercase tracking-[0.6em]">
           CAJ TECH HQ - SECURITY LEVEL 4
