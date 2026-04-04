@@ -13,11 +13,25 @@ import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { WalletTicket, WALLET_TICKET_CAPTURE_ID } from "@/components/agendamento-publico/WalletTicket";
 import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackdrop";
 
-const HORARIOS = [
-  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-  "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-  "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
-];
+// 🚀 FUNÇÃO INTELIGENTE QUE GERA OS HORÁRIOS DINAMICAMENTE
+function gerarHorarios(abertura = "09:00", fechamento = "18:00") {
+  const horarios = [];
+  let [horaAtual, minAtual] = abertura.split(':').map(Number);
+  const [horaFim, minFim] = fechamento.split(':').map(Number);
+
+  while (horaAtual < horaFim || (horaAtual === horaFim && minAtual < minFim)) {
+    const hFormated = String(horaAtual).padStart(2, '0');
+    const mFormated = String(minAtual).padStart(2, '0');
+    horarios.push(`${hFormated}:${mFormated}`);
+
+    minAtual += 30;
+    if (minAtual >= 60) {
+      minAtual -= 60;
+      horaAtual += 1;
+    }
+  }
+  return horarios;
+}
 
 const listContainer = {
   hidden: { opacity: 0 },
@@ -29,6 +43,7 @@ const listItem = {
   show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 380, damping: 34 } },
 };
 
+// 🚀 ADICIONADO OS CAMPOS DE HORÁRIO NA TIPAGEM
 type BarbeariaRow = {
   nome?: string | null;
   cor_primaria?: string | null;
@@ -36,6 +51,9 @@ type BarbeariaRow = {
   cor_destaque?: string | null;
   url_fundo?: string | null;
   url_logo?: string | null;
+  horario_abertura?: string | null;
+  horario_fechamento?: string | null;
+  dias_trabalho?: number[] | null;
 };
 
 export default function AgendamentoPublico() {
@@ -54,7 +72,6 @@ export default function AgendamentoPublico() {
     data: "", horario: "", nome: "", whatsapp: "",
   });
 
-  // 🚀 PALETA DE CORES DINÂMICA
   const brand = config?.cor_primaria?.trim() || "#D4AF37";
   const bg = config?.cor_secundaria?.trim() || "#18181B"; 
   const textHighlight = config?.cor_destaque?.trim() || "#FFFFFF";
@@ -138,8 +155,16 @@ export default function AgendamentoPublico() {
 
   const heroImageUrl = config?.url_fundo?.trim() || APP_HERO_FALLBACK_BG;
 
+  // 🚀 LÓGICA DE DIAS E HORÁRIOS
+  const horariosDoDia = gerarHorarios(config?.horario_abertura || "09:00", config?.horario_fechamento || "18:00");
+  
+  // Identifica o dia da semana da data escolhida (0 = Dom, 1 = Seg...)
+  const dataSelecionada = selecao.data ? new Date(selecao.data + 'T00:00:00') : null;
+  const diaDaSemana = dataSelecionada ? dataSelecionada.getDay() : -1;
+  const diasTrabalho = config?.dias_trabalho || [1, 2, 3, 4, 5, 6];
+  const isAbertoHoje = dataSelecionada ? diasTrabalho.includes(diaDaSemana) : true;
+
   return (
-    // 🚀 O FUNDO DA TELA AGORA PUXA A COR SECUNDÁRIA DO CLIENTE
     <div className="min-h-[100dvh] relative isolate font-sans antialiased overflow-x-hidden transition-colors duration-500" style={{ backgroundColor: bg }}>
       <AppHeroBackdrop imageUrl={heroImageUrl} />
 
@@ -234,26 +259,40 @@ export default function AgendamentoPublico() {
 
                     <motion.div className="space-y-4">
                       <p className="text-sm font-medium" style={{ color: hexToRgba(textHighlight, 0.5) }}>Horários</p>
-                      <div className="grid grid-cols-3 gap-2.5 max-h-[min(52vh,22rem)] overflow-y-auto pr-1 pb-2">
-                        {HORARIOS.map((h) => {
-                          const isOcupado = ocupados.includes(h);
-                          return (
-                            <motion.button key={h} type="button" disabled={isOcupado || !selecao.data}
-                              onClick={() => { setSelecao({ ...selecao, horario: h }); setEtapa(4); }}
-                              className={cn("rounded-2xl py-3 text-xs font-semibold tracking-wide transition-all border",
-                                isOcupado || !selecao.data ? "opacity-25 cursor-not-allowed line-through" : "hover:bg-white/5"
-                              )}
-                              style={{ 
-                                backgroundColor: isOcupado || !selecao.data ? hexToRgba(bg, 0.3) : hexToRgba(bg, 0.8), 
-                                borderColor: hexToRgba(textHighlight, 0.1), 
-                                color: textHighlight 
-                              }}
-                              whileHover={!isOcupado && selecao.data ? { scale: 1.04, borderColor: brand } : undefined}
-                              whileTap={!isOcupado && selecao.data ? { scale: 0.96 } : undefined}
-                            >{h}</motion.button>
-                          );
-                        })}
-                      </div>
+                      
+                      {/* 🚀 LÓGICA DE BLOQUEIO DE DIAS FECHADOS */}
+                      {!isAbertoHoje && selecao.data ? (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="p-4 rounded-2xl text-center border shadow-lg"
+                          style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: "rgba(239,68,68,0.3)" }}
+                        >
+                          <p className="text-[15px] font-bold text-red-400">Fechado neste dia.</p>
+                          <p className="text-[12px] text-red-400/70 mt-1">Por favor, escolha outra data no calendário.</p>
+                        </motion.div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2.5 max-h-[min(52vh,22rem)] overflow-y-auto pr-1 pb-2">
+                          {horariosDoDia.map((h) => {
+                            const isOcupado = ocupados.includes(h);
+                            return (
+                              <motion.button key={h} type="button" disabled={isOcupado || !selecao.data}
+                                onClick={() => { setSelecao({ ...selecao, horario: h }); setEtapa(4); }}
+                                className={cn("rounded-2xl py-3 text-xs font-semibold tracking-wide transition-all border",
+                                  isOcupado || !selecao.data ? "opacity-25 cursor-not-allowed line-through" : "hover:bg-white/5"
+                                )}
+                                style={{ 
+                                  backgroundColor: isOcupado || !selecao.data ? hexToRgba(bg, 0.3) : hexToRgba(bg, 0.8), 
+                                  borderColor: hexToRgba(textHighlight, 0.1), 
+                                  color: textHighlight 
+                                }}
+                                whileHover={!isOcupado && selecao.data ? { scale: 1.04, borderColor: brand } : undefined}
+                                whileTap={!isOcupado && selecao.data ? { scale: 0.96 } : undefined}
+                              >{h}</motion.button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </motion.div>
                   </motion.section>
                 )}

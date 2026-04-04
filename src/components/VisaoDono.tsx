@@ -10,6 +10,8 @@ import {
   Copy,
   LayoutDashboard,
   Settings2,
+  Clock,
+  Save,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,8 +20,19 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
 
 const MotionButton = motion.create(Button);
+
+const DIAS_SEMANA = [
+  { id: 0, label: "D", fullName: "Domingo" },
+  { id: 1, label: "S", fullName: "Segunda" },
+  { id: 2, label: "T", fullName: "Terça" },
+  { id: 3, label: "Q", fullName: "Quarta" },
+  { id: 4, label: "Q", fullName: "Quinta" },
+  { id: 5, label: "S", fullName: "Sexta" },
+  { id: 6, label: "S", fullName: "Sábado" },
+];
 
 function useCountUp(target: number, duration = 900) {
   const [display, setDisplay] = useState(target);
@@ -120,6 +133,14 @@ export function VisaoDono({
   const [subTab, setSubTab] = useState<DonoSubTab>("dashboard");
   const [subDir, setSubDir] = useState(1);
 
+  // 🚀 ESTADOS PARA O HORÁRIO DA LOJA
+  const [horariosLoja, setHorariosLoja] = useState({
+    abertura: "09:00",
+    fechamento: "18:00",
+    dias_trabalho: [1, 2, 3, 4, 5, 6], // Padrão: Seg a Sáb
+  });
+  const [isSavingHorario, setIsSavingHorario] = useState(false);
+
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
   const glass = {
@@ -129,6 +150,29 @@ export function VisaoDono({
   } as const;
 
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
+
+  // 🚀 CARREGA OS HORÁRIOS SALVOS QUANDO O COMPONENTE MONTA
+  useEffect(() => {
+    async function carregarHorarios() {
+      const slugAtivo = barbeiros[0]?.barbearia_slug;
+      if (!slugAtivo) return;
+
+      const { data, error } = await supabase
+        .from('barbearias')
+        .select('horario_abertura, horario_fechamento, dias_trabalho')
+        .eq('slug', slugAtivo)
+        .single();
+
+      if (data && !error) {
+        setHorariosLoja({
+          abertura: data.horario_abertura || "09:00",
+          fechamento: data.horario_fechamento || "18:00",
+          dias_trabalho: Array.isArray(data.dias_trabalho) ? data.dias_trabalho : [1, 2, 3, 4, 5, 6]
+        });
+      }
+    }
+    carregarHorarios();
+  }, [barbeiros]);
 
   const switchSub = (next: DonoSubTab) => {
     const order: DonoSubTab[] = ["dashboard", "config"];
@@ -155,6 +199,45 @@ export function VisaoDono({
 
     onAddServico(validacao.data.nome, Number(validacao.data.preco));
     setNServico({ nome: "", preco: "" });
+  };
+
+  // 🚀 FUNÇÃO PARA SALVAR OS HORÁRIOS NO BANCO
+  const handleSaveHorarios = async () => {
+    const slugAtivo = barbeiros[0]?.barbearia_slug;
+    if (!slugAtivo) return toast.error("Erro ao identificar sua barbearia.");
+
+    if (horariosLoja.dias_trabalho.length === 0) {
+      return toast.error("Selecione pelo menos um dia de trabalho!");
+    }
+
+    setIsSavingHorario(true);
+    try {
+      const { error } = await supabase
+        .from('barbearias')
+        .update({
+          horario_abertura: horariosLoja.abertura,
+          horario_fechamento: horariosLoja.fechamento,
+          dias_trabalho: horariosLoja.dias_trabalho
+        })
+        .eq('slug', slugAtivo);
+
+      if (error) throw error;
+      toast.success("Horários atualizados com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao salvar horários.");
+    } finally {
+      setIsSavingHorario(false);
+    }
+  };
+
+  const toggleDiaSemana = (idDia: number) => {
+    setHorariosLoja(prev => {
+      const isSelected = prev.dias_trabalho.includes(idDia);
+      const novosDias = isSelected 
+        ? prev.dias_trabalho.filter(d => d !== idDia)
+        : [...prev.dias_trabalho, idDia].sort();
+      return { ...prev, dias_trabalho: novosDias };
+    });
   };
 
   const tabVariants = {
@@ -338,6 +421,75 @@ export function VisaoDono({
 
           {subTab === "config" && (
             <>
+              {/* 🚀 NOVA SEÇÃO: HORÁRIO DE FUNCIONAMENTO */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 px-1">
+                  <Clock className="h-4 w-4" style={{ color: brand }} />
+                  <h3 className="font-bold text-white uppercase text-sm tracking-tight">
+                    Horário de Funcionamento
+                  </h3>
+                </div>
+                <Card className="p-5 rounded-[22px] border border-white/[0.08] shadow-xl space-y-5" style={glass}>
+                  {/* Seleção de Dias */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Dias de Trabalho</p>
+                    <div className="flex justify-between gap-1">
+                      {DIAS_SEMANA.map((dia) => {
+                        const isSelected = horariosLoja.dias_trabalho.includes(dia.id);
+                        return (
+                          <button
+                            key={dia.id}
+                            onClick={() => toggleDiaSemana(dia.id)}
+                            className={cn(
+                              "h-10 flex-1 rounded-xl text-xs font-bold transition-all border",
+                              isSelected ? "border-transparent shadow-lg" : "bg-black/30 border-white/[0.08] text-white/40 hover:bg-white/5"
+                            )}
+                            style={isSelected ? { backgroundColor: brand, color: ctaFg } : {}}
+                            title={dia.fullName}
+                          >
+                            {dia.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Seleção de Horários */}
+                  <div className="flex gap-4">
+                    <div className="flex-1 space-y-2">
+                      <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Abertura</p>
+                      <input
+                        type="time"
+                        value={horariosLoja.abertura}
+                        onChange={(e) => setHorariosLoja({ ...horariosLoja, abertura: e.target.value })}
+                        className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm"
+                        style={{ colorScheme: 'dark' }}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Fechamento</p>
+                      <input
+                        type="time"
+                        value={horariosLoja.fechamento}
+                        onChange={(e) => setHorariosLoja({ ...horariosLoja, fechamento: e.target.value })}
+                        className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm"
+                        style={{ colorScheme: 'dark' }}
+                      />
+                    </div>
+                  </div>
+
+                  <MotionButton
+                    className="w-full h-12 rounded-xl font-bold uppercase tracking-wide gap-2 border-0 bg-white/10 text-white hover:bg-white/20"
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSaveHorarios}
+                    disabled={isSavingHorario}
+                  >
+                    <Save className="h-4 w-4" />
+                    {isSavingHorario ? "Salvando..." : "Salvar Horários"}
+                  </MotionButton>
+                </Card>
+              </section>
+
               <section className="space-y-4">
                 <div className="flex items-center gap-2 px-1">
                   <Users className="h-4 w-4" style={{ color: brand }} />
