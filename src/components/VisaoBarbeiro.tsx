@@ -11,6 +11,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
+function getHojeLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function VisaoBarbeiro({ 
   barbeiros = [], 
   servicos = [], 
@@ -34,12 +39,36 @@ export function VisaoBarbeiro({
     horario: "" 
   });
 
-  // Identifica o perfil do barbeiro logado para checar status
   const perfilLogado = barbeiros.find((b: any) => b.id === userId);
 
-  // ============================================================================
-  // BLOQUEIO DE ACESSO (O GATE)
-  // ============================================================================
+  useEffect(() => {
+    if (open) {
+      setNovo((prev) => ({
+        ...prev,
+        barbeiroId: barbeiroSelecionadoId || "",
+        data: getHojeLocal(),
+      }));
+    }
+  }, [open, barbeiroSelecionadoId]);
+
+  const horarios = useMemo(() => {
+    const slots = [];
+    for (let h = 9; h <= 19; h++) {
+      slots.push(`${String(h).padStart(2, "0")}:00`);
+      if (h !== 12 && h !== 19) slots.push(`${String(h).padStart(2, "0")}:30`);
+    }
+    return slots;
+  }, []);
+
+  const { horaAtual, minAtual, hojeLocal } = useMemo(() => {
+    const agora = new Date();
+    return {
+      horaAtual: agora.getHours(),
+      minAtual: agora.getMinutes(),
+      hojeLocal: getHojeLocal(),
+    };
+  }, []);
+
   if (!isDono && perfilLogado && perfilLogado.ativo === false) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black p-6">
@@ -54,8 +83,8 @@ export function VisaoBarbeiro({
               Seu perfil está desativado. Entre em contato com o administrador.
             </p>
           </div>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             className="w-full h-12 text-zinc-500 font-black uppercase text-xs hover:text-white"
             onClick={() => supabase.auth.signOut()}
           >
@@ -65,39 +94,6 @@ export function VisaoBarbeiro({
       </div>
     );
   }
-
-  const getHojeLocal = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  useEffect(() => {
-    if (open) {
-      setNovo(prev => ({ 
-        ...prev, 
-        barbeiroId: barbeiroSelecionadoId || "",
-        data: getHojeLocal() 
-      }));
-    }
-  }, [open, barbeiroSelecionadoId]);
-
-  const horarios = useMemo(() => {
-    const slots = [];
-    for (let h = 9; h <= 19; h++) {
-      slots.push(`${String(h).padStart(2, '0')}:00`);
-      if (h !== 12 && h !== 19) slots.push(`${String(h).padStart(2, '0')}:30`);
-    }
-    return slots;
-  }, []);
-
-  const { horaAtual, minAtual, hojeLocal } = useMemo(() => {
-    const agora = new Date();
-    return { 
-      horaAtual: agora.getHours(), 
-      minAtual: agora.getMinutes(), 
-      hojeLocal: getHojeLocal() 
-    };
-  }, []);
 
   const handleAgendar = async () => {
     const toastId = toast.loading("Processando...");

@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar, ShieldCheck } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
@@ -7,9 +7,11 @@ import { VisaoDono } from "@/components/VisaoDono";
 import { VisaoVendedor } from "@/components/VisaoVendedor";
 import { VisaoCEO } from "@/components/VisaoCEO";
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
+import { IndexPageSkeleton } from "@/components/IndexPageSkeleton";
+import { DataLoadError } from "@/components/DataLoadError";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
-import { supabase } from "@/integrations/supabase/client"; // ✅ Importado o supabase
+import { supabase } from "@/integrations/supabase/client";
 
 import { 
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
@@ -19,127 +21,152 @@ import {
 const getLocalDate = () => {
   const agora = new Date();
   const y = agora.getFullYear();
-  const m = String(agora.getMonth() + 1).padStart(2, '0');
-  const d = String(agora.getDate()).padStart(2, '0');
+  const m = String(agora.getMonth() + 1).padStart(2, "0");
+  const d = String(agora.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 };
 
+function mensagemDeErro(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const m = (err as { message?: string }).message;
+    if (typeof m === "string" && m.length > 0) return m;
+  }
+  return "Não foi possível carregar os dados. Verifique sua conexão e tente novamente.";
+}
+
 export default function Index() {
   const { signOut, userRole, user } = useAuth();
-  
+
   const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira" | "vendedor">("barbeiro");
   const [dataFiltro, setDataFiltro] = useState<string>(getLocalDate());
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
-
-  // -------------------------------------------------------------------------
-  // 👑 1. VISÃO CEO (COMANDO CENTRAL) - COM DADOS REAIS
-  // -------------------------------------------------------------------------
   const [dadosCEO, setDadosCEO] = useState({ lojas: 0, faturamento: 0, vendedores: [] });
 
-  useEffect(() => {
-    if (userRole !== "ceo") return;
+  const barbeariaQueryEnabled = userRole !== "ceo" && userRole !== "vendedor";
 
-    async function buscarDadosHQ() {
-      // 1. Busca os vendedores ativos no banco
-      const { data: vends } = await supabase.from('perfis_vendedores').select('*').eq('ativo', true);
-      
-      // 2. Busca todas as barbearias cadastradas
-      const { data: lojas } = await supabase.from('barbearias').select('*');
-
-      const totalLojasReal = lojas?.length || 0;
-      
-      // 3. Monta a lista de vendedores para o painel
-      const listaVendedores = vends?.map((v: any) => ({
-        id: v.id,
-        nome: v.nome,
-        total_lojas: 0 // No futuro, faremos o cálculo de quantas lojas ESSE vendedor fechou
-      })) || [];
-
-      // 4. Atualiza a tela
-      setDadosCEO({
-        lojas: totalLojasReal,
-        faturamento: totalLojasReal * 50,
-        vendedores: listaVendedores
-      });
-    }
-
-    buscarDadosHQ();
-  }, [userRole]);
-
-  if (userRole === "ceo") {
-    return (
-      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
-        <header className="p-4 border-b flex justify-between items-center bg-card">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH HQ</h1>
-          </div>
-          <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
-        </header>
-        
-        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
-           <VisaoCEO 
-             totalLojas={dadosCEO.lojas} 
-             faturamentoTotal={dadosCEO.faturamento} 
-             vendedores={dadosCEO.vendedores} 
-           />
-        </main>
-        
-        <div className="p-8 text-center bg-black mt-auto">
-          <p className="text-zinc-800 text-[8px] font-black uppercase mb-4 tracking-[0.5em]">Sistema Criptografado</p>
-        </div>
-      </div>
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  // 🛡️ 2. VISÃO VENDEDOR - Destravado para PC
-  // -------------------------------------------------------------------------
-  if (userRole === "vendedor") {
-    return (
-      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
-        <header className="p-4 border-b flex justify-between items-center bg-card">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH</h1>
-          </div>
-          <Button variant="ghost" size="icon" onClick={() => signOut()}><LogOut className="h-5 w-5"/></Button>
-        </header>
-        
-        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
-           <VisaoVendedor 
-             vendedorNome={user?.email?.split('@')[0] || "Consultor"} 
-             clientesAtivos={[]} 
-             prospectos={[]} 
-           />
-        </main>
-        <TermosDeUso />
-      </div>
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  // 📊 3. CARREGAMENTO DE DADOS (Dono e Barbeiro)
-  // -------------------------------------------------------------------------
-  const { data: barbearia, isLoading: loadingBarbearia } = useBarbearia();
+  const {
+    data: barbearia,
+    isLoading: loadingBarbearia,
+    isError: erroBarbearia,
+    error: erroDetalheBarbearia,
+    isFetching: fetchingBarbearia,
+    refetch: refetchBarbearia,
+  } = useBarbearia({
+    enabled: barbeariaQueryEnabled,
+  });
   const slug = barbearia?.slug;
   const isDono = barbearia?.isDono;
 
-  const { data: barbeiros = [] } = useBarbeiros(slug);
-  const { data: servicos = [] } = useServicos(slug);
-  const { data: agendamentos = [] } = useAgendamentos(slug);
+  const barbeirosQuery = useBarbeiros(slug);
+  const servicosQuery = useServicos(slug);
+  const agendamentosQuery = useAgendamentos(slug);
+
+  const { data: barbeiros = [], refetch: refetchBarbeiros } = barbeirosQuery;
+  const { data: servicos = [], refetch: refetchServicos } = servicosQuery;
+  const { data: agendamentos = [], refetch: refetchAgendamentos } = agendamentosQuery;
+
+  const carregandoDependentes =
+    !!slug &&
+    (barbeirosQuery.isLoading || servicosQuery.isLoading || agendamentosQuery.isLoading);
+
+  const buscandoDependentes =
+    !!slug &&
+    (barbeirosQuery.isFetching || servicosQuery.isFetching || agendamentosQuery.isFetching);
+
+  const erroDependentes =
+    !!slug &&
+    (barbeirosQuery.isError || servicosQuery.isError || agendamentosQuery.isError);
+
+  const temErroDados = barbeariaQueryEnabled && (erroBarbearia || erroDependentes);
+
+  const buscandoAlgumaQuery =
+    barbeariaQueryEnabled && (fetchingBarbearia || buscandoDependentes);
+
+  const exibirSkeleton =
+    barbeariaQueryEnabled &&
+    ((!temErroDados && (loadingBarbearia || carregandoDependentes)) ||
+      (temErroDados && buscandoAlgumaQuery));
+
+  const refetchDadosPrincipais = useCallback(async () => {
+    await refetchBarbearia();
+    if (slug) {
+      await Promise.all([refetchBarbeiros(), refetchServicos(), refetchAgendamentos()]);
+    }
+  }, [
+    slug,
+    refetchBarbearia,
+    refetchBarbeiros,
+    refetchServicos,
+    refetchAgendamentos,
+  ]);
+
+  const tituloErroCarregamento = useMemo(() => {
+    const msg = erroBarbearia
+      ? mensagemDeErro(erroDetalheBarbearia)
+      : mensagemDeErro(
+          barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error,
+        );
+    return msg.includes("Nenhuma barbearia") ? "Nenhuma barbearia vinculada" : "Erro de conexão";
+  }, [
+    erroBarbearia,
+    erroDetalheBarbearia,
+    barbeirosQuery.error,
+    servicosQuery.error,
+    agendamentosQuery.error,
+  ]);
+
+  const mensagemErroCarregamento = useMemo(() => {
+    if (erroBarbearia) return mensagemDeErro(erroDetalheBarbearia);
+    return mensagemDeErro(
+      barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error,
+    );
+  }, [
+    erroBarbearia,
+    erroDetalheBarbearia,
+    barbeirosQuery.error,
+    servicosQuery.error,
+    agendamentosQuery.error,
+  ]);
 
   const mutacoesBarbeiro = useMutacoesBarbeiro();
   const mutacoesServico = useMutacoesServico();
   const mutacoesAgendamento = useMutacoesAgendamento();
 
   useEffect(() => {
+    if (userRole !== "ceo") return;
+
+    async function buscarDadosHQ() {
+      const { data: vends } = await supabase.from("perfis_vendedores").select("*").eq("ativo", true);
+      const { data: lojas } = await supabase.from("barbearias").select("*");
+
+      const totalLojasReal = lojas?.length || 0;
+
+      const listaVendedores =
+        vends?.map((v: any) => ({
+          id: v.id,
+          nome: v.nome,
+          total_lojas: 0,
+        })) || [];
+
+      setDadosCEO({
+        lojas: totalLojasReal,
+        faturamento: totalLojasReal * 50,
+        vendedores: listaVendedores,
+      });
+    }
+
+    buscarDadosHQ();
+  }, [userRole]);
+
+  useEffect(() => {
+    if (!barbeariaQueryEnabled) return;
     if (!isDono && user?.id) {
       setBarbeiroSelecionadoId(user.id);
     } else if (isDono && barbeiros.length > 0 && !barbeiroSelecionadoId) {
-      setBarbeiroSelecionadoId(""); 
+      setBarbeiroSelecionadoId("");
     }
-  }, [isDono, user?.id, barbeiros]);
+  }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros, barbeiroSelecionadoId]);
 
   const stats = useMemo(() => {
     const hoje = getLocalDate();
@@ -196,12 +223,73 @@ export default function Index() {
 
   const servicos_find = (id: string) => servicos.find((s: any) => s.id === id);
 
-  if (loadingBarbearia) {
+  if (userRole === "ceo") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center dark bg-background text-primary font-bold gap-4">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-        <p className="tracking-widest animate-pulse uppercase text-sm">Sincronizando...</p>
+      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
+        <header className="p-4 border-b flex justify-between items-center bg-card">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH HQ</h1>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => signOut()}>
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </header>
+
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
+          <VisaoCEO
+            totalLojas={dadosCEO.lojas}
+            faturamentoTotal={dadosCEO.faturamento}
+            vendedores={dadosCEO.vendedores}
+          />
+        </main>
+
+        <div className="p-8 text-center bg-black mt-auto">
+          <p className="text-zinc-800 text-[8px] font-black uppercase mb-4 tracking-[0.5em]">Sistema Criptografado</p>
+        </div>
       </div>
+    );
+  }
+
+  if (userRole === "vendedor") {
+    return (
+      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
+        <header className="p-4 border-b flex justify-between items-center bg-card">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH</h1>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => signOut()}>
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </header>
+
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
+          <VisaoVendedor
+            vendedorNome={user?.email?.split("@")[0] || "Consultor"}
+            clientesAtivos={[]}
+            prospectos={[]}
+          />
+        </main>
+        <TermosDeUso />
+      </div>
+    );
+  }
+
+  if (barbeariaQueryEnabled && exibirSkeleton) {
+    const skeletonTab =
+      tab === "dono" || tab === "carteira" || tab === "barbeiro" ? tab : "barbeiro";
+    return <IndexPageSkeleton tab={skeletonTab} />;
+  }
+
+  if (barbeariaQueryEnabled && temErroDados) {
+    return (
+      <DataLoadError
+        title={tituloErroCarregamento}
+        message={mensagemErroCarregamento}
+        onRetry={() => void refetchDadosPrincipais()}
+        onSignOut={() => void signOut()}
+      />
     );
   }
 

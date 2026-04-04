@@ -1,43 +1,109 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Calendar, Clock, User, Scissors, Smartphone, Share2 } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
+import {
+  WalletTicket,
+  WALLET_TICKET_CAPTURE_ID,
+} from "@/components/agendamento-publico/WalletTicket";
+
+const FALLBACK_BG =
+  "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=2070";
+
+const HORARIOS = [
+  "09:00",
+  "09:30",
+  "10:00",
+  "10:30",
+  "11:00",
+  "11:30",
+  "13:00",
+  "13:30",
+  "14:00",
+  "14:30",
+  "15:00",
+  "15:30",
+  "16:00",
+  "16:30",
+  "17:00",
+  "17:30",
+  "18:00",
+  "18:30",
+];
+
+const listContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.07, delayChildren: 0.04 },
+  },
+};
+
+const listItem = {
+  hidden: { opacity: 0, y: 20 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring" as const, stiffness: 380, damping: 34 },
+  },
+};
+
+type BarbeariaRow = {
+  nome?: string | null;
+  cor_primaria?: string | null;
+  url_fundo?: string | null;
+  url_logo?: string | null;
+};
 
 export default function AgendamentoPublico() {
   const { slug } = useParams();
   const [etapa, setEtapa] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [config, setConfig] = useState<any>(null);
-  
-  // Dados da barbearia (Barbeiros e Serviços)
-  const [barbeiros, setBarbeiros] = useState([]);
-  const [servicos, setServicos] = useState([]);
-  const [ocupados, setOcupados] = useState([]);
+  const [config, setConfig] = useState<BarbeariaRow | null>(null);
+  const [barbeiros, setBarbeiros] = useState<unknown[]>([]);
+  const [servicos, setServicos] = useState<unknown[]>([]);
+  const [ocupados, setOcupados] = useState<string[]>([]);
+  const [ticketCodigo, setTicketCodigo] = useState("");
 
-  // Seleções do Cliente
   const [selecao, setSelecao] = useState({
-    servico: null as any,
-    barbeiro: null as any,
+    servico: null as { id: string; nome: string; preco: number } | null,
+    barbeiro: null as { id: string; nome: string } | null,
     data: "",
     horario: "",
     nome: "",
-    whatsapp: ""
+    whatsapp: "",
   });
 
-  // 1. CARREGAR IDENTIDADE E DADOS
+  const brand = config?.cor_primaria?.trim() || "#D4AF37";
+  const ctaFg = contrastTextOnBrand(brand);
+
   useEffect(() => {
     async function carregarDados() {
-      const { data: bInfo } = await supabase.from("barbearias").select("*").eq("slug", slug).single();
-      if (bInfo) setConfig(bInfo);
+      const { data: bInfo } = await supabase
+        .from("barbearias")
+        .select("*")
+        .eq("slug", slug)
+        .single();
+      if (bInfo) setConfig(bInfo as BarbeariaRow);
 
-      const { data: barbs } = await supabase.from("barbeiros").select("*").eq("barbearia_slug", slug).eq("ativo", true);
-      const { data: servs } = await supabase.from("servicos").select("*").eq("barbearia_slug", slug);
-      
+      const { data: barbs } = await supabase
+        .from("barbeiros")
+        .select("*")
+        .eq("barbearia_slug", slug)
+        .eq("ativo", true);
+      const { data: servs } = await supabase
+        .from("servicos")
+        .select("*")
+        .eq("barbearia_slug", slug);
+
       setBarbeiros(barbs || []);
       setServicos(servs || []);
       setLoading(false);
@@ -45,172 +111,422 @@ export default function AgendamentoPublico() {
     carregarDados();
   }, [slug]);
 
-  // 2. BUSCAR HORÁRIOS OCUPADOS QUANDO MUDAR DATA/BARBEIRO
   useEffect(() => {
     if (selecao.data && selecao.barbeiro) {
-      supabase.from("agendamentos")
+      supabase
+        .from("agendamentos")
         .select("horario")
         .eq("barbeiro_id", selecao.barbeiro.id)
         .eq("data", selecao.data)
-        .then(({ data }) => setOcupados(data?.map(d => d.horario) || []));
+        .then(({ data }) => setOcupados(data?.map((d) => d.horario) || []));
     }
   }, [selecao.data, selecao.barbeiro]);
 
   const handleFinalizar = async () => {
-    const toastId = toast.loading("Reservando seu horário...");
-    
+    const toastId = toast.loading("Reservando seu horário…");
+
     const { error } = await supabase.from("agendamentos").insert({
       nome_cliente: selecao.nome,
       telefone_cliente: selecao.whatsapp,
-      servico_id: selecao.servico.id,
-      barbeiro_id: selecao.barbeiro.id,
+      servico_id: selecao.servico!.id,
+      barbeiro_id: selecao.barbeiro!.id,
       data: selecao.data,
       horario: selecao.horario,
       barbearia_slug: slug,
-      status: "Pendente"
+      status: "Pendente",
     });
 
     toast.dismiss(toastId);
     if (error) {
-      if (error.code === "23505") return toast.error("Ops! Alguém acabou de pegar esse horário. Escolha outro!");
+      if (error.code === "23505") {
+        return toast.error("Ops! Alguém acabou de pegar esse horário. Escolha outro.");
+      }
       return toast.error("Erro ao agendar. Tente novamente.");
     }
 
-    setEtapa(5); // Vai para o Ticket VIP
-    toast.success("Agendamento Confirmado!");
+    setTicketCodigo(
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+    );
+    setEtapa(5);
+    toast.success("Agendamento confirmado.");
   };
 
-  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Carregando experiência...</div>;
+  const salvarTicketComoImagem = useCallback(async () => {
+    const el = document.getElementById(WALLET_TICKET_CAPTURE_ID);
+    if (!el) {
+      toast.error("Não foi possível localizar o ticket.");
+      return;
+    }
+    const wait = toast.loading("Gerando imagem…");
+    try {
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f2f2f7",
+        logging: false,
+      });
+      const link = document.createElement("a");
+      link.download = `agendamento-${slug ?? "caj"}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      toast.dismiss(wait);
+      toast.success("Imagem salva.");
+    } catch {
+      toast.dismiss(wait);
+      toast.error("Falha ao exportar. Tente tirar um print do ticket.");
+    }
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <div className="min-h-[100dvh] bg-zinc-950 flex flex-col">
+        <div className="p-6 pt-12 max-w-lg mx-auto w-full space-y-8">
+          <Skeleton className="h-14 w-full rounded-3xl bg-white/10" />
+          <Skeleton className="h-40 w-full rounded-3xl bg-white/10" />
+          <div className="space-y-4">
+            <Skeleton className="h-24 w-full rounded-3xl bg-white/10" />
+            <Skeleton className="h-24 w-full rounded-3xl bg-white/10" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden font-sans">
-      {/* BACKGROUND DINÂMICO */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center transition-all duration-1000 scale-110"
-        style={{ backgroundImage: `url(${config?.url_fundo || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=2070'})`, filter: 'brightness(0.3) blur(8px)' }}
+    <div className="min-h-[100dvh] relative text-white font-sans antialiased overflow-x-hidden">
+      <div className="fixed inset-0 -z-20 bg-zinc-950" />
+      <div
+        className="fixed inset-0 -z-10"
+        style={{ backgroundColor: hexToRgba(brand, 0.1) }}
+      />
+      <div
+        className="fixed inset-0 -z-10 bg-cover bg-center opacity-[0.18] scale-110 blur-3xl"
+        style={{
+          backgroundImage: `url(${config?.url_fundo?.trim() || FALLBACK_BG})`,
+        }}
       />
 
-      <div className="relative z-10 w-full max-w-md">
-        {etapa < 5 ? (
-          <Card className="bg-black/40 backdrop-blur-xl border-white/10 p-6 rounded-[2.5rem] shadow-2xl text-white">
-            <header className="text-center mb-8">
-              <h1 className="text-2xl font-black uppercase italic tracking-tighter" style={{ color: config?.cor_primaria }}>{config?.nome || "Barbearia"}</h1>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Reserve seu estilo em segundos</p>
-            </header>
+      <div className="relative z-10 flex min-h-[100dvh] flex-col">
+        <motion.header
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+          className="mx-4 mt-4 mb-2 rounded-[22px] border border-white/[0.08] px-6 py-5 shadow-[0_8px_40px_rgba(0,0,0,0.25)]"
+          style={{
+            backgroundColor: hexToRgba(brand, 0.12),
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+          }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-white/50">
+            Agendar
+          </p>
+          <h1
+            className="mt-1 text-3xl sm:text-4xl font-bold tracking-tight text-white"
+            style={{ textShadow: `0 0 40px ${hexToRgba(brand, 0.45)}` }}
+          >
+            {config?.nome || "Barbearia"}
+          </h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-white/65 max-w-md">
+            Escolha o serviço, o profissional e o melhor horário — em poucos toques.
+          </p>
+        </motion.header>
 
-            {/* ETAPA 1: SERVIÇO */}
-            {etapa === 1 && (
-              <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
-                <p className="text-xs font-black uppercase text-zinc-500 mb-4">Selecione o Serviço</p>
-                {servicos.map((s: any) => (
-                  <button key={s.id} onClick={() => { setSelecao({...selecao, servico: s}); setEtapa(2); }}
-                    className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 flex justify-between items-center hover:bg-white/10 transition-all text-left">
-                    <span className="font-bold uppercase text-sm">{s.nome}</span>
-                    <span className="font-black italic text-primary" style={{ color: config?.cor_primaria }}>R$ {s.preco}</span>
+        <main className="flex-1 px-5 pb-36 pt-4 max-w-lg mx-auto w-full">
+          <AnimatePresence mode="wait">
+            {etapa < 5 ? (
+              <motion.div
+                key={etapa}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ type: "spring", stiffness: 340, damping: 34 }}
+                className="space-y-8"
+              >
+                {etapa > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setEtapa((e) => Math.max(1, e - 1))}
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/70 hover:text-white transition-colors -ml-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Voltar
                   </button>
-                ))}
-              </div>
-            )}
+                )}
 
-            {/* ETAPA 2: BARBEIRO */}
-            {etapa === 2 && (
-              <div className="space-y-3 animate-in fade-in slide-in-from-right-4">
-                <p className="text-xs font-black uppercase text-zinc-500 mb-4">Escolha o Profissional</p>
-                {barbeiros.map((b: any) => (
-                  <button key={b.id} onClick={() => { setSelecao({...selecao, barbeiro: b}); setEtapa(3); }}
-                    className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4 hover:bg-white/10 transition-all">
-                    <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center font-black text-xs">{b.nome[0]}</div>
-                    <span className="font-bold uppercase text-sm">{b.nome}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+                {etapa === 1 && (
+                  <section className="space-y-6">
+                    <h2 className="text-xl font-bold tracking-tight text-white">
+                      Serviços
+                    </h2>
+                    <motion.ul
+                      className="space-y-4"
+                      variants={listContainer}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {(servicos as { id: string; nome: string; preco: number }[]).map(
+                        (s) => (
+                          <motion.li key={s.id} variants={listItem}>
+                            <motion.button
+                              type="button"
+                              whileHover={{
+                                scale: 1.02,
+                                boxShadow: `0 20px 50px ${hexToRgba(brand, 0.25)}`,
+                              }}
+                              whileTap={{ scale: 0.99 }}
+                              transition={{ type: "spring", stiffness: 420, damping: 26 }}
+                              onClick={() => {
+                                setSelecao({ ...selecao, servico: s });
+                                setEtapa(2);
+                              }}
+                              className={cn(
+                                "w-full rounded-[22px] border border-white/[0.06] px-6 py-5 text-left",
+                                "shadow-[0_4px_24px_rgba(0,0,0,0.2)] transition-shadow",
+                              )}
+                              style={{
+                                backgroundColor: hexToRgba(brand, 0.08),
+                                backdropFilter: "blur(10px)",
+                                WebkitBackdropFilter: "blur(10px)",
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-4">
+                                <span className="text-[17px] font-semibold tracking-tight text-white">
+                                  {s.nome}
+                                </span>
+                                <span
+                                  className="text-lg font-bold tabular-nums shrink-0"
+                                  style={{ color: brand }}
+                                >
+                                  R$ {s.preco}
+                                </span>
+                              </div>
+                            </motion.button>
+                          </motion.li>
+                        ),
+                      )}
+                    </motion.ul>
+                    {servicos.length === 0 && (
+                      <p className="text-center text-white/50 text-sm py-12">
+                        Nenhum serviço disponível no momento.
+                      </p>
+                    )}
+                  </section>
+                )}
 
-            {/* ETAPA 3: DATA E HORA (AQUI ENTRA O PORTEIRO) */}
-            {etapa === 3 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                <Input type="date" className="bg-white/5 border-white/10 h-12 text-white color-scheme-dark" 
-                  value={selecao.data} onChange={e => setSelecao({...selecao, data: e.target.value})} />
-                
-                <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                  {["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30"].map(h => {
-                    const isOcupado = ocupados.includes(h);
-                    return (
-                      <button key={h} disabled={isOcupado} onClick={() => { setSelecao({...selecao, horario: h}); setEtapa(4); }}
-                        className={cn(
-                          "p-2 rounded-xl text-[10px] font-black border transition-all",
-                          isOcupado ? "opacity-10 border-transparent strike-through" : "bg-white/5 border-white/10 hover:border-primary hover:text-primary"
-                        )}>
-                        {h}
-                      </button>
-                    );
-                  })}
+                {etapa === 2 && (
+                  <section className="space-y-6">
+                    <h2 className="text-xl font-bold tracking-tight text-white">
+                      Profissional
+                    </h2>
+                    <motion.ul
+                      className="space-y-3"
+                      variants={listContainer}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {(barbeiros as { id: string; nome: string }[]).map((b) => (
+                        <motion.li key={b.id} variants={listItem}>
+                          <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.99 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                            onClick={() => {
+                              setSelecao({ ...selecao, barbeiro: b });
+                              setEtapa(3);
+                            }}
+                            className="flex w-full items-center gap-4 rounded-[22px] border border-white/[0.06] px-5 py-4 text-left shadow-[0_4px_24px_rgba(0,0,0,0.15)]"
+                            style={{
+                              backgroundColor: hexToRgba(brand, 0.08),
+                              backdropFilter: "blur(10px)",
+                              WebkitBackdropFilter: "blur(10px)",
+                            }}
+                          >
+                            <div
+                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-base font-bold"
+                              style={{
+                                backgroundColor: hexToRgba(brand, 0.2),
+                                color: brand,
+                              }}
+                            >
+                              {b.nome[0]?.toUpperCase()}
+                            </div>
+                            <span className="text-[17px] font-semibold tracking-tight">
+                              {b.nome}
+                            </span>
+                          </motion.button>
+                        </motion.li>
+                      ))}
+                    </motion.ul>
+                    {barbeiros.length === 0 && (
+                      <p className="text-center text-white/50 text-sm py-12">
+                        Nenhum profissional disponível.
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {etapa === 3 && (
+                  <motion.section
+                    initial={{ opacity: 0, y: 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ type: "spring", stiffness: 320, damping: 26 }}
+                    className="space-y-8"
+                  >
+                    <h2 className="text-xl font-bold tracking-tight text-white">
+                      Data e horário
+                    </h2>
+                    <Input
+                      type="date"
+                      className="h-14 rounded-2xl border-white/10 text-[17px] font-medium text-white placeholder:text-white/40 color-scheme-dark"
+                      style={{
+                        backgroundColor: hexToRgba(brand, 0.1),
+                        backdropFilter: "blur(10px)",
+                        WebkitBackdropFilter: "blur(10px)",
+                      }}
+                      value={selecao.data}
+                      onChange={(e) =>
+                        setSelecao({ ...selecao, data: e.target.value, horario: "" })
+                      }
+                    />
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 32 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 280, damping: 22 }}
+                      className="space-y-4"
+                    >
+                      <p className="text-sm font-medium text-white/50">Horários</p>
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "-40px" }}
+                        transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                        className="grid grid-cols-3 gap-2.5 max-h-[min(52vh,22rem)] overflow-y-auto pr-1 pb-2 -mr-1"
+                      >
+                        {HORARIOS.map((h) => {
+                          const isOcupado = ocupados.includes(h);
+                          return (
+                            <motion.button
+                              key={h}
+                              type="button"
+                              disabled={isOcupado || !selecao.data}
+                              whileHover={
+                                !isOcupado && selecao.data ? { scale: 1.04 } : undefined
+                              }
+                              whileTap={
+                                !isOcupado && selecao.data ? { scale: 0.96 } : undefined
+                              }
+                              onClick={() => {
+                                setSelecao({ ...selecao, horario: h });
+                                setEtapa(4);
+                              }}
+                              className={cn(
+                                "rounded-2xl py-3 text-xs font-semibold tracking-wide transition-colors",
+                                isOcupado || !selecao.data
+                                  ? "opacity-25 cursor-not-allowed line-through bg-white/5"
+                                  : "bg-white/[0.07] border border-white/[0.06] text-white hover:bg-white/10",
+                              )}
+                              style={
+                                !isOcupado && selecao.data
+                                  ? { boxShadow: `0 0 0 1px ${hexToRgba(brand, 0.25)}` }
+                                  : undefined
+                              }
+                            >
+                              {h}
+                            </motion.button>
+                          );
+                        })}
+                      </motion.div>
+                    </motion.div>
+                  </motion.section>
+                )}
+
+                {etapa === 4 && (
+                  <section className="space-y-8 pt-2">
+                    <h2 className="text-xl font-bold tracking-tight text-white text-center">
+                      Seus dados
+                    </h2>
+                    <div className="space-y-5">
+                      <Input
+                        placeholder="Nome completo"
+                        className="h-14 rounded-2xl border-white/10 text-center text-[17px] font-medium"
+                        style={{
+                          backgroundColor: hexToRgba(brand, 0.1),
+                          backdropFilter: "blur(10px)",
+                          WebkitBackdropFilter: "blur(10px)",
+                        }}
+                        value={selecao.nome}
+                        onChange={(e) =>
+                          setSelecao({ ...selecao, nome: e.target.value })
+                        }
+                      />
+                      <Input
+                        placeholder="WhatsApp com DDD"
+                        className="h-14 rounded-2xl border-white/10 text-center text-[17px] font-medium"
+                        style={{
+                          backgroundColor: hexToRgba(brand, 0.1),
+                          backdropFilter: "blur(10px)",
+                          WebkitBackdropFilter: "blur(10px)",
+                        }}
+                        value={selecao.whatsapp}
+                        onChange={(e) =>
+                          setSelecao({ ...selecao, whatsapp: e.target.value })
+                        }
+                      />
+                      <Button
+                        className="w-full h-14 rounded-2xl text-[17px] font-bold shadow-lg border-0"
+                        style={{ backgroundColor: brand, color: ctaFg }}
+                        onClick={handleFinalizar}
+                      >
+                        Confirmar
+                      </Button>
+                    </div>
+                  </section>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="ticket"
+                initial={{ opacity: 0, scale: 0.94, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 280, damping: 28 }}
+                className="flex flex-col items-center gap-8 pt-4"
+              >
+                <p className="text-center text-sm font-medium text-white/60 max-w-xs">
+                  Seu ingresso digital. Apresente na chegada ou salve no rolo da câmera.
+                </p>
+                <WalletTicket
+                  config={config}
+                  selecao={selecao}
+                  slug={slug}
+                  ticketCodigo={ticketCodigo}
+                />
+                <div className="flex w-full max-w-[340px] flex-col gap-3">
+                  <Button
+                    type="button"
+                    className="h-12 rounded-2xl font-semibold w-full"
+                    style={{ backgroundColor: brand, color: ctaFg }}
+                    onClick={() => void salvarTicketComoImagem()}
+                  >
+                    Salvar no dispositivo
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-white/70 hover:text-white hover:bg-white/10 rounded-2xl"
+                    onClick={() => window.location.reload()}
+                  >
+                    Novo agendamento
+                  </Button>
                 </div>
-              </div>
+              </motion.div>
             )}
-
-            {/* ETAPA 4: CONTATO */}
-            {etapa === 4 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-right-4 text-center">
-                <Input placeholder="Seu Nome Completo" className="bg-white/5 border-white/10 h-14 text-center text-lg font-bold" 
-                  value={selecao.nome} onChange={e => setSelecao({...selecao, nome: e.target.value})} />
-                <Input placeholder="WhatsApp com DDD" className="bg-white/5 border-white/10 h-14 text-center text-lg font-bold" 
-                  value={selecao.whatsapp} onChange={e => setSelecao({...selecao, whatsapp: e.target.value})} />
-                <Button className="w-full h-14 font-black uppercase rounded-2xl" 
-                  style={{ backgroundColor: config?.cor_primaria, color: '#000' }}
-                  onClick={handleFinalizar}
-                >Confirmar Agendamento</Button>
-              </div>
-            )}
-          </Card>
-        ) : (
-          /* O TICKET VIP (HORIZONTAL) */
-          <div className="animate-in zoom-in-95 duration-500">
-            <Card className="bg-zinc-900 border-none rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col sm:flex-row h-auto sm:h-56">
-              {/* Lado Esquerdo (Status) */}
-              <div className="w-full sm:w-16 flex items-center justify-center p-4" style={{ backgroundColor: config?.cor_primaria }}>
-                <CheckCircle2 className="h-8 w-8 text-black" />
-              </div>
-              
-              {/* Corpo do Passe */}
-              <div className="flex-1 p-6 relative flex flex-col justify-between bg-gradient-to-br from-zinc-800 to-zinc-900">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Reserva Confirmada</h2>
-                    <p className="text-xl font-black text-white uppercase italic tracking-tighter leading-none mt-1">{config?.nome}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-zinc-500 uppercase">Valor</p>
-                    <p className="text-lg font-black text-white italic" style={{ color: config?.cor_primaria }}>R$ {selecao.servico?.preco}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 mt-4">
-                  <div>
-                    <p className="text-[8px] font-black text-zinc-500 uppercase">Data</p>
-                    <p className="text-xs font-bold text-white">{selecao.data.split('-').reverse().join('/')}</p>
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-zinc-500 uppercase">Horário</p>
-                    <p className="text-xs font-bold text-white">{selecao.horario}</p>
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-zinc-500 uppercase">Barbeiro</p>
-                    <p className="text-xs font-bold text-white uppercase">{selecao.barbeiro?.nome}</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
-                   <p className="text-sm font-black text-white uppercase">{selecao.nome}</p>
-                   <p className="text-[8px] text-zinc-600 font-mono tracking-tighter">REF: {Math.random().toString(36).substring(7).toUpperCase()}</p>
-                </div>
-              </div>
-            </Card>
-            
-            <p className="text-center text-zinc-500 text-[10px] mt-6 font-bold uppercase animate-pulse">Tire um print do seu passe VIP</p>
-            <Button variant="ghost" className="w-full mt-2 text-zinc-400 font-black uppercase text-xs" onClick={() => window.location.reload()}>Novo Agendamento</Button>
-          </div>
-        )}
+          </AnimatePresence>
+        </main>
       </div>
     </div>
   );

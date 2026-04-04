@@ -15,7 +15,11 @@ const getInicioDoMes = () => {
 // ============================================================================
 // 1. BARBEARIA (IDENTIFICAÇÃO E PERMISSÕES)
 // ============================================================================
-export function useBarbearia() {
+export type UseBarbeariaOptions = {
+  enabled?: boolean;
+};
+
+export function useBarbearia(options?: UseBarbeariaOptions) {
   return useQuery({
     queryKey: ["barbearia"],
     queryFn: async () => {
@@ -36,6 +40,7 @@ export function useBarbearia() {
       return { slug, isDono, userId: user.id };
     },
     staleTime: Infinity,
+    enabled: options?.enabled ?? true,
   });
 }
 

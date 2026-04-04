@@ -15,7 +15,8 @@ export default function ConfiguracoesVitrine() {
     nome: "",
     slug: "",
     cor_primaria: "#D4AF37",
-    url_fundo: ""
+    url_fundo: "",
+    url_logo: "",
   });
 
   // 1. CARREGAR OS DADOS ATUAIS DA BARBEARIA DO DONO LOGADO
@@ -36,7 +37,8 @@ export default function ConfiguracoesVitrine() {
           nome: data.nome || "",
           slug: data.slug || "",
           cor_primaria: data.cor_primaria || "#D4AF37",
-          url_fundo: data.url_fundo || ""
+          url_fundo: data.url_fundo || "",
+          url_logo: (data as { url_logo?: string }).url_logo || "",
         });
       }
     }
@@ -53,7 +55,8 @@ export default function ConfiguracoesVitrine() {
       .update({
         nome: config.nome,
         cor_primaria: config.cor_primaria,
-        url_fundo: config.url_fundo
+        url_fundo: config.url_fundo,
+        url_logo: config.url_logo || null,
       })
       .eq("id", config.id);
 
@@ -135,6 +138,21 @@ export default function ConfiguracoesVitrine() {
               placeholder="Cole o link de uma imagem aqui..."
             />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-zinc-400 uppercase flex items-center gap-2">
+            <ImageIcon className="w-4 h-4" /> Logo (ticket e vitrine)
+          </label>
+          <Input
+            className="bg-black/50 border-zinc-700 h-12"
+            value={config.url_logo}
+            onChange={(e) => setConfig({ ...config, url_logo: e.target.value })}
+            placeholder="URL pública da logo (PNG ou SVG recomendado)"
+          />
+          <p className="text-[10px] text-zinc-500">
+            No Supabase, inclua o campo texto url_logo na tabela barbearias se ainda não existir.
+          </p>
         </div>
 
         {/* PREVIEW DO FUNDO */}
