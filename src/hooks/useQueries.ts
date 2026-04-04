@@ -12,9 +12,6 @@ const getInicioDoMes = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 };
 
-// ============================================================================
-// 1. BARBEARIA (IDENTIFICAÇÃO E PERMISSÕES)
-// ============================================================================
 export type UseBarbeariaOptions = {
   enabled?: boolean;
 };
@@ -38,9 +35,10 @@ export function useBarbearia(options?: UseBarbeariaOptions) {
 
       if (!slug) throw new Error("Nenhuma barbearia vinculada");
 
+      // 🚀 BUSCA A PALETA COMPLETA AQUI
       const { data: loja } = await supabase
         .from("barbearias")
-        .select("cor_primaria, url_fundo")
+        .select("cor_primaria, cor_secundaria, cor_destaque, url_fundo")
         .eq("slug", slug)
         .maybeSingle();
 
@@ -49,6 +47,8 @@ export function useBarbearia(options?: UseBarbeariaOptions) {
         isDono,
         userId: user.id,
         cor_primaria: loja?.cor_primaria?.trim() || "#D4AF37",
+        cor_secundaria: loja?.cor_secundaria?.trim() || "#18181B",
+        cor_destaque: loja?.cor_destaque?.trim() || "#FFFFFF",
         url_fundo: loja?.url_fundo?.trim() || null,
       };
     },
@@ -57,9 +57,7 @@ export function useBarbearia(options?: UseBarbeariaOptions) {
   });
 }
 
-// ============================================================================
-// 2. AGENDAMENTOS (AGENDA E REALTIME)
-// ============================================================================
+// 2. AGENDAMENTOS
 export function useAgendamentos(slug?: string) {
   const queryClient = useQueryClient();
 
@@ -128,14 +126,11 @@ export function useMutacoesAgendamento() {
   };
 }
 
-// ============================================================================
-// 3. BARBEIROS (EQUIPE COM REMOÇÃO PROTEGIDA)
-// ============================================================================
+// 3. BARBEIROS
 export function useBarbeiros(slug?: string) {
   return useQuery({
     queryKey: ["barbeiros", slug],
     queryFn: async () => {
-      // Agora buscamos a coluna 'ativo' também
       const { data, error } = await supabase
         .from("barbeiros")
         .select("*")
@@ -181,7 +176,6 @@ export function useMutacoesBarbeiro() {
       onError: (err: any) => toast.error(`Falha no cadastro: ${err.message}`)
     }),
 
-    // NOVA LÓGICA: ATIVAR/DESATIVAR
     alternarStatusBarbeiro: useMutation({
       mutationFn: async ({ id, novoStatus, slug }: any) => {
         const { error } = await supabase
@@ -196,7 +190,6 @@ export function useMutacoesBarbeiro() {
       }
     }),
 
-    // REMOÇÃO PROTEGIDA: SÓ DELETA SE ESTIVER DESATIVADO
     removerBarbeiro: useMutation({
       mutationFn: async ({ id, estaAtivo, slug }: any) => {
         if (estaAtivo) {
@@ -215,9 +208,7 @@ export function useMutacoesBarbeiro() {
   };
 }
 
-// ============================================================================
-// 4. SERVIÇOS (TABELA DE PREÇOS)
-// ============================================================================
+// 4. SERVIÇOS
 export function useServicos(slug?: string) {
   return useQuery({
     queryKey: ["servicos", slug],
