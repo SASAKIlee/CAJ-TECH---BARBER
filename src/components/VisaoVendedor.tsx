@@ -6,29 +6,21 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner"; 
 
-const FORM_NOVO_LEAD_INICIAL = { nome: "", bairro: "", email: "", senha: "", telefone: "", cor: "#D4AF37" };
+const FORM_NOVO_LEAD_INICIAL = { 
+  nome: "", bairro: "", email: "", senha: "", telefone: "", 
+  cor_primaria: "#D4AF37", cor_secundaria: "#18181B", cor_destaque: "#FFFFFF" 
+};
 
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-interface VisaoVendedorProps {
-  vendedorId?: string; 
-  vendedorNome?: string;
-  clientesAtivos?: unknown[];
-}
-
-export function VisaoVendedor({
-  vendedorId,
-  vendedorNome = "Consultor CAJ",
-  clientesAtivos = [],
-}: VisaoVendedorProps) {
+export function VisaoVendedor({ vendedorId, vendedorNome = "Consultor CAJ", clientesAtivos = [] }: any) {
   const [busca, setBusca] = useState("");
   const [modalCadastroAberto, setModalCadastroAberto] = useState(false);
   const [tabAtiva, setTabAtiva] = useState<"visita" | "contrato">("visita");
   const [formNovoLead, setFormNovoLead] = useState(FORM_NOVO_LEAD_INICIAL);
   const [isSubmitting, setIsSubmitting] = useState(false); 
-
   const [meusLeads, setMeusLeads] = useState<any[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
 
@@ -74,7 +66,6 @@ export function VisaoVendedor({
         setIsSubmitting(false); return;
       }
 
-      // LÓGICA DO ONBOARDING
       const payload = {
         nome_barbearia: formNovoLead.nome,
         bairro: formNovoLead.bairro,
@@ -84,7 +75,9 @@ export function VisaoVendedor({
           email_dono: formNovoLead.email,
           senha_temp: formNovoLead.senha,
           telefone: formNovoLead.telefone,
-          cor_primaria: formNovoLead.cor
+          cor_primaria: formNovoLead.cor_primaria,
+          cor_secundaria: formNovoLead.cor_secundaria,
+          cor_destaque: formNovoLead.cor_destaque
         } : {}
       };
 
@@ -97,7 +90,7 @@ export function VisaoVendedor({
       carregarMeusLeads();
 
     } catch (error) {
-      toast.error("Falha ao registrar visita. Verifique sua conexão.");
+      toast.error("Falha ao registrar visita.");
     } finally {
       setIsSubmitting(false);
     }
@@ -116,19 +109,7 @@ export function VisaoVendedor({
           <span className="text-[10px] uppercase font-black text-primary tracking-[0.2em]">Partner Dashboard</span>
         </div>
         <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter">Olá, {vendedorNome.split(" ")[0]}</h1>
-        <p className="text-zinc-500 text-xs font-bold uppercase">Sua performance na CAJ TECH hoje</p>
       </header>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-5 bg-zinc-900/50 border-zinc-800 backdrop-blur-md">
-          <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Recorrência</p>
-          <p className="text-2xl font-black text-primary italic">{formatarMoeda(recorrenciaMensal)}</p>
-        </Card>
-        <Card className="p-5 bg-zinc-900/50 border-zinc-800 backdrop-blur-md">
-          <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Fechamento</p>
-          <p className="text-2xl font-black text-white italic">{taxaConversao}%</p>
-        </Card>
-      </div>
 
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -150,36 +131,29 @@ export function VisaoVendedor({
         </div>
         
         <div className="grid gap-3">
-          {loadingLeads ? (
-            <div className="text-zinc-600 text-[10px] uppercase font-bold text-center py-4 italic animate-pulse">Carregando radar de clientes...</div>
-          ) : leadsFiltrados.length === 0 ? (
-            <p className="text-zinc-600 text-[10px] uppercase font-bold text-center py-4 italic bg-zinc-900/30 rounded-2xl border border-zinc-800/50 border-dashed">Nenhuma prospecção encontrada.</p>
-          ) : (
-            leadsFiltrados.map((lead) => (
-              <div key={lead.id} className="bg-zinc-900/40 border border-zinc-800 backdrop-blur-md rounded-2xl p-4 flex justify-between items-center hover:border-primary/30 transition-colors">
-                <div>
-                  <h4 className="font-bold text-white text-sm uppercase italic">{lead.nome_barbearia}</h4>
-                  <div className="flex items-center gap-1 mt-1">
-                    <MapPin className="h-3 w-3 text-zinc-500" />
-                    <span className="text-[9px] text-zinc-400 font-bold uppercase">{lead.bairro || 'Sem Localização'}</span>
-                  </div>
-                </div>
-                <div>
-                  {lead.status === 'visita' ? (
-                    <span className="px-2 py-1 rounded-full bg-zinc-800/50 text-zinc-400 text-[9px] font-black uppercase flex items-center gap-1 border border-zinc-700">Visita</span>
-                  ) : lead.status === 'pendente' ? (
-                    <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[9px] font-black uppercase flex items-center gap-1 border border-blue-500/20"><Clock className="h-3 w-3" /> Em Aprovação</span>
-                  ) : (
-                    <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-[9px] font-black uppercase flex items-center gap-1 border border-primary/20"><CheckCircle className="h-3 w-3" /> Convertido</span>
-                  )}
+          {leadsFiltrados.map((lead) => (
+            <div key={lead.id} className="bg-zinc-900/40 border border-zinc-800 backdrop-blur-md rounded-2xl p-4 flex justify-between items-center hover:border-primary/30 transition-colors">
+              <div>
+                <h4 className="font-bold text-white text-sm uppercase italic">{lead.nome_barbearia}</h4>
+                <div className="flex items-center gap-1 mt-1">
+                  <MapPin className="h-3 w-3 text-zinc-500" />
+                  <span className="text-[9px] text-zinc-400 font-bold uppercase">{lead.bairro || 'Sem Localização'}</span>
                 </div>
               </div>
-            ))
-          )}
+              <div>
+                {lead.status === 'visita' ? (
+                  <span className="px-2 py-1 rounded-full bg-zinc-800/50 text-zinc-400 text-[9px] font-black uppercase flex items-center gap-1 border border-zinc-700">Visita</span>
+                ) : lead.status === 'pendente' ? (
+                  <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[9px] font-black uppercase flex items-center gap-1 border border-blue-500/20"><Clock className="h-3 w-3" /> Em Aprovação</span>
+                ) : (
+                  <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-[9px] font-black uppercase flex items-center gap-1 border border-primary/20"><CheckCircle className="h-3 w-3" /> Convertido</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* MODAL INTELIGENTE (VISITA OU CONTRATO) */}
       {modalCadastroAberto && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm transition-all">
           <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -196,13 +170,25 @@ export function VisaoVendedor({
               
               {tabAtiva === "contrato" && (
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
-                  <p className="text-[10px] font-black text-primary uppercase italic">Dados de Acesso do Cliente</p>
                   <Input type="email" className="bg-black border-zinc-800 text-white h-12 rounded-xl" placeholder="E-mail do Proprietário" value={formNovoLead.email} onChange={e => setFormNovoLead({ ...formNovoLead, email: e.target.value })} />
                   <Input className="bg-black border-zinc-800 text-white h-12 rounded-xl" placeholder="Senha Temporária (Min 6 dig.)" value={formNovoLead.senha} onChange={e => setFormNovoLead({ ...formNovoLead, senha: e.target.value })} />
                   <Input className="bg-black border-zinc-800 text-white h-12 rounded-xl" placeholder="WhatsApp" value={formNovoLead.telefone} onChange={e => setFormNovoLead({ ...formNovoLead, telefone: e.target.value })} />
-                  <div className="flex items-center justify-between bg-black border border-zinc-800 h-12 rounded-xl px-3">
-                    <span className="text-xs text-zinc-400 font-bold uppercase">Cor Principal</span>
-                    <input type="color" value={formNovoLead.cor} onChange={e => setFormNovoLead({ ...formNovoLead, cor: e.target.value })} className="h-8 w-14 cursor-pointer bg-transparent border-none outline-none" />
+                  
+                  {/* AS TRÊS CORES ESTÃO AQUI! */}
+                  <div className="space-y-2 pt-2">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase italic">Paleta de Cores da Marca</p>
+                    <div className="flex items-center justify-between bg-black border border-zinc-800 h-12 rounded-xl px-3">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase">Cor Primária (Botões)</span>
+                      <input type="color" value={formNovoLead.cor_primaria} onChange={e => setFormNovoLead({ ...formNovoLead, cor_primaria: e.target.value })} className="h-8 w-14 cursor-pointer bg-transparent border-none outline-none" />
+                    </div>
+                    <div className="flex items-center justify-between bg-black border border-zinc-800 h-12 rounded-xl px-3">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase">Cor Secundária (Fundo)</span>
+                      <input type="color" value={formNovoLead.cor_secundaria} onChange={e => setFormNovoLead({ ...formNovoLead, cor_secundaria: e.target.value })} className="h-8 w-14 cursor-pointer bg-transparent border-none outline-none" />
+                    </div>
+                    <div className="flex items-center justify-between bg-black border border-zinc-800 h-12 rounded-xl px-3">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase">Cor Destaque (Textos)</span>
+                      <input type="color" value={formNovoLead.cor_destaque} onChange={e => setFormNovoLead({ ...formNovoLead, cor_destaque: e.target.value })} className="h-8 w-14 cursor-pointer bg-transparent border-none outline-none" />
+                    </div>
                   </div>
                 </div>
               )}
