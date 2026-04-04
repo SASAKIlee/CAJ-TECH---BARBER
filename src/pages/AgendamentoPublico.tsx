@@ -14,9 +14,10 @@ import {
   WalletTicket,
   WALLET_TICKET_CAPTURE_ID,
 } from "@/components/agendamento-publico/WalletTicket";
-
-const FALLBACK_BG =
-  "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=2070";
+import {
+  AppHeroBackdrop,
+  APP_HERO_FALLBACK_BG,
+} from "@/components/AppHeroBackdrop";
 
 const HORARIOS = [
   "09:00",
@@ -181,7 +182,9 @@ export default function AgendamentoPublico() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-zinc-950 flex flex-col">
+      <div className="min-h-[100dvh] relative isolate overflow-x-hidden flex flex-col text-white">
+        <AppHeroBackdrop imageUrl={APP_HERO_FALLBACK_BG} />
+        <div className="relative z-10 flex flex-col flex-1">
         <div className="p-6 pt-12 max-w-lg mx-auto w-full space-y-8">
           <Skeleton className="h-14 w-full rounded-3xl bg-white/10" />
           <Skeleton className="h-40 w-full rounded-3xl bg-white/10" />
@@ -190,23 +193,16 @@ export default function AgendamentoPublico() {
             <Skeleton className="h-24 w-full rounded-3xl bg-white/10" />
           </div>
         </div>
+        </div>
       </div>
     );
   }
 
+  const heroImageUrl = config?.url_fundo?.trim() || APP_HERO_FALLBACK_BG;
+
   return (
-    <div className="min-h-[100dvh] relative text-white font-sans antialiased overflow-x-hidden">
-      <div className="fixed inset-0 -z-20 bg-zinc-950" />
-      <div
-        className="fixed inset-0 -z-10"
-        style={{ backgroundColor: hexToRgba(brand, 0.1) }}
-      />
-      <div
-        className="fixed inset-0 -z-10 bg-cover bg-center opacity-[0.18] scale-110 blur-3xl"
-        style={{
-          backgroundImage: `url(${config?.url_fundo?.trim() || FALLBACK_BG})`,
-        }}
-      />
+    <div className="min-h-[100dvh] relative isolate text-white font-sans antialiased overflow-x-hidden">
+      <AppHeroBackdrop imageUrl={heroImageUrl} />
 
       <div className="relative z-10 flex min-h-[100dvh] flex-col">
         <motion.header

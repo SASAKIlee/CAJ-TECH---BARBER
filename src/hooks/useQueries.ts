@@ -37,7 +37,20 @@ export function useBarbearia(options?: UseBarbeariaOptions) {
       }
 
       if (!slug) throw new Error("Nenhuma barbearia vinculada");
-      return { slug, isDono, userId: user.id };
+
+      const { data: loja } = await supabase
+        .from("barbearias")
+        .select("cor_primaria, url_fundo")
+        .eq("slug", slug)
+        .maybeSingle();
+
+      return {
+        slug,
+        isDono,
+        userId: user.id,
+        cor_primaria: loja?.cor_primaria?.trim() || "#D4AF37",
+        url_fundo: loja?.url_fundo?.trim() || null,
+      };
     },
     staleTime: Infinity,
     enabled: options?.enabled ?? true,
