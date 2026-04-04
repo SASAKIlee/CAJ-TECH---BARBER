@@ -13,35 +13,59 @@ import { toast } from "sonner";
 export function VisaoCEO({ 
   totalLojas = 0, 
   faturamentoTotal = 0, 
-  vendedores = [] // O Index já nos manda quem são os vendedores
+  vendedores = [] 
 }: any) {
   
   const [leadsRecentes, setLeadsRecentes] = useState<any[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
+  
+  // 🚀 NOVO: Estado para a Calculadora de Ranking
+  const [ranking, setRanking] = useState<any[]>([]);
 
   useEffect(() => {
-    async function buscarLeads() {
+    async function carregarDados() {
       try {
-        // 🔥 REMOVEMOS O JOIN. Buscamos a tabela pura!
-        const { data, error } = await supabase
+        // 1. Busca os últimos leads para a lista
+        const { data: leads, error: errorLeads } = await supabase
           .from('leads')
           .select('*') 
           .order('created_at', { ascending: false })
           .limit(10);
 
-        if (error) throw error;
-        setLeadsRecentes(data || []);
+        if (errorLeads) throw errorLeads;
+        setLeadsRecentes(leads || []);
+
+        // 2. 🚀 BUSCA TODAS AS VENDAS CONVERTIDAS PARA CALCULAR A COMISSÃO
+        const { data: vendasConvertidas } = await supabase
+          .from('leads')
+          .select('vendedor_id')
+          .eq('status', 'convertido');
+
+        // 3. Cruza os vendedores com as vendas
+        const rankingCalculado = vendedores.map((v: any) => {
+          const totalVendas = vendasConvertidas?.filter(lead => lead.vendedor_id === v.id).length || 0;
+          return {
+            ...v,
+            total_lojas: totalVendas
+          };
+        });
+
+        // Ordena para quem vendeu mais ficar no topo
+        rankingCalculado.sort((a, b) => b.total_lojas - a.total_lojas);
+        setRanking(rankingCalculado);
+
       } catch (err) {
-        console.error("Erro ao buscar leads:", err);
+        console.error("Erro ao buscar dados:", err);
       } finally {
         setLoadingLeads(false);
       }
     }
 
-    buscarLeads();
-  }, []);
+    carregarDados();
+  }, [vendedores]);
 
-  const handleAprovarLead = async (leadId: string) => {
+  // 🚀 Função de aprovar agora soma +1 no gráfico ao vivo!
+  const handleAprovarLead = async (leadId: string, vendedorId: string) => {
     try {
       const { error } = await supabase
         .from('leads')
@@ -50,11 +74,23 @@ export function VisaoCEO({
 
       if (error) throw error;
 
-      toast.success("Venda confirmada! Agora ela conta para as metas.");
+      toast.success("Venda confirmada! Comissão calculada.");
       
+      // Muda a etiqueta pra verde na lista
       setLeadsRecentes(prev => 
         prev.map(l => l.id === leadId ? { ...l, status: 'convertido' } : l)
       );
+
+      // 🚀 ATUALIZA O GRÁFICO E A COMISSÃO NA HORA
+      if (vendedorId) {
+        setRanking(prev => {
+          const novoRanking = prev.map(v => 
+            v.id === vendedorId ? { ...v, total_lojas: v.total_lojas + 1 } : v
+          );
+          return novoRanking.sort((a, b) => b.total_lojas - a.total_lojas);
+        });
+      }
+
     } catch (err) {
       console.error("Erro ao aprovar lead:", err);
       toast.error("Erro ao confirmar venda. Tente novamente.");
@@ -63,7 +99,6 @@ export function VisaoCEO({
 
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // 🚀 Função inteligente que acha o nome do vendedor baseada no ID
   const getNomeVendedor = (idDesteLead: string) => {
     if (!idDesteLead) return "Desconhecido";
     const vendedorEncontrado = vendedores.find((v: any) => v.id === idDesteLead);
@@ -93,7 +128,8 @@ export function VisaoCEO({
           </div>
           <p className="text-[10px] uppercase font-black text-zinc-500 mb-1 tracking-widest">Previsão de MRR (Recorrência)</p>
           <div className="flex items-end gap-2">
-            <p className="text-4xl font-black text-white italic">{formatarMoeda(totalLojas * 50)}</p>
+            {/* Calcula o total baseado em vendas confirmadas + lojas antigas se quiser */}
+            <p className="text-4xl font-black text-white italic">{formatarMoeda((ranking.reduce((acc, v) => acc + v.total_lojas, 0)) * 50)}</p>
             <span className="text-emerald-500 text-xs font-bold mb-2 flex items-center">
               <ArrowUpRight className="h-3 w-3" /> 100%
             </span>
@@ -106,7 +142,7 @@ export function VisaoCEO({
         <Card className="p-5 bg-zinc-900/50 border-zinc-800 backdrop-blur-sm">
           <Store className="h-4 w-4 text-primary mb-2" />
           <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Market Share</p>
-          <p className="text-2xl font-black text-white italic">{totalLojas}</p>
+          <p className="text-2xl font-black text-white italic">{ranking.reduce((acc, v) => acc + v.total_lojas, 0)}</p>
           <p className="text-[8px] text-zinc-600 uppercase mt-1 italic">Lojas na Base</p>
         </Card>
 
@@ -145,7 +181,6 @@ export function VisaoCEO({
                       <span className="text-zinc-700">•</span>
                       <span className="text-[9px] text-amber-500 font-bold uppercase flex items-center gap-1">
                         <Users className="h-3 w-3" /> 
-                        {/* 🚀 Chama a função que descobre o nome do Vendedor */}
                         {getNomeVendedor(lead.vendedor_id)}
                       </span>
                     </div>
@@ -159,7 +194,8 @@ export function VisaoCEO({
                     {lead.status === 'pendente' ? (
                       <Button 
                         size="sm" 
-                        onClick={() => handleAprovarLead(lead.id)}
+                        // 🚀 PASSANDO O VENDEDOR ID AQUI PRA CALCULAR CERTO
+                        onClick={() => handleAprovarLead(lead.id, lead.vendedor_id)}
                         className="h-7 bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black uppercase px-3 rounded-lg shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
                       >
                         Confirmar Venda
@@ -177,7 +213,7 @@ export function VisaoCEO({
         </Card>
       </section>
 
-      {/* 3. RANKING DE VENDEDORES */}
+      {/* 3. RANKING DE VENDEDORES (AGORA FUNCIONANDO!) */}
       <section className="space-y-4 pt-2">
         <div className="flex items-center gap-2 px-1 text-zinc-400">
           <BarChart3 className="h-4 w-4" />
@@ -185,7 +221,7 @@ export function VisaoCEO({
         </div>
         
         <div className="grid gap-3">
-          {vendedores.map((v: any, index: number) => (
+          {ranking.map((v: any, index: number) => (
             <Card key={v.id} className="p-4 bg-zinc-900/40 border-zinc-800 flex justify-between items-center group hover:border-primary/50 transition-all">
               <div className="flex items-center gap-4">
                 <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-sm text-zinc-500 border border-zinc-700 group-hover:text-primary group-hover:border-primary/50">
