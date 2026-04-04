@@ -62,12 +62,12 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
       await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
 
       // 3. Cria a Barbearia Oficial vinculando o dono_id
+      // 🔥 CORREÇÃO: Removida a linha do telefone que dava erro no banco!
       const { error: barbError } = await supabase.from("barbearias").insert({
         nome: lead.nome_barbearia,
         slug: slugDesejado,
         dono_id: novoDonoId,
-        cor_primaria: extras.cor_primaria || "#D4AF37",
-        telefone: extras.telefone || ""
+        cor_primaria: extras.cor_primaria || "#D4AF37"
       });
       if (barbError) throw new Error("Erro ao criar barbearia: " + barbError.message);
 

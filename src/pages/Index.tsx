@@ -272,6 +272,7 @@ export default function Index() {
             vendedorId={user?.id} // <-- CONEXÃO FEITA AQUI
             vendedorNome={user?.email?.split("@")[0] || "Consultor"}
             clientesAtivos={[]}
+            prospectos={[]}
           />
         </main>
         <TermosDeUso />
