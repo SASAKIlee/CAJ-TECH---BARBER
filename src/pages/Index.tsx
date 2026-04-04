@@ -269,9 +269,9 @@ export default function Index() {
 
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
           <VisaoVendedor
+            vendedorId={user?.id} // <-- CONEXÃO FEITA AQUI
             vendedorNome={user?.email?.split("@")[0] || "Consultor"}
             clientesAtivos={[]}
-            prospectos={[]}
           />
         </main>
         <TermosDeUso />
