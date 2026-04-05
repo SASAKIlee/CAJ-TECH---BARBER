@@ -190,6 +190,21 @@ export function useMutacoesBarbeiro() {
       }
     }),
 
+    // 🚀 AQUI ESTÁ A NOVA MUTAÇÃO DA META DIÁRIA
+    atualizarMetaBarbeiro: useMutation({
+      mutationFn: async ({ id, meta, slug }: any) => {
+        const { error } = await supabase
+          .from("barbeiros")
+          .update({ meta_diaria: meta })
+          .eq("id", id);
+        if (error) throw error;
+      },
+      onSuccess: (_, vars) => {
+        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
+        toast.success("Meta diária atualizada! Foco no objetivo! 🎯");
+      }
+    }),
+
     removerBarbeiro: useMutation({
       mutationFn: async ({ id, estaAtivo, slug }: any) => {
         if (estaAtivo) {
