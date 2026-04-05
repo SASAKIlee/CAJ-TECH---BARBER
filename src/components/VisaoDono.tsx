@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Users, Scissors, Trash2, Plus, Power, PowerOff,
-  Link as LinkIcon, Copy, LayoutDashboard, Settings2, Clock, Save,
-} from "lucide-react";
+import { Users, Scissors, Trash2, Plus, Power, PowerOff, Link as LinkIcon, Copy, FileText, Settings2, Clock, Save, BarChart3 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
@@ -11,6 +8,9 @@ import { cn } from "@/lib/utils";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+
+// 🚀 IMPORT DOS GRÁFICOS
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const MotionButton = motion.create(Button);
 
@@ -25,7 +25,6 @@ function useCountUp(target: number, duration = 900) {
   const [display, setDisplay] = useState(target);
   const displayRef = useRef(display);
   displayRef.current = display;
-
   useEffect(() => {
     const from = displayRef.current;
     const start = performance.now();
@@ -39,7 +38,6 @@ function useCountUp(target: number, duration = 900) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target, duration]);
-
   return display;
 }
 
@@ -57,7 +55,8 @@ function StatCard({ label, value, brand, highlight, delay = 0 }: any) {
   );
 }
 
-type DonoSubTab = "dashboard" | "config";
+// 🚀 AS TRÊS ABAS DO DONO
+type DonoSubTab = "resumo" | "dashboard" | "config";
 
 export function VisaoDono({
   faturamentoHoje = 0, comissoesAPagarHoje = 0, lucroRealHoje = 0, faturamentoMensal = 0,
@@ -65,11 +64,9 @@ export function VisaoDono({
   onAddBarbeiro, onRemoveBarbeiro, onAddServico, onRemoveServico, onToggleBarbeiroStatus, corPrimaria = "#D4AF37",
 }: any) {
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
-  
-  // 🚀 ADICIONADO O ESTADO DOS MINUTOS
   const [nServico, setNServico] = useState({ nome: "", preco: "", duracao_minutos: "30" });
   
-  const [subTab, setSubTab] = useState<DonoSubTab>("dashboard");
+  const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
   const [horariosLoja, setHorariosLoja] = useState({ abertura: "09:00", fechamento: "18:00", dias_trabalho: [1, 2, 3, 4, 5, 6] });
   const [isSavingHorario, setIsSavingHorario] = useState(false);
@@ -79,6 +76,12 @@ export function VisaoDono({
   const glass = { backgroundColor: hexToRgba(brand, 0.1), backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" } as const;
 
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
+
+  // 🚀 PREPARA OS DADOS PARA O GRÁFICO
+  const chartData = comissaoPorBarbeiroHoje.map((item: any) => ({
+    name: item.barbeiro?.nome?.split(' ')[0] || "Desconhecido",
+    Total: item.total
+  })).sort((a: any, b: any) => b.Total - a.Total); // Ordena quem vendeu mais
 
   useEffect(() => {
     async function carregarHorarios() {
@@ -96,7 +99,7 @@ export function VisaoDono({
   }, [barbeiros]);
 
   const switchSub = (next: DonoSubTab) => {
-    const order: DonoSubTab[] = ["dashboard", "config"];
+    const order: DonoSubTab[] = ["resumo", "dashboard", "config"];
     setSubDir(order.indexOf(next) > order.indexOf(subTab) ? 1 : -1);
     setSubTab(next);
   };
@@ -108,7 +111,6 @@ export function VisaoDono({
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
   };
 
-  // 🚀 ENVIA OS MINUTOS NA HORA DE SALVAR
   const handleAddServico = () => {
     const validacao = servicoSchema.safeParse(nServico);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
@@ -144,11 +146,12 @@ export function VisaoDono({
     <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden text-white">
       <div className="flex rounded-2xl border border-white/[0.08] p-1 gap-1" style={glass}>
         {([
-          { id: "dashboard" as const, label: "Dashboard", Icon: LayoutDashboard },
-          { id: "config" as const, label: "Configurações", Icon: Settings2 },
+          { id: "resumo" as const, label: "Resumo", Icon: FileText },
+          { id: "dashboard" as const, label: "Dashboard", Icon: BarChart3 },
+          { id: "config" as const, label: "Ajustes", Icon: Settings2 },
         ] as const).map(({ id, label, Icon }) => (
           <MotionButton key={id} type="button" variant="ghost" whileTap={{ scale: 0.95 }} onClick={() => switchSub(id)}
-            className={cn("flex-1 h-11 rounded-xl text-[11px] font-bold uppercase tracking-wide gap-2", subTab === id ? "shadow-lg border-0" : "text-white/60 hover:text-white hover:bg-white/[0.06]")}
+            className={cn("flex-1 h-11 rounded-xl text-[10px] font-bold uppercase tracking-wide gap-1.5 px-1", subTab === id ? "shadow-lg border-0" : "text-white/60 hover:text-white hover:bg-white/[0.06]")}
             style={subTab === id ? { backgroundColor: brand, color: ctaFg } : undefined}>
             <Icon className="h-4 w-4" />{label}
           </MotionButton>
@@ -157,7 +160,9 @@ export function VisaoDono({
 
       <AnimatePresence mode="wait" initial={false} custom={subDir}>
         <motion.div key={subTab} custom={subDir} variants={tabVariants} initial="enter" animate="center" exit="exit" transition={{ type: "spring", stiffness: 400, damping: 36 }} className="space-y-8">
-          {subTab === "dashboard" && (
+          
+          {/* 🚀 ABA 1: RESUMO (O Antigo Dashboard) */}
+          {subTab === "resumo" && (
             <>
               <section>
                 <Card className="relative overflow-hidden rounded-[22px] border border-white/[0.08] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.25)]" style={glass}>
@@ -165,7 +170,7 @@ export function VisaoDono({
                   <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: brand }} />
-                      <p className="text-[10px] uppercase font-bold tracking-[0.25em]" style={{ color: brand }}>Link de Agendamento Online</p>
+                      <p className="text-[10px] uppercase font-bold tracking-[0.25em]" style={{ color: brand }}>Link de Agendamento</p>
                     </div>
                     <div className="flex flex-col gap-3">
                       <div className="rounded-xl border border-white/[0.08] bg-black/35 p-3 flex items-center justify-between gap-2 backdrop-blur-md">
@@ -186,29 +191,68 @@ export function VisaoDono({
                 <StatCard label="Faturamento mês" value={Number(faturamentoMensal) || 0} brand={brand} delay={0.1} />
                 <StatCard label="Comissões hoje" value={Number(comissoesAPagarHoje) || 0} brand={brand} delay={0.14} />
               </div>
-
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 px-1">
-                  <LinkIcon className="h-4 w-4" style={{ color: brand }} />
-                  <h3 className="font-bold text-white uppercase text-sm tracking-tight">Produção de hoje</h3>
-                </div>
-                <div className="grid gap-2">
-                  {comissaoPorBarbeiroHoje.map((item: any, i: number) => (
-                    <motion.div key={item.barbeiro?.id ?? i} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ type: "spring", stiffness: 360, damping: 30, delay: 0.05 * i }}>
-                      <Card className={cn("p-4 rounded-[20px] border border-white/[0.08] flex justify-between items-center shadow-lg", !item.barbeiro?.ativo && "opacity-60")} style={glass}>
-                        <div>
-                          <p className="font-semibold text-white uppercase text-xs tracking-tight">{item.barbeiro?.nome}</p>
-                          <p className="text-[9px] text-white/45 font-bold uppercase tracking-tighter">{item.cortes} atendimentos</p>
-                        </div>
-                        <p className="text-lg font-bold tabular-nums" style={{ color: brand }}>R$ {formatarMoeda(item.total)}</p>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
-              </section>
             </>
           )}
 
+          {/* 🚀 ABA 2: O NOVO DASHBOARD DE GRÁFICOS */}
+          {subTab === "dashboard" && (
+            <section className="space-y-6">
+              <div className="flex items-center gap-2 px-1">
+                <BarChart3 className="h-5 w-5" style={{ color: brand }} />
+                <h3 className="font-black text-white uppercase text-xl tracking-tighter italic">Inteligência de Dados</h3>
+              </div>
+
+              <Card className="p-5 rounded-[22px] border border-white/[0.08] shadow-xl space-y-4" style={glass}>
+                <div>
+                  <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Ranking de Faturamento (Hoje)</p>
+                  <p className="text-sm font-semibold text-white">Produção por Profissional</p>
+                </div>
+                
+                <div className="h-64 w-full mt-4">
+                  {chartData.length > 0 && chartData.some(d => d.Total > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="name" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
+                        <Tooltip 
+                          cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                          contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+                          formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Produção']}
+                        />
+                        <Bar dataKey="Total" radius={[6, 6, 6, 6]}>
+                          {chartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={index === 0 ? brand : hexToRgba(brand, 0.4)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center border border-dashed border-white/10 rounded-xl">
+                      <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-widest">Nenhuma produção registrada hoje</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              {/* LISTA DETALHADA DE HOJE */}
+              <div className="space-y-3 pt-2">
+                <p className="text-[10px] font-black text-white/50 uppercase tracking-widest px-1">Detalhamento da Equipe</p>
+                <div className="grid gap-2">
+                  {comissaoPorBarbeiroHoje.map((item: any, i: number) => (
+                    <Card key={item.barbeiro?.id ?? i} className={cn("p-4 rounded-[20px] border border-white/[0.08] flex justify-between items-center shadow-lg", !item.barbeiro?.ativo && "opacity-60")} style={glass}>
+                      <div>
+                        <p className="font-semibold text-white uppercase text-xs tracking-tight">{item.barbeiro?.nome}</p>
+                        <p className="text-[9px] text-white/45 font-bold uppercase tracking-tighter">{item.cortes} atendimentos</p>
+                      </div>
+                      <p className="text-lg font-bold tabular-nums" style={{ color: brand }}>R$ {formatarMoeda(item.total)}</p>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* 🚀 ABA 3: CONFIGURAÇÕES */}
           {subTab === "config" && (
             <>
               <section className="space-y-4">
@@ -291,8 +335,6 @@ export function VisaoDono({
 
                 <Card className="p-4 rounded-[22px] border border-white/[0.08] shadow-xl space-y-3" style={glass}>
                   <input placeholder="Nome do Serviço" className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" value={nServico.nome} onChange={(e) => setNServico({ ...nServico, nome: e.target.value })} />
-                  
-                  {/* 🚀 O CAMPO DE MINUTOS AQUI! */}
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <span className="absolute left-3 top-3 text-zinc-500 text-sm">R$</span>
@@ -313,7 +355,6 @@ export function VisaoDono({
                     <div key={s.id} className="flex justify-between items-center rounded-xl border border-white/[0.08] p-3" style={glass}>
                       <div className="text-[11px]">
                         <p className="font-semibold text-white uppercase tracking-tight">{s.nome}</p>
-                        {/* 🚀 EXIBIÇÃO DOS MINUTOS NA LISTA */}
                         <p className="font-bold italic tabular-nums" style={{ color: brand }}>
                           R$ {formatarMoeda(s.preco)} <span className="text-zinc-500 text-[9px] font-normal not-italic ml-1 opacity-70">• {s.duracao_minutos} min</span>
                         </p>
