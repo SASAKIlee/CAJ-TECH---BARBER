@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
   BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
-  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet
+  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,11 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [novoAviso, setNovoAviso] = useState("");
 
+  // 🚀 ESTADOS DO NOVO CONSULTOR
+  const [modalConsultorAberto, setModalConsultorAberto] = useState(false);
+  const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
+  const [isSavingConsultor, setIsSavingConsultor] = useState(false);
+
   useEffect(() => {
     async function carregarDados() {
       try {
@@ -53,7 +58,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
         const rankingCalculado = vendedores.map((v: any) => ({
           ...v, 
           total_lojas: vendasConvertidas.filter(lead => lead.vendedor_id === v.id).length || 0,
-          comissao_pendente: (vendasConvertidas.filter(lead => lead.vendedor_id === v.id).length || 0) * 25 // Exemplo R$25 por loja
+          comissao_pendente: (vendasConvertidas.filter(lead => lead.vendedor_id === v.id).length || 0) * 25
         }));
         setRanking(rankingCalculado.sort((a, b) => b.total_lojas - a.total_lojas));
       } catch (err) {}
@@ -61,13 +66,12 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     carregarDados();
   }, [vendedores]);
 
-  // ESTATÍSTICAS FUNIL
   const statVisitas = leadsRecentes.filter(l => l.status === 'visita').length;
   const statPendentes = leadsRecentes.filter(l => l.status === 'pendente').length;
   const statConvertidos = leadsRecentes.filter(l => l.status === 'convertido').length;
   const taxaConversao = leadsRecentes.length > 0 ? ((statConvertidos / leadsRecentes.length) * 100).toFixed(0) : 0;
 
-  // 1. APROVAÇÃO E CRIAÇÃO
+  // 1. APROVAÇÃO E CRIAÇÃO DA LOJA
   const handleAprovarContrato = async (lead: any) => {
     const slugDesejado = slugs[lead.id];
     const planoEscolhido = planos[lead.id] || "pro";
@@ -102,10 +106,49 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     }
   };
 
-  // 2. RECUSAR CONTRATO
+  // 2. CADASTRAR NOVO CONSULTOR
+  const handleCadastrarConsultor = async () => {
+    if (!novoConsultor.nome || !novoConsultor.email || !novoConsultor.senha) {
+      return toast.error("Preencha todos os campos do consultor!");
+    }
+
+    setIsSavingConsultor(true);
+    toast.loading("Registrando consultor...", { id: "novo_consultor" });
+
+    try {
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
+      const { data: authData, error: authError } = await tempSupabase.auth.signUp({ 
+        email: novoConsultor.email, password: novoConsultor.senha 
+      });
+      
+      if (authError) throw new Error(authError.message);
+      const novoConsultorId = authData.user!.id;
+
+      const { error: roleError } = await supabase.from("user_roles").insert({ 
+        user_id: novoConsultorId, role: "vendedor" 
+      });
+      if (roleError) throw new Error("Erro ao dar permissão: " + roleError.message);
+
+      const { error: perfilError } = await supabase.from("perfis_vendedores").insert({ 
+        id: novoConsultorId, nome: novoConsultor.nome 
+      });
+      if (perfilError) throw new Error("Erro ao criar perfil: " + perfilError.message);
+
+      toast.success("✅ Consultor criado com sucesso!", { id: "novo_consultor" });
+      
+      setRanking(prev => [...prev, { id: novoConsultorId, nome: novoConsultor.nome, total_lojas: 0, comissao_pendente: 0 }]);
+      setModalConsultorAberto(false);
+      setNovoConsultor({ nome: "", email: "", senha: "" });
+
+    } catch (err: any) {
+      toast.error(err.message, { id: "novo_consultor" });
+    } finally {
+      setIsSavingConsultor(false);
+    }
+  };
+
   const handleRecusarContrato = async (leadId: string) => {
     if (!motivoRecusa) return toast.error("Digite o motivo da recusa para o vendedor.");
-    
     try {
       await supabase.from("leads").update({ status: 'recusado', dados_adicionais: { motivo_recusa: motivoRecusa } }).eq('id', leadId);
       toast.success("Contrato devolvido ao vendedor.");
@@ -115,7 +158,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     } catch { toast.error("Erro ao recusar."); }
   };
 
-  // 3. BLOQUEAR/DESBLOQUEAR INADIMPLENTE
   const toggleStatusLoja = async (lojaId: string, statusAtual: boolean) => {
     try {
       await supabase.from("barbearias").update({ ativo: !statusAtual }).eq('id', lojaId);
@@ -124,20 +166,17 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     } catch { toast.error("Falha ao alterar status."); }
   };
 
-  // 4. PAGAR COMISSÃO DO VENDEDOR
   const pagarComissao = (vendedorId: string) => {
     toast.success("Pix registrado! Comissão zerada no sistema.");
     setRanking(prev => prev.map(v => v.id === vendedorId ? { ...v, comissao_pendente: 0 } : v));
   };
 
-  // 5. DISPARAR AVISO GLOBAL
   const dispararAviso = () => {
     if (!novoAviso) return;
     toast.success("Megafone ativado! Todas as barbearias verão esse aviso.");
     setNovoAviso("");
   };
 
-  // 6. EXPORTAR CSV
   const exportarCaixa = () => {
     const header = "Barbearia,Plano,Status\n";
     const rows = lojasAtivas.map(l => `${l.nome},${l.plano || 'pro'},${l.ativo ? 'Em dia' : 'Bloqueado'}`).join("\n");
@@ -151,8 +190,9 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   };
 
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const mrrTotal = lojasAtivas.filter(l => l.ativo !== false).length * 99.90; // Calculo fictício médio
+  const mrrTotal = lojasAtivas.filter(l => l.ativo !== false).length * 99.90; 
 
+  // 🚀 CORREÇÃO DO TYPESCRIPT APLICADA AQUI
   const navItems: { id: CEOTab; icon: any; label: string; badge?: number }[] = [
     { id: "dashboard", icon: BarChart3, label: "Métricas" },
     { id: "aprovacoes", icon: ClipboardList, label: "Aprovações", badge: statPendentes },
@@ -239,8 +279,8 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                   <h3 className="font-black uppercase text-xs tracking-widest">Aviso para toda a rede</h3>
                 </div>
                 <div className="flex gap-2">
-                  <Input placeholder="Escreva uma novidade..." className="bg-black/50 border-blue-500/20 text-xs" value={novoAviso} onChange={(e) => setNovoAviso(e.target.value)} />
-                  <Button onClick={dispararAviso} className="bg-blue-600 hover:bg-blue-500 font-bold text-xs">Enviar</Button>
+                  <Input placeholder="Escreva uma novidade..." className="bg-black/50 border-blue-500/20 text-xs text-white" value={novoAviso} onChange={(e) => setNovoAviso(e.target.value)} />
+                  <Button onClick={dispararAviso} className="bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white">Enviar</Button>
                 </div>
               </Card>
             </div>
@@ -272,7 +312,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                         <div>
                           <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Plano Assinado</label>
                           <Select value={planos[lead.id] || "pro"} onValueChange={(v) => setPlanos({...planos, [lead.id]: v})}>
-                            <SelectTrigger className="bg-zinc-900 border-zinc-700 h-11 rounded-xl text-xs font-bold"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="bg-zinc-900 border-zinc-700 h-11 rounded-xl text-xs font-bold text-white"><SelectValue /></SelectTrigger>
                             <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
                               <SelectItem value="starter">Starter (R$ 49,90)</SelectItem>
                               <SelectItem value="pro">Pro (R$ 99,90)</SelectItem>
@@ -282,7 +322,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                         </div>
                         <div>
                           <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Slug do Link</label>
-                          <Input placeholder="nome-da-barbearia" className="bg-zinc-900 border-zinc-700 h-11 rounded-xl text-xs font-bold" value={slugs[lead.id] || ""} onChange={e => setSlugs({ ...slugs, [lead.id]: e.target.value.toLowerCase().replace(/\s+/g, '-') })} />
+                          <Input placeholder="nome-da-barbearia" className="bg-zinc-900 border-zinc-700 h-11 rounded-xl text-xs font-bold text-white" value={slugs[lead.id] || ""} onChange={e => setSlugs({ ...slugs, [lead.id]: e.target.value.toLowerCase().replace(/\s+/g, '-') })} />
                         </div>
                       </div>
 
@@ -291,7 +331,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                       </div>
                       
                       <div className="flex gap-2 pt-2 border-t border-zinc-800/50">
-                        <Input placeholder="Motivo da recusa..." className="bg-zinc-900 border-zinc-800 text-xs h-10" value={motivoRecusa} onChange={e => setMotivoRecusa(e.target.value)} />
+                        <Input placeholder="Motivo da recusa..." className="bg-zinc-900 border-zinc-800 text-xs h-10 text-white" value={motivoRecusa} onChange={e => setMotivoRecusa(e.target.value)} />
                         <Button variant="outline" onClick={() => handleRecusarContrato(lead.id)} className="h-10 text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500/10 font-bold uppercase text-[10px]"><XCircle className="h-4 w-4 mr-1"/> Recusar</Button>
                       </div>
                     </div>
@@ -334,7 +374,11 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
           {/* ================= ABA 4: EQUIPE COMERCIAL ================= */}
           {tabAtiva === "equipe" && (
             <div className="space-y-4">
-              <Button className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold h-12 rounded-xl text-xs uppercase border border-zinc-700 border-dashed mb-4">
+              
+              <Button 
+                onClick={() => setModalConsultorAberto(true)} 
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold h-12 rounded-xl text-xs uppercase border border-zinc-700 border-dashed mb-4"
+              >
                 <UserPlus className="h-4 w-4 mr-2" /> Cadastrar Novo Consultor
               </Button>
               
@@ -367,6 +411,63 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
 
         </motion.div>
       </AnimatePresence>
+
+      {/* ================= MODAL NOVO CONSULTOR ================= */}
+      {modalConsultorAberto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm transition-all">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl">
+            <div className="flex justify-between items-center">
+              <h2 className="text-white font-black uppercase italic text-xl">Novo Consultor</h2>
+              <button onClick={() => setModalConsultorAberto(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <X />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">Nome Completo</label>
+                <Input 
+                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" 
+                  placeholder="Ex: Carlos Vendas" 
+                  value={novoConsultor.nome} 
+                  onChange={e => setNovoConsultor({ ...novoConsultor, nome: e.target.value })} 
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">E-mail de Acesso</label>
+                <Input 
+                  type="email"
+                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" 
+                  placeholder="carlos@cajtech.net.br" 
+                  value={novoConsultor.email} 
+                  onChange={e => setNovoConsultor({ ...novoConsultor, email: e.target.value })} 
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">Senha (Mín. 6 dígitos)</label>
+                <Input 
+                  type="password"
+                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" 
+                  placeholder="******" 
+                  value={novoConsultor.senha} 
+                  onChange={e => setNovoConsultor({ ...novoConsultor, senha: e.target.value })} 
+                />
+              </div>
+            </div>
+
+            <Button 
+              onClick={handleCadastrarConsultor} 
+              disabled={isSavingConsultor} 
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl text-lg uppercase italic shadow-lg shadow-emerald-600/20"
+            >
+              {isSavingConsultor ? <Loader2 className="h-6 w-6 animate-spin" /> : "Salvar e Liberar Acesso"}
+            </Button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
