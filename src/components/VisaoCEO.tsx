@@ -109,50 +109,53 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     }
   };
 
-  // 2. CADASTRAR NOVO CONSULTOR (Corrigido com a "Quarentena" de sessão)
-  const handleCadastrarConsultor = async () => {
-    if (!novoConsultor.nome || !novoConsultor.email || !novoConsultor.senha) {
-      return toast.error("Preencha todos os campos do consultor!");
-    }
+// 2. CADASTRAR NOVO CONSULTOR
+const handleCadastrarConsultor = async () => {
+  if (!novoConsultor.nome || !novoConsultor.email || !novoConsultor.senha) {
+    return toast.error("Preencha todos os campos do consultor!");
+  }
 
-    setIsSavingConsultor(true);
-    toast.loading("Registrando consultor...", { id: "novo_consultor" });
+  setIsSavingConsultor(true);
+  toast.loading("Registrando consultor...", { id: "novo_consultor" });
 
-    try {
-      // 🚀 SEGREDO DO CTO: Chave isolada para não deslogar o CEO
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
-        auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-consultor-${Math.random()}` } 
-      });
-      
-      const { data: authData, error: authError } = await tempSupabase.auth.signUp({ 
-        email: novoConsultor.email, password: novoConsultor.senha 
-      });
-      
-      if (authError) throw new Error(authError.message);
-      const novoConsultorId = authData.user!.id;
+  try {
+    // 🚀 SEGREDO DO CTO: Chave isolada para não deslogar o CEO
+    const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
+      auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-consultor-${Math.random()}` } 
+    });
+    
+    const { data: authData, error: authError } = await tempSupabase.auth.signUp({ 
+      email: novoConsultor.email, password: novoConsultor.senha 
+    });
+    
+    if (authError) throw new Error(authError.message);
+    const novoConsultorId = authData.user!.id;
 
-      const { error: roleError } = await supabase.from("user_roles").insert({ 
-        user_id: novoConsultorId, role: "vendedor" 
-      });
-      if (roleError) throw new Error("Erro ao dar permissão: " + roleError.message);
+    const { error: roleError } = await supabase.from("user_roles").insert({ 
+      user_id: novoConsultorId, role: "vendedor" 
+    });
+    if (roleError) throw new Error("Erro ao dar permissão: " + roleError.message);
 
-      const { error: perfilError } = await supabase.from("perfis_vendedores").insert({ 
-        id: novoConsultorId, nome: novoConsultor.nome 
-      });
-      if (perfilError) throw new Error("Erro ao criar perfil: " + perfilError.message);
+    // 🚀 A CORREÇÃO ESTÁ AQUI: Agora estamos mandando o email para a tabela!
+    const { error: perfilError } = await supabase.from("perfis_vendedores").insert({ 
+      id: novoConsultorId, 
+      nome: novoConsultor.nome,
+      email: novoConsultor.email 
+    });
+    if (perfilError) throw new Error("Erro ao criar perfil: " + perfilError.message);
 
-      toast.success("✅ Consultor criado com sucesso!", { id: "novo_consultor" });
-      
-      setRanking(prev => [...prev, { id: novoConsultorId, nome: novoConsultor.nome, total_lojas: 0, comissao_pendente: 0 }]);
-      setModalConsultorAberto(false);
-      setNovoConsultor({ nome: "", email: "", senha: "" });
+    toast.success("✅ Consultor criado com sucesso!", { id: "novo_consultor" });
+    
+    setRanking(prev => [...prev, { id: novoConsultorId, nome: novoConsultor.nome, total_lojas: 0, comissao_pendente: 0 }]);
+    setModalConsultorAberto(false);
+    setNovoConsultor({ nome: "", email: "", senha: "" });
 
-    } catch (err: any) {
-      toast.error(err.message, { id: "novo_consultor" });
-    } finally {
-      setIsSavingConsultor(false);
-    }
-  };
+  } catch (err: any) {
+    toast.error(err.message, { id: "novo_consultor" });
+  } finally {
+    setIsSavingConsultor(false);
+  }
+};
 
   const handleRecusarContrato = async (leadId: string) => {
     if (!motivoRecusa) return toast.error("Digite o motivo da recusa para o vendedor.");
