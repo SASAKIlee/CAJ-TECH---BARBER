@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner"; 
 
-const FORM_NOVO_LEAD_INICIAL = { nome: "", bairro: "", email: "", senha: "", telefone: "", cor: "#D4AF37" };
+// 🚀 AGORA TEM AS 3 CORES INICIAIS
+const FORM_NOVO_LEAD_INICIAL = { 
+  nome: "", bairro: "", email: "", senha: "", telefone: "", 
+  cor_primaria: "#D4AF37", cor_secundaria: "#18181B", cor_destaque: "#FFFFFF" 
+};
 
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -74,7 +78,7 @@ export function VisaoVendedor({
         setIsSubmitting(false); return;
       }
 
-      // LÓGICA DO ONBOARDING
+      // 🚀 AS 3 CORES VÃO PARA O BANCO DE DADOS AQUI
       const payload = {
         nome_barbearia: formNovoLead.nome,
         bairro: formNovoLead.bairro,
@@ -84,7 +88,9 @@ export function VisaoVendedor({
           email_dono: formNovoLead.email,
           senha_temp: formNovoLead.senha,
           telefone: formNovoLead.telefone,
-          cor_primaria: formNovoLead.cor
+          cor_primaria: formNovoLead.cor_primaria,
+          cor_secundaria: formNovoLead.cor_secundaria,
+          cor_destaque: formNovoLead.cor_destaque
         } : {}
       };
 
@@ -93,13 +99,11 @@ export function VisaoVendedor({
 
       toast.success(tabAtiva === "visita" ? "Visita registrada na sua rota!" : "Contrato enviado para aprovação do CEO!");
       
-      // 🚀 AQUI É O "ROBOZINHO" DO WHATSAPP AVISANDO O CEO
+      // DISPARA O WHATSAPP SE FOR CONTRATO
       if (tabAtiva === "contrato") {
-        // ⚠️ ATENÇÃO: COLOQUE O SEU NÚMERO DE WHATSAPP AQUI EMBAIXO
-        const numeroCEO = "5511999999999"; 
-        
-        const mensagem = `Fala chefe! 🚀\n\nAcabei de fechar com uma barbearia nova:\n💈 *${formNovoLead.nome}*\n📍 Bairro: ${formNovoLead.bairro || "Não informado"}\n📱 WhatsApp: ${formNovoLead.telefone || "Não informado"}\n\nJá subi o contrato no sistema, pode aprovar lá! 🔥`;
-        
+        // ⚠️ LEMBRE-SE DE COLOCAR SEU NÚMERO AQUI
+        const numeroCEO = "5517992051576"; 
+        const mensagem = `Fala chefe! 🚀\n\nAcabei de fechar com uma barbearia nova:\n💈 *${formNovoLead.nome}*\n📍 Bairro: ${formNovoLead.bairro || "Não informado"}\n📱 WhatsApp: ${formNovoLead.telefone || "Não informado"}\n\nJá subi o contrato e a paleta de cores no sistema, pode aprovar lá! 🔥`;
         window.open(`https://api.whatsapp.com/send?phone=${numeroCEO}&text=${encodeURIComponent(mensagem)}`, "_blank");
       }
 
@@ -211,10 +215,23 @@ export function VisaoVendedor({
                   <Input type="email" className="bg-black border-zinc-800 text-white h-12 rounded-xl" placeholder="E-mail do Proprietário" value={formNovoLead.email} onChange={e => setFormNovoLead({ ...formNovoLead, email: e.target.value })} />
                   <Input className="bg-black border-zinc-800 text-white h-12 rounded-xl" placeholder="Senha Temporária (Min 6 dig.)" value={formNovoLead.senha} onChange={e => setFormNovoLead({ ...formNovoLead, senha: e.target.value })} />
                   <Input className="bg-black border-zinc-800 text-white h-12 rounded-xl" placeholder="WhatsApp" value={formNovoLead.telefone} onChange={e => setFormNovoLead({ ...formNovoLead, telefone: e.target.value })} />
-                  <div className="flex items-center justify-between bg-black border border-zinc-800 h-12 rounded-xl px-3">
-                    <span className="text-xs text-zinc-400 font-bold uppercase">Cor Principal</span>
-                    <input type="color" value={formNovoLead.cor} onChange={e => setFormNovoLead({ ...formNovoLead, cor: e.target.value })} className="h-8 w-14 cursor-pointer bg-transparent border-none outline-none" />
+                  
+                  {/* 🚀 AS 3 CORES AQUI */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center justify-center bg-black border border-zinc-800 p-2 rounded-xl">
+                      <span className="text-[9px] text-zinc-400 font-bold uppercase mb-1">Destaque</span>
+                      <input type="color" value={formNovoLead.cor_primaria} onChange={e => setFormNovoLead({ ...formNovoLead, cor_primaria: e.target.value })} className="h-6 w-full cursor-pointer bg-transparent border-none outline-none" />
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-black border border-zinc-800 p-2 rounded-xl">
+                      <span className="text-[9px] text-zinc-400 font-bold uppercase mb-1">Fundo</span>
+                      <input type="color" value={formNovoLead.cor_secundaria} onChange={e => setFormNovoLead({ ...formNovoLead, cor_secundaria: e.target.value })} className="h-6 w-full cursor-pointer bg-transparent border-none outline-none" />
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-black border border-zinc-800 p-2 rounded-xl">
+                      <span className="text-[9px] text-zinc-400 font-bold uppercase mb-1">Textos</span>
+                      <input type="color" value={formNovoLead.cor_destaque} onChange={e => setFormNovoLead({ ...formNovoLead, cor_destaque: e.target.value })} className="h-6 w-full cursor-pointer bg-transparent border-none outline-none" />
+                    </div>
                   </div>
+
                 </div>
               )}
             </div>
