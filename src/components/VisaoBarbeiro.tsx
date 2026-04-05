@@ -20,7 +20,6 @@ function getHojeLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// 🚀 FUNÇÃO INTELIGENTE PARA OS HORÁRIOS DO MODAL
 function gerarHorariosDinamicos(abertura = "09:00", fechamento = "18:00") {
   const horarios = [];
   let [horaAtual, minAtual] = abertura.split(':').map(Number);
@@ -55,7 +54,8 @@ export function VisaoBarbeiro({
   corPrimaria = "#D4AF37",
 }: any) {
   const [open, setOpen] = useState(false);
-  const [horariosLoja, setHorariosLoja] = useState({ abertura: "09:00", fechamento: "19:00" });
+  // 🚀 ADICIONEI O NOME NO ESTADO PARA USAR NO WHATSAPP
+  const [infoLoja, setInfoLoja] = useState({ abertura: "09:00", fechamento: "19:00", nome: "nossa barbearia" });
   
   const [novo, setNovo] = useState({
     nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: "", horario: "",
@@ -71,13 +71,17 @@ export function VisaoBarbeiro({
 
   const perfilLogado = barbeiros.find((b: any) => b.id === userId);
 
-  // 🚀 BUSCA OS HORÁRIOS REAIS DA BARBEARIA PARA O MODAL
   useEffect(() => {
     async function fetchHorariosConfig() {
       const slug = barbeiros[0]?.barbearia_slug;
       if (!slug) return;
-      const { data } = await supabase.from('barbearias').select('horario_abertura, horario_fechamento').eq('slug', slug).single();
-      if (data) setHorariosLoja({ abertura: data.horario_abertura || "09:00", fechamento: data.horario_fechamento || "19:00" });
+      // 🚀 AGORA BUSCA O NOME TAMBÉM
+      const { data } = await supabase.from('barbearias').select('horario_abertura, horario_fechamento, nome').eq('slug', slug).single();
+      if (data) setInfoLoja({ 
+        abertura: data.horario_abertura || "09:00", 
+        fechamento: data.horario_fechamento || "19:00",
+        nome: data.nome || "nossa barbearia"
+      });
     }
     fetchHorariosConfig();
   }, [barbeiros]);
@@ -86,7 +90,7 @@ export function VisaoBarbeiro({
     if (open) setNovo((prev) => ({ ...prev, barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal() }));
   }, [open, barbeiroSelecionadoId]);
 
-  const horarios = useMemo(() => gerarHorariosDinamicos(horariosLoja.abertura, horariosLoja.fechamento), [horariosLoja]);
+  const horarios = useMemo(() => gerarHorariosDinamicos(infoLoja.abertura, infoLoja.fechamento), [infoLoja]);
 
   const { horaAtual, minAtual, hojeLocal } = useMemo(() => {
     const agora = new Date();
@@ -286,7 +290,6 @@ export function VisaoBarbeiro({
                     <div className="absolute left-[-22px] top-7 h-3 w-3 rounded-full border-2 border-white/30 bg-zinc-950 shadow-[0_0_12px_rgba(255,255,255,0.15)]"
                       style={{ borderColor: saindo ? "transparent" : hexToRgba(brand, 0.85), boxShadow: `0 0 14px ${hexToRgba(brand, 0.35)}` }} />
                     
-                    {/* AQUI É O CARD DO CLIENTE - FICOU MAIS OTIMIZADO PARA MOBILE */}
                     <Card className={cn("p-5 rounded-[22px] border border-white/[0.08] shadow-xl flex flex-col gap-4")} style={glass}>
                       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
                         <div className="space-y-1">
@@ -303,11 +306,13 @@ export function VisaoBarbeiro({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/[0.08] mt-2">
+                        {/* 🚀 MENSAGEM DO WHATSAPP TURBINADA AQUI */}
                         <MotionButton size="icon" className="h-10 w-10 text-green-500 bg-green-500/10 hover:bg-green-500/20 rounded-xl shrink-0 border border-green-500/20"
                           whileTap={{ scale: 0.95 }} disabled={!!dismissing}
                           onClick={() => {
                             const n = ag.telefone_cliente?.replace(/\D/g, "");
-                            window.open(`https://api.whatsapp.com/send?phone=55${n}&text=${encodeURIComponent(`Fala ${ag.nome_cliente}! ✂️ Confirmado hoje às ${ag.horario}.`)}`, "_blank");
+                            const msg = `Fala, *${ag.nome_cliente}*! Tudo bem? ✂️\n\nPassando para confirmar seu horário hoje às *${ag.horario}* aqui na *${infoLoja.nome}*!\n\nJá estou preparando as máquinas. ☕️ Te espero para darmos aquele trato no visual! 🔥👊`;
+                            window.open(`https://api.whatsapp.com/send?phone=55${n}&text=${encodeURIComponent(msg)}`, "_blank");
                           }} title="Avisar no WhatsApp">
                           <MessageCircle className="h-5 w-5" />
                         </MotionButton>
