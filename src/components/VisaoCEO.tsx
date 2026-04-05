@@ -40,7 +40,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [novoAviso, setNovoAviso] = useState("");
 
-  // 🚀 ESTADOS DO NOVO CONSULTOR
   const [modalConsultorAberto, setModalConsultorAberto] = useState(false);
   const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
   const [isSavingConsultor, setIsSavingConsultor] = useState(false);
@@ -71,7 +70,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const statConvertidos = leadsRecentes.filter(l => l.status === 'convertido').length;
   const taxaConversao = leadsRecentes.length > 0 ? ((statConvertidos / leadsRecentes.length) * 100).toFixed(0) : 0;
 
-  // 1. APROVAÇÃO E CRIAÇÃO DA LOJA
+  // 1. APROVAÇÃO (Corrigida com a "Quarentena" de sessão)
   const handleAprovarContrato = async (lead: any) => {
     const slugDesejado = slugs[lead.id];
     const planoEscolhido = planos[lead.id] || "pro";
@@ -83,7 +82,11 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     toast.loading("Instanciando sistema...", { id: "aprovacao" });
 
     try {
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
+      // 🚀 SEGREDO DO CTO: Chave isolada para não deslogar o CEO
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
+        auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-loja-${Math.random()}` } 
+      });
+      
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: extras.email_dono, password: extras.senha_temp });
       if (authError) throw new Error(authError.message);
       
@@ -106,7 +109,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     }
   };
 
-  // 2. CADASTRAR NOVO CONSULTOR
+  // 2. CADASTRAR NOVO CONSULTOR (Corrigido com a "Quarentena" de sessão)
   const handleCadastrarConsultor = async () => {
     if (!novoConsultor.nome || !novoConsultor.email || !novoConsultor.senha) {
       return toast.error("Preencha todos os campos do consultor!");
@@ -116,7 +119,11 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     toast.loading("Registrando consultor...", { id: "novo_consultor" });
 
     try {
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
+      // 🚀 SEGREDO DO CTO: Chave isolada para não deslogar o CEO
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
+        auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-consultor-${Math.random()}` } 
+      });
+      
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({ 
         email: novoConsultor.email, password: novoConsultor.senha 
       });
@@ -192,7 +199,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const mrrTotal = lojasAtivas.filter(l => l.ativo !== false).length * 99.90; 
 
-  // 🚀 CORREÇÃO DO TYPESCRIPT APLICADA AQUI
   const navItems: { id: CEOTab; icon: any; label: string; badge?: number }[] = [
     { id: "dashboard", icon: BarChart3, label: "Métricas" },
     { id: "aprovacoes", icon: ClipboardList, label: "Aprovações", badge: statPendentes },
@@ -272,7 +278,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                 </Card>
               </div>
 
-              {/* MEGAFONE GLOBAL */}
               <Card className="p-4 bg-blue-500/10 border-blue-500/20 space-y-3">
                 <div className="flex items-center gap-2 text-blue-400">
                   <Megaphone className="h-4 w-4" />
