@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, Loader2, ImageIcon } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -221,24 +221,20 @@ export default function AgendamentoPublico() {
                     <motion.ul className="space-y-4" variants={listContainer} initial="hidden" animate="show">
                       {(servicos as { id: string; nome: string; preco: number; duracao_minutos: number; url_imagem?: string }[]).map((s) => (
                         <motion.li key={s.id} variants={listItem}>
-                          <motion.button type="button" onClick={() => { setSelecao({ ...selecao, servico: s }); setEtapa(2); }} className="w-full rounded-[22px] border px-4 py-4 text-left shadow-[0_4px_24px_rgba(0,0,0,0.2)] transition-all"
+                          <motion.button type="button" onClick={() => { setSelecao({ ...selecao, servico: s }); setEtapa(2); }} className="w-full rounded-[22px] border px-5 py-4 text-left shadow-[0_4px_24px_rgba(0,0,0,0.2)] transition-all"
                             style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.05) }}
                             whileHover={{ scale: 1.02, borderColor: brand, boxShadow: `0 20px 50px ${hexToRgba(brand, 0.15)}` }}
                             whileTap={{ scale: 0.99 }}
                           >
                             <div className="flex items-center justify-between gap-4">
                               <div className="flex items-center gap-3">
-                                {/* 🚀 EXIBE A IMAGEM DO SERVIÇO AQUI */}
-                                {s.url_imagem ? (
-                                  <img src={s.url_imagem} alt={s.nome} className="w-14 h-14 rounded-xl object-cover border border-white/10" />
-                                ) : (
-                                  <div className="w-14 h-14 rounded-xl bg-black/20 flex items-center justify-center border border-white/5">
-                                    <ImageIcon className="h-5 w-5 text-white/20" />
-                                  </div>
+                                {/* 🚀 SE TIVER IMAGEM MOSTRA, SE NÃO, SE ADAPTA SEM ESPAÇOS VAZIOS */}
+                                {s.url_imagem && (
+                                  <img src={s.url_imagem} alt={s.nome} className="w-14 h-14 rounded-xl object-cover border border-white/10 shrink-0" />
                                 )}
                                 <div>
-                                  <span className="text-[17px] font-semibold tracking-tight leading-none" style={{ color: textHighlight }}>{s.nome}</span>
-                                  <p className="text-[11px] mt-1 font-bold" style={{ color: brand }}>⏱ {s.duracao_minutos} min</p>
+                                  <span className="text-[17px] font-semibold tracking-tight leading-none block mb-1" style={{ color: textHighlight }}>{s.nome}</span>
+                                  <p className="text-[11px] font-bold" style={{ color: brand }}>⏱ {s.duracao_minutos} min</p>
                                 </div>
                               </div>
                               <span className="text-lg font-black tabular-nums shrink-0" style={{ color: textHighlight }}>R$ {s.preco}</span>

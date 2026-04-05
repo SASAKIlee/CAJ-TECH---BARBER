@@ -10,6 +10,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
+// 🚀 IMPORT DA BIBLIOTECA DE COMPRESSÃO
+import imageCompression from 'browser-image-compression';
+
 const MotionButton = motion.create(Button);
 
 const DIAS_SEMANA = [
@@ -63,7 +66,6 @@ export function VisaoDono({
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
   const [nServico, setNServico] = useState({ nome: "", preco: "", duracao_minutos: "30" });
   
-  // 🚀 ESTADO PARA GUARDAR O ARQUIVO DA IMAGEM E LOADINGS
   const [imagemServico, setImagemServico] = useState<File | null>(null);
   const [isUploadingServico, setIsUploadingServico] = useState(false);
 
@@ -120,7 +122,7 @@ export function VisaoDono({
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
   };
 
-  // 🚀 FUNÇÃO PODEROSA DE UPLOAD DO SERVIÇO
+  // 🚀 LÓGICA DE COMPRESSÃO APLICADA AQUI
   const handleAddServico = async () => {
     const validacao = servicoSchema.safeParse(nServico);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
@@ -129,18 +131,36 @@ export function VisaoDono({
     let urlFinal = null;
 
     if (imagemServico) {
-      const fileExt = imagemServico.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const { data, error } = await supabase.storage.from('servicos').upload(fileName, imagemServico);
+      try {
+        // Configurações do "espremedor"
+        const options = {
+          maxSizeMB: 0.2, // Máximo de 200 KB
+          maxWidthOrHeight: 800, // Não precisa ser maior que 800px para celular
+          useWebWorker: true,
+        };
 
-      if (error) {
-        toast.error("Erro ao salvar a imagem. Verifique o tamanho.");
+        toast.loading("Otimizando imagem...", { id: "upload-img" });
+        
+        // Comprime a imagem
+        const compressedFile = await imageCompression(imagemServico, options);
+        
+        const fileExt = compressedFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        
+        // Sobe a imagem já espremida e levinha
+        const { error } = await supabase.storage.from('servicos').upload(fileName, compressedFile);
+
+        if (error) throw error;
+        
+        const { data: publicData } = supabase.storage.from('servicos').getPublicUrl(fileName);
+        urlFinal = publicData.publicUrl;
+        toast.success("Imagem salva!", { id: "upload-img" });
+
+      } catch (error) {
+        toast.error("Erro ao otimizar ou salvar a imagem.", { id: "upload-img" });
         setIsUploadingServico(false);
         return;
       }
-      
-      const { data: publicData } = supabase.storage.from('servicos').getPublicUrl(fileName);
-      urlFinal = publicData.publicUrl;
     }
 
     onAddServico(validacao.data.nome, Number(validacao.data.preco), Number(validacao.data.duracao_minutos), urlFinal);
@@ -419,7 +439,6 @@ export function VisaoDono({
                 <Card className="p-4 rounded-[22px] border border-white/[0.08] shadow-xl space-y-3" style={glass}>
                   <input placeholder="Nome do Serviço" className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" value={nServico.nome} onChange={(e) => setNServico({ ...nServico, nome: e.target.value })} />
                   
-                  {/* 🚀 O UPLOAD DE IMAGEM APARECE AQUI */}
                   <div className="flex items-center gap-3">
                     <label className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-dashed border-white/20 bg-black/30 text-xs text-white/60 cursor-pointer hover:bg-white/5 transition-colors">
                       <ImagePlus className="h-4 w-4" />
@@ -447,7 +466,6 @@ export function VisaoDono({
                   {servicos.map((s: any) => (
                     <div key={s.id} className="flex justify-between items-center rounded-xl border border-white/[0.08] p-3" style={glass}>
                       <div className="flex items-center gap-3">
-                        {/* 🚀 MINIATURA DA IMAGEM NA LISTA DO DONO */}
                         {s.url_imagem && (
                           <img src={s.url_imagem} alt="Serviço" className="w-10 h-10 rounded-lg object-cover border border-white/10" />
                         )}
