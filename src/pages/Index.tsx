@@ -481,8 +481,8 @@ export default function Index() {
                       slug,
                     })
                   }
-                  onAddServico={(nome: string, preco: number, duracao_minutos: number) =>
-                    mutacoesServico.adicionarServico.mutate({ nome, preco, duracao_minutos, slug })
+                  onAddServico={(nome: string, preco: number, duracao_minutos: number, url_imagem: string) =>
+                    mutacoesServico.adicionarServico.mutate({ nome, preco, duracao_minutos, url_imagem, slug })
                   }
                   onRemoveServico={(id: string) =>
                     mutacoesServico.removerServico.mutate({ id, slug })

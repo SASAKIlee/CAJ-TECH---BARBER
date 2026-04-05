@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Users, Scissors, Trash2, Plus, Power, PowerOff, Link as LinkIcon, Copy, FileText, Settings2, Clock, Save, BarChart3 } from "lucide-react";
+import { Users, Scissors, Trash2, Plus, Power, PowerOff, Link as LinkIcon, Copy, FileText, Settings2, Clock, Save, BarChart3, CalendarX2, ImagePlus, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
@@ -8,8 +8,6 @@ import { cn } from "@/lib/utils";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-
-// 🚀 IMPORT DOS GRÁFICOS
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const MotionButton = motion.create(Button);
@@ -55,7 +53,6 @@ function StatCard({ label, value, brand, highlight, delay = 0 }: any) {
   );
 }
 
-// 🚀 AS TRÊS ABAS DO DONO
 type DonoSubTab = "resumo" | "dashboard" | "config";
 
 export function VisaoDono({
@@ -66,32 +63,44 @@ export function VisaoDono({
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
   const [nServico, setNServico] = useState({ nome: "", preco: "", duracao_minutos: "30" });
   
+  // 🚀 ESTADO PARA GUARDAR O ARQUIVO DA IMAGEM E LOADINGS
+  const [imagemServico, setImagemServico] = useState<File | null>(null);
+  const [isUploadingServico, setIsUploadingServico] = useState(false);
+
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
-  const [horariosLoja, setHorariosLoja] = useState({ abertura: "09:00", fechamento: "18:00", dias_trabalho: [1, 2, 3, 4, 5, 6] });
+  const [horariosLoja, setHorariosLoja] = useState({ 
+    abertura: "09:00", fechamento: "18:00", dias_trabalho: [1, 2, 3, 4, 5, 6],
+    inicio_almoco: "12:00", fim_almoco: "13:00", datas_fechadas: [] as string[]
+  });
+  const [novaDataFechada, setNovaDataFechada] = useState("");
   const [isSavingHorario, setIsSavingHorario] = useState(false);
 
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
   const glass = { backgroundColor: hexToRgba(brand, 0.1), backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" } as const;
-
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
-  // 🚀 PREPARA OS DADOS PARA O GRÁFICO
   const chartData = comissaoPorBarbeiroHoje.map((item: any) => ({
     name: item.barbeiro?.nome?.split(' ')[0] || "Desconhecido",
     Total: item.total
-  })).sort((a: any, b: any) => b.Total - a.Total); // Ordena quem vendeu mais
+  })).sort((a: any, b: any) => b.Total - a.Total);
 
   useEffect(() => {
     async function carregarHorarios() {
       const slugAtivo = barbeiros[0]?.barbearia_slug;
       if (!slugAtivo) return;
-      const { data, error } = await supabase.from('barbearias').select('horario_abertura, horario_fechamento, dias_trabalho').eq('slug', slugAtivo).single();
+      const { data, error } = await supabase.from('barbearias')
+        .select('horario_abertura, horario_fechamento, dias_trabalho, inicio_almoco, fim_almoco, datas_fechadas')
+        .eq('slug', slugAtivo).single();
       if (data && !error) {
         setHorariosLoja({
-          abertura: data.horario_abertura || "09:00", fechamento: data.horario_fechamento || "18:00",
-          dias_trabalho: Array.isArray(data.dias_trabalho) ? data.dias_trabalho : [1, 2, 3, 4, 5, 6]
+          abertura: data.horario_abertura || "09:00", 
+          fechamento: data.horario_fechamento || "18:00",
+          inicio_almoco: data.inicio_almoco || "12:00",
+          fim_almoco: data.fim_almoco || "13:00",
+          dias_trabalho: Array.isArray(data.dias_trabalho) ? data.dias_trabalho : [1, 2, 3, 4, 5, 6],
+          datas_fechadas: Array.isArray(data.datas_fechadas) ? data.datas_fechadas : []
         });
       }
     }
@@ -111,11 +120,33 @@ export function VisaoDono({
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
   };
 
-  const handleAddServico = () => {
+  // 🚀 FUNÇÃO PODEROSA DE UPLOAD DO SERVIÇO
+  const handleAddServico = async () => {
     const validacao = servicoSchema.safeParse(nServico);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
-    onAddServico(validacao.data.nome, Number(validacao.data.preco), Number(validacao.data.duracao_minutos));
+    
+    setIsUploadingServico(true);
+    let urlFinal = null;
+
+    if (imagemServico) {
+      const fileExt = imagemServico.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const { data, error } = await supabase.storage.from('servicos').upload(fileName, imagemServico);
+
+      if (error) {
+        toast.error("Erro ao salvar a imagem. Verifique o tamanho.");
+        setIsUploadingServico(false);
+        return;
+      }
+      
+      const { data: publicData } = supabase.storage.from('servicos').getPublicUrl(fileName);
+      urlFinal = publicData.publicUrl;
+    }
+
+    onAddServico(validacao.data.nome, Number(validacao.data.preco), Number(validacao.data.duracao_minutos), urlFinal);
     setNServico({ nome: "", preco: "", duracao_minutos: "30" });
+    setImagemServico(null);
+    setIsUploadingServico(false);
   };
 
   const handleSaveHorarios = async () => {
@@ -125,7 +156,8 @@ export function VisaoDono({
     setIsSavingHorario(true);
     try {
       const { error } = await supabase.from('barbearias').update({
-        horario_abertura: horariosLoja.abertura, horario_fechamento: horariosLoja.fechamento, dias_trabalho: horariosLoja.dias_trabalho
+        horario_abertura: horariosLoja.abertura, horario_fechamento: horariosLoja.fechamento, dias_trabalho: horariosLoja.dias_trabalho,
+        inicio_almoco: horariosLoja.inicio_almoco, fim_almoco: horariosLoja.fim_almoco, datas_fechadas: horariosLoja.datas_fechadas
       }).eq('slug', slugAtivo);
       if (error) throw error;
       toast.success("Horários atualizados com sucesso!");
@@ -138,6 +170,22 @@ export function VisaoDono({
       const novosDias = isSelected ? prev.dias_trabalho.filter(d => d !== idDia) : [...prev.dias_trabalho, idDia].sort();
       return { ...prev, dias_trabalho: novosDias };
     });
+  };
+
+  const handleAddDataFechada = () => {
+    if (!novaDataFechada) return;
+    if (horariosLoja.datas_fechadas.includes(novaDataFechada)) return toast.error("Esta data já está bloqueada.");
+    setHorariosLoja(prev => ({ ...prev, datas_fechadas: [...prev.datas_fechadas, novaDataFechada].sort() }));
+    setNovaDataFechada("");
+  };
+
+  const handleRemoveDataFechada = (dataParaRemover: string) => {
+    setHorariosLoja(prev => ({ ...prev, datas_fechadas: prev.datas_fechadas.filter(d => d !== dataParaRemover) }));
+  };
+
+  const formatarDataBR = (dataIso: string) => {
+    const [ano, mes, dia] = dataIso.split("-");
+    return `${dia}/${mes}/${ano}`;
   };
 
   const tabVariants = { enter: (dir: number) => ({ x: dir * 56, opacity: 0 }), center: { x: 0, opacity: 1 }, exit: (dir: number) => ({ x: dir * -56, opacity: 0 }) };
@@ -161,7 +209,6 @@ export function VisaoDono({
       <AnimatePresence mode="wait" initial={false} custom={subDir}>
         <motion.div key={subTab} custom={subDir} variants={tabVariants} initial="enter" animate="center" exit="exit" transition={{ type: "spring", stiffness: 400, damping: 36 }} className="space-y-8">
           
-          {/* 🚀 ABA 1: RESUMO (O Antigo Dashboard) */}
           {subTab === "resumo" && (
             <>
               <section>
@@ -184,7 +231,6 @@ export function VisaoDono({
                   </div>
                 </Card>
               </section>
-
               <div className="grid grid-cols-2 gap-3">
                 <StatCard label="Entradas hoje" value={Number(faturamentoHoje) || 0} brand={brand} delay={0} />
                 <StatCard label="Lucro real hoje" value={Number(lucroRealHoje) || 0} brand={brand} highlight delay={0.06} />
@@ -194,35 +240,26 @@ export function VisaoDono({
             </>
           )}
 
-          {/* 🚀 ABA 2: O NOVO DASHBOARD DE GRÁFICOS */}
           {subTab === "dashboard" && (
             <section className="space-y-6">
               <div className="flex items-center gap-2 px-1">
                 <BarChart3 className="h-5 w-5" style={{ color: brand }} />
                 <h3 className="font-black text-white uppercase text-xl tracking-tighter italic">Inteligência de Dados</h3>
               </div>
-
               <Card className="p-5 rounded-[22px] border border-white/[0.08] shadow-xl space-y-4" style={glass}>
                 <div>
                   <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Ranking de Faturamento (Hoje)</p>
                   <p className="text-sm font-semibold text-white">Produção por Profissional</p>
                 </div>
-                
                 <div className="h-64 w-full mt-4">
                   {chartData.length > 0 && chartData.some(d => d.Total > 0) ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <XAxis dataKey="name" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
                         <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
-                        <Tooltip 
-                          cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                          contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
-                          formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Produção']}
-                        />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }} formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Produção']} />
                         <Bar dataKey="Total" radius={[6, 6, 6, 6]}>
-                          {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={index === 0 ? brand : hexToRgba(brand, 0.4)} />
-                          ))}
+                          {chartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === 0 ? brand : hexToRgba(brand, 0.4)} />))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -233,8 +270,6 @@ export function VisaoDono({
                   )}
                 </div>
               </Card>
-
-              {/* LISTA DETALHADA DE HOJE */}
               <div className="space-y-3 pt-2">
                 <p className="text-[10px] font-black text-white/50 uppercase tracking-widest px-1">Detalhamento da Equipe</p>
                 <div className="grid gap-2">
@@ -252,7 +287,6 @@ export function VisaoDono({
             </section>
           )}
 
-          {/* 🚀 ABA 3: CONFIGURAÇÕES */}
           {subTab === "config" && (
             <>
               <section className="space-y-4">
@@ -286,9 +320,58 @@ export function VisaoDono({
                       <input type="time" value={horariosLoja.fechamento} onChange={(e) => setHorariosLoja({ ...horariosLoja, fechamento: e.target.value })} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" style={{ colorScheme: 'dark' }} />
                     </div>
                   </div>
-                  <MotionButton className="w-full h-12 rounded-xl font-bold uppercase tracking-wide gap-2 border-0 bg-white/10 text-white hover:bg-white/20" whileTap={{ scale: 0.95 }} onClick={handleSaveHorarios} disabled={isSavingHorario}>
-                    <Save className="h-4 w-4" />{isSavingHorario ? "Salvando..." : "Salvar Horários"}
-                  </MotionButton>
+
+                  <div className="pt-2 border-t border-white/[0.05] space-y-3">
+                    <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Pausa (Almoço / Descanso)</p>
+                    <div className="flex gap-4">
+                      <div className="flex-1 space-y-2">
+                        <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest">Início da Pausa</p>
+                        <input type="time" value={horariosLoja.inicio_almoco} onChange={(e) => setHorariosLoja({ ...horariosLoja, inicio_almoco: e.target.value })} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" style={{ colorScheme: 'dark' }} />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest">Fim da Pausa</p>
+                        <input type="time" value={horariosLoja.fim_almoco} onChange={(e) => setHorariosLoja({ ...horariosLoja, fim_almoco: e.target.value })} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" style={{ colorScheme: 'dark' }} />
+                      </div>
+                    </div>
+                  </div>
+
+                </Card>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 px-1">
+                  <CalendarX2 className="h-4 w-4" style={{ color: brand }} />
+                  <h3 className="font-bold text-white uppercase text-sm tracking-tight">Feriados e Bloqueios</h3>
+                </div>
+                <Card className="p-5 rounded-[22px] border border-white/[0.08] shadow-xl space-y-4" style={glass}>
+                  <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Adicionar dia fechado</p>
+                  <div className="flex gap-2">
+                    <input type="date" value={novaDataFechada} onChange={(e) => setNovaDataFechada(e.target.value)} className="flex-1 rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" style={{ colorScheme: 'dark' }} />
+                    <MotionButton className="h-12 w-12 shrink-0 rounded-xl border-0 p-0" style={{ backgroundColor: brand, color: ctaFg }} whileTap={{ scale: 0.95 }} onClick={handleAddDataFechada}>
+                      <Plus className="h-6 w-6 stroke-[3px]" />
+                    </MotionButton>
+                  </div>
+
+                  {horariosLoja.datas_fechadas.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest mb-2">Dias bloqueados</p>
+                      <div className="flex flex-wrap gap-2">
+                        {horariosLoja.datas_fechadas.map(data => (
+                          <div key={data} className="flex items-center gap-2 bg-black/40 border border-white/[0.08] pl-3 pr-1 py-1 rounded-full backdrop-blur-sm">
+                            <span className="text-[11px] font-bold text-zinc-300">{formatarDataBR(data)}</span>
+                            <button onClick={() => handleRemoveDataFechada(data)} className="h-6 w-6 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="pt-4 border-t border-white/[0.05]">
+                    <MotionButton className="w-full h-12 rounded-xl font-bold uppercase tracking-wide gap-2 border-0 bg-white/10 text-white hover:bg-white/20 shadow-lg" whileTap={{ scale: 0.95 }} onClick={handleSaveHorarios} disabled={isSavingHorario}>
+                      <Save className="h-4 w-4" />{isSavingHorario ? "Salvando..." : "Salvar Configurações Gerais"}
+                    </MotionButton>
+                  </div>
                 </Card>
               </section>
 
@@ -335,6 +418,16 @@ export function VisaoDono({
 
                 <Card className="p-4 rounded-[22px] border border-white/[0.08] shadow-xl space-y-3" style={glass}>
                   <input placeholder="Nome do Serviço" className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" value={nServico.nome} onChange={(e) => setNServico({ ...nServico, nome: e.target.value })} />
+                  
+                  {/* 🚀 O UPLOAD DE IMAGEM APARECE AQUI */}
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-dashed border-white/20 bg-black/30 text-xs text-white/60 cursor-pointer hover:bg-white/5 transition-colors">
+                      <ImagePlus className="h-4 w-4" />
+                      {imagemServico ? imagemServico.name.substring(0, 15) + "..." : "Adicionar Foto (Opcional)"}
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => setImagemServico(e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <span className="absolute left-3 top-3 text-zinc-500 text-sm">R$</span>
@@ -344,8 +437,8 @@ export function VisaoDono({
                       <span className="absolute right-3 top-3 text-zinc-500 text-sm">min</span>
                       <input placeholder="30" type="number" step="15" className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-3 pr-10 text-sm text-white outline-none focus:border-white/20 backdrop-blur-sm" value={nServico.duracao_minutos} onChange={(e) => setNServico({ ...nServico, duracao_minutos: e.target.value })} />
                     </div>
-                    <MotionButton className="h-12 w-12 shrink-0 rounded-xl border-0 p-0" style={{ backgroundColor: brand, color: ctaFg }} whileTap={{ scale: 0.95 }} onClick={handleAddServico}>
-                      <Plus className="h-6 w-6 stroke-[3px]" />
+                    <MotionButton className="h-12 w-12 shrink-0 rounded-xl border-0 p-0" style={{ backgroundColor: brand, color: ctaFg }} whileTap={{ scale: 0.95 }} onClick={handleAddServico} disabled={isUploadingServico}>
+                      {isUploadingServico ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-6 w-6 stroke-[3px]" />}
                     </MotionButton>
                   </div>
                 </Card>
@@ -353,11 +446,17 @@ export function VisaoDono({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {servicos.map((s: any) => (
                     <div key={s.id} className="flex justify-between items-center rounded-xl border border-white/[0.08] p-3" style={glass}>
-                      <div className="text-[11px]">
-                        <p className="font-semibold text-white uppercase tracking-tight">{s.nome}</p>
-                        <p className="font-bold italic tabular-nums" style={{ color: brand }}>
-                          R$ {formatarMoeda(s.preco)} <span className="text-zinc-500 text-[9px] font-normal not-italic ml-1 opacity-70">• {s.duracao_minutos} min</span>
-                        </p>
+                      <div className="flex items-center gap-3">
+                        {/* 🚀 MINIATURA DA IMAGEM NA LISTA DO DONO */}
+                        {s.url_imagem && (
+                          <img src={s.url_imagem} alt="Serviço" className="w-10 h-10 rounded-lg object-cover border border-white/10" />
+                        )}
+                        <div className="text-[11px]">
+                          <p className="font-semibold text-white uppercase tracking-tight">{s.nome}</p>
+                          <p className="font-bold italic tabular-nums" style={{ color: brand }}>
+                            R$ {formatarMoeda(s.preco)} <span className="text-zinc-500 text-[9px] font-normal not-italic ml-1 opacity-70">• {s.duracao_minutos} min</span>
+                          </p>
+                        </div>
                       </div>
                       <MotionButton variant="ghost" size="icon" whileTap={{ scale: 0.95 }} onClick={() => onRemoveServico(s.id)} className="h-9 w-9 text-zinc-500 hover:text-red-400">
                         <Trash2 className="h-4 w-4" />
@@ -372,4 +471,10 @@ export function VisaoDono({
       </AnimatePresence>
     </div>
   );
+}
+
+function X(props: any) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+  )
 }

@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,16 +13,24 @@ import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { WalletTicket, WALLET_TICKET_CAPTURE_ID } from "@/components/agendamento-publico/WalletTicket";
 import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackdrop";
 
-// 🚀 FUNÇÃO INTELIGENTE QUE GERA OS HORÁRIOS DINAMICAMENTE
-function gerarHorarios(abertura = "09:00", fechamento = "18:00") {
+function gerarHorarios(abertura = "09:00", fechamento = "18:00", inicioAlmoco = "12:00", fimAlmoco = "13:00") {
   const horarios = [];
   let [horaAtual, minAtual] = abertura.split(':').map(Number);
   const [horaFim, minFim] = fechamento.split(':').map(Number);
+  
+  const [horaIniAlmoco, minIniAlmoco] = inicioAlmoco.split(':').map(Number);
+  const [horaFimAlmoco, minFimAlmoco] = fimAlmoco.split(':').map(Number);
 
   while (horaAtual < horaFim || (horaAtual === horaFim && minAtual < minFim)) {
-    const hFormated = String(horaAtual).padStart(2, '0');
-    const mFormated = String(minAtual).padStart(2, '0');
-    horarios.push(`${hFormated}:${mFormated}`);
+    const isHoraAlmoco = 
+      (horaAtual > horaIniAlmoco || (horaAtual === horaIniAlmoco && minAtual >= minIniAlmoco)) &&
+      (horaAtual < horaFimAlmoco || (horaAtual === horaFimAlmoco && minAtual < minFimAlmoco));
+
+    if (!isHoraAlmoco) {
+      const hFormated = String(horaAtual).padStart(2, '0');
+      const mFormated = String(minAtual).padStart(2, '0');
+      horarios.push(`${hFormated}:${mFormated}`);
+    }
 
     minAtual += 30;
     if (minAtual >= 60) {
@@ -33,17 +41,9 @@ function gerarHorarios(abertura = "09:00", fechamento = "18:00") {
   return horarios;
 }
 
-const listContainer = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.04 } },
-};
+const listContainer = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.04 } } };
+const listItem = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 380, damping: 34 } } };
 
-const listItem = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 380, damping: 34 } },
-};
-
-// 🚀 ADICIONADO OS CAMPOS DE HORÁRIO NA TIPAGEM
 type BarbeariaRow = {
   nome?: string | null;
   cor_primaria?: string | null;
@@ -54,6 +54,9 @@ type BarbeariaRow = {
   horario_abertura?: string | null;
   horario_fechamento?: string | null;
   dias_trabalho?: number[] | null;
+  inicio_almoco?: string | null;
+  fim_almoco?: string | null;
+  datas_fechadas?: string[] | null;
 };
 
 export default function AgendamentoPublico() {
@@ -67,7 +70,7 @@ export default function AgendamentoPublico() {
   const [ticketCodigo, setTicketCodigo] = useState("");
 
   const [selecao, setSelecao] = useState({
-    servico: null as { id: string; nome: string; preco: number } | null,
+    servico: null as { id: string; nome: string; preco: number; duracao_minutos: number; url_imagem?: string } | null,
     barbeiro: null as { id: string; nome: string } | null,
     data: "", horario: "", nome: "", whatsapp: "",
   });
@@ -94,10 +97,26 @@ export default function AgendamentoPublico() {
 
   useEffect(() => {
     if (selecao.data && selecao.barbeiro) {
-      supabase.from("agendamentos").select("horario").eq("barbeiro_id", selecao.barbeiro.id).eq("data", selecao.data)
-        .then(({ data }) => setOcupados(data?.map((d) => d.horario) || []));
+      supabase.from("agendamentos").select("horario, servico_id").eq("barbeiro_id", selecao.barbeiro.id).eq("data", selecao.data).neq("status", "Cancelado")
+        .then(({ data }) => {
+          if(!data) return;
+          const slotsOcupados: string[] = [];
+          data.forEach(ag => {
+            const serv = servicos.find((s:any) => s.id === ag.servico_id) as any;
+            const duracao = serv ? serv.duracao_minutos : 30;
+            const qtdeBlocos = Math.ceil(duracao / 30);
+            
+            let [h, m] = ag.horario.split(':').map(Number);
+            for(let i=0; i < qtdeBlocos; i++) {
+               slotsOcupados.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+               m += 30;
+               if(m >= 60) { m -= 60; h += 1; }
+            }
+          });
+          setOcupados(slotsOcupados);
+        });
     }
-  }, [selecao.data, selecao.barbeiro]);
+  }, [selecao.data, selecao.barbeiro, servicos]);
 
   const handleFinalizar = async () => {
     const toastId = toast.loading("Reservando seu horário…");
@@ -154,15 +173,16 @@ export default function AgendamentoPublico() {
   }
 
   const heroImageUrl = config?.url_fundo?.trim() || APP_HERO_FALLBACK_BG;
-
-  // 🚀 LÓGICA DE DIAS E HORÁRIOS
-  const horariosDoDia = gerarHorarios(config?.horario_abertura || "09:00", config?.horario_fechamento || "18:00");
+  const horariosDoDia = gerarHorarios(config?.horario_abertura || "09:00", config?.horario_fechamento || "18:00", config?.inicio_almoco || "12:00", config?.fim_almoco || "13:00");
   
-  // Identifica o dia da semana da data escolhida (0 = Dom, 1 = Seg...)
   const dataSelecionada = selecao.data ? new Date(selecao.data + 'T00:00:00') : null;
   const diaDaSemana = dataSelecionada ? dataSelecionada.getDay() : -1;
   const diasTrabalho = config?.dias_trabalho || [1, 2, 3, 4, 5, 6];
-  const isAbertoHoje = dataSelecionada ? diasTrabalho.includes(diaDaSemana) : true;
+  const datasFechadas = Array.isArray(config?.datas_fechadas) ? config.datas_fechadas : [];
+  
+  const isAbertoHoje = dataSelecionada 
+    ? (diasTrabalho.includes(diaDaSemana) && !datasFechadas.includes(selecao.data))
+    : true;
 
   return (
     <div className="min-h-[100dvh] relative isolate font-sans antialiased overflow-x-hidden transition-colors duration-500" style={{ backgroundColor: bg }}>
@@ -174,12 +194,7 @@ export default function AgendamentoPublico() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
           className="mx-4 mt-4 mb-2 rounded-[22px] px-6 py-5 shadow-[0_8px_40px_rgba(0,0,0,0.25)] border"
-          style={{
-            backgroundColor: hexToRgba(bg, 0.5),
-            borderColor: hexToRgba(textHighlight, 0.1),
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-          }}
+          style={{ backgroundColor: hexToRgba(bg, 0.5), borderColor: hexToRgba(textHighlight, 0.1), backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
         >
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em]" style={{ color: hexToRgba(textHighlight, 0.5) }}>Agendar</p>
           <h1 className="mt-1 text-3xl sm:text-4xl font-bold tracking-tight" style={{ color: textHighlight, textShadow: `0 0 40px ${hexToRgba(brand, 0.45)}` }}>
@@ -193,14 +208,7 @@ export default function AgendamentoPublico() {
         <main className="flex-1 px-5 pb-36 pt-4 max-w-lg mx-auto w-full">
           <AnimatePresence mode="wait">
             {etapa < 5 ? (
-              <motion.div
-                key={etapa}
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ type: "spring", stiffness: 340, damping: 34 }}
-                className="space-y-8"
-              >
+              <motion.div key={etapa} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ type: "spring", stiffness: 340, damping: 34 }} className="space-y-8">
                 {etapa > 1 && (
                   <button type="button" onClick={() => setEtapa((e) => Math.max(1, e - 1))} className="inline-flex items-center gap-1.5 text-sm font-semibold transition-colors -ml-1" style={{ color: hexToRgba(textHighlight, 0.7) }}>
                     <ChevronLeft className="h-4 w-4" /> Voltar
@@ -211,16 +219,29 @@ export default function AgendamentoPublico() {
                   <section className="space-y-6">
                     <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Serviços</h2>
                     <motion.ul className="space-y-4" variants={listContainer} initial="hidden" animate="show">
-                      {(servicos as { id: string; nome: string; preco: number }[]).map((s) => (
+                      {(servicos as { id: string; nome: string; preco: number; duracao_minutos: number; url_imagem?: string }[]).map((s) => (
                         <motion.li key={s.id} variants={listItem}>
-                          <motion.button type="button" onClick={() => { setSelecao({ ...selecao, servico: s }); setEtapa(2); }} className="w-full rounded-[22px] border px-6 py-5 text-left shadow-[0_4px_24px_rgba(0,0,0,0.2)] transition-all"
+                          <motion.button type="button" onClick={() => { setSelecao({ ...selecao, servico: s }); setEtapa(2); }} className="w-full rounded-[22px] border px-4 py-4 text-left shadow-[0_4px_24px_rgba(0,0,0,0.2)] transition-all"
                             style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.05) }}
                             whileHover={{ scale: 1.02, borderColor: brand, boxShadow: `0 20px 50px ${hexToRgba(brand, 0.15)}` }}
                             whileTap={{ scale: 0.99 }}
                           >
                             <div className="flex items-center justify-between gap-4">
-                              <span className="text-[17px] font-semibold tracking-tight" style={{ color: textHighlight }}>{s.nome}</span>
-                              <span className="text-lg font-bold tabular-nums shrink-0" style={{ color: brand }}>R$ {s.preco}</span>
+                              <div className="flex items-center gap-3">
+                                {/* 🚀 EXIBE A IMAGEM DO SERVIÇO AQUI */}
+                                {s.url_imagem ? (
+                                  <img src={s.url_imagem} alt={s.nome} className="w-14 h-14 rounded-xl object-cover border border-white/10" />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-xl bg-black/20 flex items-center justify-center border border-white/5">
+                                    <ImageIcon className="h-5 w-5 text-white/20" />
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="text-[17px] font-semibold tracking-tight leading-none" style={{ color: textHighlight }}>{s.nome}</span>
+                                  <p className="text-[11px] mt-1 font-bold" style={{ color: brand }}>⏱ {s.duracao_minutos} min</p>
+                                </div>
+                              </div>
+                              <span className="text-lg font-black tabular-nums shrink-0" style={{ color: textHighlight }}>R$ {s.preco}</span>
                             </div>
                           </motion.button>
                         </motion.li>
@@ -253,42 +274,41 @@ export default function AgendamentoPublico() {
                 {etapa === 3 && (
                   <motion.section className="space-y-8">
                     <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Data e horário</h2>
-                    <Input type="date" className="h-14 rounded-2xl font-medium" 
-                           style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }}
-                           value={selecao.data} onChange={(e) => setSelecao({ ...selecao, data: e.target.value, horario: "" })} />
+                    <Input type="date" className="h-14 rounded-2xl font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.data} onChange={(e) => setSelecao({ ...selecao, data: e.target.value, horario: "" })} />
 
                     <motion.div className="space-y-4">
                       <p className="text-sm font-medium" style={{ color: hexToRgba(textHighlight, 0.5) }}>Horários</p>
                       
-                      {/* 🚀 LÓGICA DE BLOQUEIO DE DIAS FECHADOS */}
                       {!isAbertoHoje && selecao.data ? (
-                        <motion.div 
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          className="p-4 rounded-2xl text-center border shadow-lg"
-                          style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: "rgba(239,68,68,0.3)" }}
-                        >
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="p-4 rounded-2xl text-center border shadow-lg" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: "rgba(239,68,68,0.3)" }}>
                           <p className="text-[15px] font-bold text-red-400">Fechado neste dia.</p>
                           <p className="text-[12px] text-red-400/70 mt-1">Por favor, escolha outra data no calendário.</p>
                         </motion.div>
                       ) : (
                         <div className="grid grid-cols-3 gap-2.5 max-h-[min(52vh,22rem)] overflow-y-auto pr-1 pb-2">
                           {horariosDoDia.map((h) => {
-                            const isOcupado = ocupados.includes(h);
+                            const qtdeBlocosNecessarios = Math.ceil((selecao.servico?.duracao_minutos || 30) / 30);
+                            let espacoInsuficiente = false;
+                            let [horaAvaliada, minAvaliado] = h.split(':').map(Number);
+                            
+                            for (let i = 0; i < qtdeBlocosNecessarios; i++) {
+                              const horaChecadaStr = `${String(horaAvaliada).padStart(2,'0')}:${String(minAvaliado).padStart(2,'0')}`;
+                              if(ocupados.includes(horaChecadaStr) || !horariosDoDia.includes(horaChecadaStr)) {
+                                espacoInsuficiente = true; break;
+                              }
+                              minAvaliado += 30;
+                              if (minAvaliado >= 60) { minAvaliado -= 60; horaAvaliada += 1; }
+                            }
+
+                            const isOcupado = ocupados.includes(h) || espacoInsuficiente;
+
                             return (
-                              <motion.button key={h} type="button" disabled={isOcupado || !selecao.data}
-                                onClick={() => { setSelecao({ ...selecao, horario: h }); setEtapa(4); }}
-                                className={cn("rounded-2xl py-3 text-xs font-semibold tracking-wide transition-all border",
-                                  isOcupado || !selecao.data ? "opacity-25 cursor-not-allowed line-through" : "hover:bg-white/5"
-                                )}
-                                style={{ 
-                                  backgroundColor: isOcupado || !selecao.data ? hexToRgba(bg, 0.3) : hexToRgba(bg, 0.8), 
-                                  borderColor: hexToRgba(textHighlight, 0.1), 
-                                  color: textHighlight 
-                                }}
-                                whileHover={!isOcupado && selecao.data ? { scale: 1.04, borderColor: brand } : undefined}
-                                whileTap={!isOcupado && selecao.data ? { scale: 0.96 } : undefined}
-                              >{h}</motion.button>
+                              <motion.button key={h} type="button" disabled={isOcupado || !selecao.data} onClick={() => { setSelecao({ ...selecao, horario: h }); setEtapa(4); }}
+                                className={cn("rounded-2xl py-3 text-xs font-semibold tracking-wide transition-all border", isOcupado || !selecao.data ? "opacity-25 cursor-not-allowed line-through" : "hover:bg-white/5")}
+                                style={{ backgroundColor: isOcupado || !selecao.data ? hexToRgba(bg, 0.3) : hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }}
+                                whileHover={!isOcupado && selecao.data ? { scale: 1.04, borderColor: brand } : undefined} whileTap={!isOcupado && selecao.data ? { scale: 0.96 } : undefined}>
+                                {h}
+                              </motion.button>
                             );
                           })}
                         </div>
@@ -301,12 +321,8 @@ export default function AgendamentoPublico() {
                   <section className="space-y-8 pt-2">
                     <h2 className="text-xl font-bold tracking-tight text-center" style={{ color: textHighlight }}>Seus dados</h2>
                     <div className="space-y-5">
-                      <Input placeholder="Nome completo" className="h-14 rounded-2xl text-center text-[17px] font-medium" 
-                             style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }}
-                             value={selecao.nome} onChange={(e) => setSelecao({ ...selecao, nome: e.target.value })} />
-                      <Input placeholder="WhatsApp com DDD" className="h-14 rounded-2xl text-center text-[17px] font-medium"
-                             style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }}
-                             value={selecao.whatsapp} onChange={(e) => setSelecao({ ...selecao, whatsapp: e.target.value })} />
+                      <Input placeholder="Nome completo" className="h-14 rounded-2xl text-center text-[17px] font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.nome} onChange={(e) => setSelecao({ ...selecao, nome: e.target.value })} />
+                      <Input placeholder="WhatsApp com DDD" className="h-14 rounded-2xl text-center text-[17px] font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.whatsapp} onChange={(e) => setSelecao({ ...selecao, whatsapp: e.target.value })} />
                       <Button className="w-full h-14 rounded-2xl text-[17px] font-bold shadow-lg border-0" style={{ backgroundColor: brand, color: ctaFg }} onClick={handleFinalizar}>
                         Confirmar Agendamento
                       </Button>
@@ -316,17 +332,11 @@ export default function AgendamentoPublico() {
               </motion.div>
             ) : (
               <motion.div key="ticket" className="flex flex-col items-center gap-8 pt-4">
-                <p className="text-center text-sm font-medium max-w-xs" style={{ color: hexToRgba(textHighlight, 0.6) }}>
-                  Seu ingresso digital. Apresente na chegada ou salve no rolo da câmera.
-                </p>
+                <p className="text-center text-sm font-medium max-w-xs" style={{ color: hexToRgba(textHighlight, 0.6) }}>Seu ingresso digital. Apresente na chegada ou salve no rolo da câmera.</p>
                 <WalletTicket config={config} selecao={selecao} slug={slug} ticketCodigo={ticketCodigo} />
                 <div className="flex w-full max-w-[340px] flex-col gap-3">
-                  <Button type="button" className="h-12 rounded-2xl font-semibold w-full" style={{ backgroundColor: brand, color: ctaFg }} onClick={() => void salvarTicketComoImagem()}>
-                    Salvar no dispositivo
-                  </Button>
-                  <Button type="button" variant="ghost" className="hover:bg-white/10 rounded-2xl" style={{ color: hexToRgba(textHighlight, 0.7) }} onClick={() => window.location.reload()}>
-                    Novo agendamento
-                  </Button>
+                  <Button type="button" className="h-12 rounded-2xl font-semibold w-full" style={{ backgroundColor: brand, color: ctaFg }} onClick={() => void salvarTicketComoImagem()}>Salvar no dispositivo</Button>
+                  <Button type="button" variant="ghost" className="hover:bg-white/10 rounded-2xl" style={{ color: hexToRgba(textHighlight, 0.7) }} onClick={() => window.location.reload()}>Novo agendamento</Button>
                 </div>
               </motion.div>
             )}
