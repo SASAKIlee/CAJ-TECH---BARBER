@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Users, Scissors, Trash2, Plus, Power, PowerOff, Link as LinkIcon, Copy, FileText, Settings2, Clock, Save, BarChart3, CalendarX2, ImagePlus, Loader2 } from "lucide-react";
+import { Users, Scissors, Trash2, Plus, Power, PowerOff, Link as LinkIcon, Copy, FileText, Settings2, Clock, Save, BarChart3, CalendarX2, ImagePlus, Loader2, Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
@@ -10,7 +10,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-// 🚀 IMPORT DA BIBLIOTECA DE COMPRESSÃO
 import imageCompression from 'browser-image-compression';
 
 const MotionButton = motion.create(Button);
@@ -77,6 +76,9 @@ export function VisaoDono({
   });
   const [novaDataFechada, setNovaDataFechada] = useState("");
   const [isSavingHorario, setIsSavingHorario] = useState(false);
+  
+  // 🚀 ESTADO DA BARREIRA
+  const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
 
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
@@ -92,10 +94,13 @@ export function VisaoDono({
     async function carregarHorarios() {
       const slugAtivo = barbeiros[0]?.barbearia_slug;
       if (!slugAtivo) return;
+      // 🚀 BUSCANDO O STATUS "ATIVO" NO BANCO
       const { data, error } = await supabase.from('barbearias')
-        .select('horario_abertura, horario_fechamento, dias_trabalho, inicio_almoco, fim_almoco, datas_fechadas')
+        .select('horario_abertura, horario_fechamento, dias_trabalho, inicio_almoco, fim_almoco, datas_fechadas, ativo')
         .eq('slug', slugAtivo).single();
+        
       if (data && !error) {
+        setIsLojaAtiva(data.ativo !== false); // Se for nulo ou true, está ativa
         setHorariosLoja({
           abertura: data.horario_abertura || "09:00", 
           fechamento: data.horario_fechamento || "18:00",
@@ -122,7 +127,6 @@ export function VisaoDono({
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
   };
 
-  // 🚀 LÓGICA DE COMPRESSÃO APLICADA AQUI
   const handleAddServico = async () => {
     const validacao = servicoSchema.safeParse(nServico);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
@@ -132,30 +136,16 @@ export function VisaoDono({
 
     if (imagemServico) {
       try {
-        // Configurações do "espremedor"
-        const options = {
-          maxSizeMB: 0.2, // Máximo de 200 KB
-          maxWidthOrHeight: 800, // Não precisa ser maior que 800px para celular
-          useWebWorker: true,
-        };
-
+        const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
         toast.loading("Otimizando imagem...", { id: "upload-img" });
-        
-        // Comprime a imagem
         const compressedFile = await imageCompression(imagemServico, options);
-        
         const fileExt = compressedFile.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
-        
-        // Sobe a imagem já espremida e levinha
         const { error } = await supabase.storage.from('servicos').upload(fileName, compressedFile);
-
         if (error) throw error;
-        
         const { data: publicData } = supabase.storage.from('servicos').getPublicUrl(fileName);
         urlFinal = publicData.publicUrl;
         toast.success("Imagem salva!", { id: "upload-img" });
-
       } catch (error) {
         toast.error("Erro ao otimizar ou salvar a imagem.", { id: "upload-img" });
         setIsUploadingServico(false);
@@ -209,6 +199,24 @@ export function VisaoDono({
   };
 
   const tabVariants = { enter: (dir: number) => ({ x: dir * 56, opacity: 0 }), center: { x: 0, opacity: 1 }, exit: (dir: number) => ({ x: dir * -56, opacity: 0 }) };
+
+  // 🚀 BARREIRA DE BLOQUEIO PARA O DONO
+  if (isLojaAtiva === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
+        <div className="h-28 w-28 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
+          <Lock className="h-12 w-12 text-red-500" />
+        </div>
+        <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-3">Acesso Suspenso</h2>
+        <p className="text-zinc-400 max-w-md text-sm leading-relaxed mb-6">
+          Sua assinatura encontra-se pendente de regularização. O painel administrativo e o agendamento público da sua barbearia foram desativados.
+        </p>
+        <p className="text-zinc-600 text-xs font-bold uppercase tracking-[0.2em] bg-zinc-900/50 px-4 py-2 rounded-lg border border-zinc-800">
+          Entre em contato com o suporte CAJ TECH.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden text-white">

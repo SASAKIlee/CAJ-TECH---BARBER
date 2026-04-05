@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +57,7 @@ type BarbeariaRow = {
   inicio_almoco?: string | null;
   fim_almoco?: string | null;
   datas_fechadas?: string[] | null;
+  ativo?: boolean | null;
 };
 
 export default function AgendamentoPublico() {
@@ -172,6 +173,21 @@ export default function AgendamentoPublico() {
     );
   }
 
+  // 🚀 BARREIRA DE BLOQUEIO PARA O CLIENTE FINAL
+  if (config?.ativo === false) {
+    return (
+      <div className="min-h-[100dvh] relative isolate flex flex-col items-center justify-center text-white p-6 text-center" style={{ backgroundColor: "#18181B" }}>
+        <div className="bg-red-500/10 p-6 rounded-[2rem] mb-6 border border-red-500/20 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+          <Lock className="h-12 w-12 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-black mb-2 uppercase italic tracking-tighter">Sistema Indisponível</h1>
+        <p className="text-zinc-400 text-sm max-w-sm">
+          Os agendamentos online para esta barbearia estão temporariamente suspensos. Por favor, tente novamente mais tarde ou entre em contato diretamente com o estabelecimento.
+        </p>
+      </div>
+    );
+  }
+
   const heroImageUrl = config?.url_fundo?.trim() || APP_HERO_FALLBACK_BG;
   const horariosDoDia = gerarHorarios(config?.horario_abertura || "09:00", config?.horario_fechamento || "18:00", config?.inicio_almoco || "12:00", config?.fim_almoco || "13:00");
   
@@ -228,7 +244,6 @@ export default function AgendamentoPublico() {
                           >
                             <div className="flex items-center justify-between gap-4">
                               <div className="flex items-center gap-3">
-                                {/* 🚀 SE TIVER IMAGEM MOSTRA, SE NÃO, SE ADAPTA SEM ESPAÇOS VAZIOS */}
                                 {s.url_imagem && (
                                   <img src={s.url_imagem} alt={s.nome} className="w-14 h-14 rounded-xl object-cover border border-white/10 shrink-0" />
                                 )}

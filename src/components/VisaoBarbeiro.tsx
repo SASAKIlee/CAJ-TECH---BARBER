@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Plus, Check, X, MessageCircle, Users, Clock, ShieldAlert, LogOut } from "lucide-react";
+import { Plus, Check, X, MessageCircle, Users, Clock, ShieldAlert, LogOut, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -54,8 +54,10 @@ export function VisaoBarbeiro({
   corPrimaria = "#D4AF37",
 }: any) {
   const [open, setOpen] = useState(false);
-  // 🚀 ADICIONEI O NOME NO ESTADO PARA USAR NO WHATSAPP
   const [infoLoja, setInfoLoja] = useState({ abertura: "09:00", fechamento: "19:00", nome: "nossa barbearia" });
+  
+  // 🚀 ESTADO DA BARREIRA
+  const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
   
   const [novo, setNovo] = useState({
     nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: "", horario: "",
@@ -75,13 +77,16 @@ export function VisaoBarbeiro({
     async function fetchHorariosConfig() {
       const slug = barbeiros[0]?.barbearia_slug;
       if (!slug) return;
-      // 🚀 AGORA BUSCA O NOME TAMBÉM
-      const { data } = await supabase.from('barbearias').select('horario_abertura, horario_fechamento, nome').eq('slug', slug).single();
-      if (data) setInfoLoja({ 
-        abertura: data.horario_abertura || "09:00", 
-        fechamento: data.horario_fechamento || "19:00",
-        nome: data.nome || "nossa barbearia"
-      });
+      // 🚀 AGORA BUSCA O ATIVO TAMBÉM
+      const { data } = await supabase.from('barbearias').select('horario_abertura, horario_fechamento, nome, ativo').eq('slug', slug).single();
+      if (data) {
+        setIsLojaAtiva(data.ativo !== false);
+        setInfoLoja({ 
+          abertura: data.horario_abertura || "09:00", 
+          fechamento: data.horario_fechamento || "19:00",
+          nome: data.nome || "nossa barbearia"
+        });
+      }
     }
     fetchHorariosConfig();
   }, [barbeiros]);
@@ -102,17 +107,29 @@ export function VisaoBarbeiro({
     return [...lista].sort((a: any, b: any) => String(a.horario).localeCompare(String(b.horario)));
   }, [agendamentos]);
 
-  if (!isDono && perfilLogado && perfilLogado.ativo === false) {
+
+  // 🚀 BARREIRA DE BLOQUEIO PARA O BARBEIRO (E BARBEIROS INATIVOS)
+  if (!isDono && (isLojaAtiva === false || (perfilLogado && perfilLogado.ativo === false))) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
         <div className="max-w-sm w-full space-y-6 text-center">
           <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
             <div className="absolute inset-0 bg-red-600/20 blur-3xl rounded-full" />
-            <ShieldAlert className="h-20 w-20 text-red-500 relative z-10 stroke-[1.5px]" />
+            {isLojaAtiva === false ? (
+              <Lock className="h-12 w-12 text-red-500 relative z-10" />
+            ) : (
+              <ShieldAlert className="h-20 w-20 text-red-500 relative z-10 stroke-[1.5px]" />
+            )}
           </div>
           <div className="space-y-2">
-            <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Acesso Negado</h1>
-            <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">Seu perfil está desativado. Entre em contato com o administrador.</p>
+            <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">
+              {isLojaAtiva === false ? "Sistema Bloqueado" : "Acesso Negado"}
+            </h1>
+            <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">
+              {isLojaAtiva === false 
+                ? "A barbearia encontra-se com o acesso suspenso no momento." 
+                : "Seu perfil de barbeiro está desativado pelo dono."}
+            </p>
           </div>
           <MotionButton variant="ghost" className="w-full h-12 text-zinc-500 font-black uppercase text-xs hover:text-white" whileTap={{ scale: 0.95 }} onClick={() => supabase.auth.signOut()}>
             <LogOut className="mr-2 h-4 w-4" /> Sair da Conta
@@ -306,7 +323,6 @@ export function VisaoBarbeiro({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/[0.08] mt-2">
-                        {/* 🚀 MENSAGEM DO WHATSAPP TURBINADA AQUI */}
                         <MotionButton size="icon" className="h-10 w-10 text-green-500 bg-green-500/10 hover:bg-green-500/20 rounded-xl shrink-0 border border-green-500/20"
                           whileTap={{ scale: 0.95 }} disabled={!!dismissing}
                           onClick={() => {
