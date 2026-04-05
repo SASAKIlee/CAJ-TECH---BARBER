@@ -103,7 +103,7 @@ export function VisaoVendedor({
       if (tabAtiva === "contrato") {
         // ⚠️ LEMBRE-SE DE COLOCAR SEU NÚMERO AQUI
         const numeroCEO = "5517992051576"; 
-        const mensagem = `Fala chefe! 🚀\n\nAcabei de fechar com uma barbearia nova:\n💈 *${formNovoLead.nome}*\n📍 Bairro: ${formNovoLead.bairro || "Não informado"}\n📱 WhatsApp: ${formNovoLead.telefone || "Não informado"}\n\nJá subi o contrato e a paleta de cores no sistema, pode aprovar lá! 🔥`;
+        const mensagem = `Fala César! 🚀\n\nAcabei de fechar com uma barbearia nova:\n💈 *${formNovoLead.nome}*\n📍 Bairro: ${formNovoLead.bairro || "Não informado"}\n📱 WhatsApp: ${formNovoLead.telefone || "Não informado"}\n\nJá subi o contrato e a paleta de cores no sistema, pode aprovar lá! 🔥`;
         window.open(`https://api.whatsapp.com/send?phone=${numeroCEO}&text=${encodeURIComponent(mensagem)}`, "_blank");
       }
 
