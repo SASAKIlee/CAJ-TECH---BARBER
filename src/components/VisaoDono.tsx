@@ -263,7 +263,7 @@ export function VisaoDono({
            
            <div className="p-5 bg-black rounded-2xl border border-zinc-800 space-y-2">
              <p className="text-[10px] uppercase font-black text-emerald-500 tracking-widest">Chave PIX (E-mail)</p>
-             <p className="text-white font-mono text-lg select-all">pagamentos@cajtech.net.br</p>
+             <p className="text-white font-mono text-lg select-all">2409d86d-1e1e-45a1-a90c-691908fc1baf</p>
            </div>
 
            <Button onClick={() => window.open(`https://wa.me/5517992051576?text=Fala equipe CAJ, acabei de realizar o pagamento da minha barbearia para desbloqueio!`, '_blank')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-14 rounded-2xl font-black uppercase tracking-wide text-sm shadow-xl shadow-emerald-600/20">
