@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Users, Scissors, Trash2, Plus, Power, PowerOff, Link as LinkIcon, Copy, FileText, Settings2, Clock, Save, BarChart3, CalendarX2, ImagePlus, Loader2, Lock } from "lucide-react";
+import { Users, Scissors, Trash2, Plus, Power, PowerOff, Link as LinkIcon, Copy, FileText, Settings2, Clock, Save, BarChart3, CalendarX2, ImagePlus, Loader2, Lock, Zap, Crown, CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
@@ -54,7 +54,7 @@ function StatCard({ label, value, brand, highlight, delay = 0 }: any) {
   );
 }
 
-type DonoSubTab = "resumo" | "dashboard" | "config";
+type DonoSubTab = "resumo" | "dashboard" | "automacoes" | "config";
 
 export function VisaoDono({
   faturamentoHoje = 0, comissoesAPagarHoje = 0, lucroRealHoje = 0, faturamentoMensal = 0,
@@ -76,13 +76,15 @@ export function VisaoDono({
   const [novaDataFechada, setNovaDataFechada] = useState("");
   const [isSavingHorario, setIsSavingHorario] = useState(false);
   
-  // 🚀 ESTADO DA BARREIRA DE BLOQUEIO MANUAL
+  // 🚀 ESTADOS DE BLOQUEIO E PLANO
   const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
+  const [planoAtual, setPlanoAtual] = useState<"starter" | "pro" | "elite">("starter");
 
-  // 🚦 ESTADOS DO SEMÁFORO DE PAGAMENTO
+  // 🚦 ESTADOS DO SEMÁFORO DE PAGAMENTO E UPGRADE
   const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
   const [fasePagamento, setFasePagamento] = useState<1 | 2 | 3 | 4>(1);
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
+  const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
 
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
@@ -95,17 +97,18 @@ export function VisaoDono({
   })).sort((a: any, b: any) => b.Total - a.Total);
 
   useEffect(() => {
-    async function carregarHorarios() {
+    async function carregarDadosLoja() {
       const slugAtivo = barbeiros[0]?.barbearia_slug;
       if (!slugAtivo) return;
       
-      // 🚀 BUSCANDO DADOS E A DATA DE VENCIMENTO NO BANCO
       const { data, error } = await supabase.from('barbearias')
-        .select('horario_abertura, horario_fechamento, dias_trabalho, inicio_almoco, fim_almoco, datas_fechadas, ativo, data_vencimento')
+        .select('horario_abertura, horario_fechamento, dias_trabalho, inicio_almoco, fim_almoco, datas_fechadas, ativo, data_vencimento, plano')
         .eq('slug', slugAtivo).single();
         
       if (data && !error) {
         setIsLojaAtiva(data.ativo !== false); 
+        setPlanoAtual(data.plano || "starter");
+        
         setHorariosLoja({
           abertura: data.horario_abertura || "09:00", 
           fechamento: data.horario_fechamento || "18:00",
@@ -119,30 +122,34 @@ export function VisaoDono({
         if (data.data_vencimento) {
           const hoje = new Date();
           const vencimento = new Date(data.data_vencimento);
-          
-          // Calcula a diferença em dias
           const diffTime = vencimento.getTime() - hoje.getTime();
           const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           
           setDiasRestantes(diffDias);
 
-          if (diffDias > 3) setFasePagamento(1); // 🟢 Fase 1: Seguro
-          else if (diffDias >= 0 && diffDias <= 3) setFasePagamento(2); // 🟡 Fase 2: Alerta Amarelo
-          else if (diffDias >= -3 && diffDias < 0) setFasePagamento(3); // 🔴 Fase 3: Carência
-          else setFasePagamento(4); // 🛑 Fase 4: Bloqueio Total
+          if (diffDias > 3) setFasePagamento(1); 
+          else if (diffDias >= 0 && diffDias <= 3) setFasePagamento(2); 
+          else if (diffDias >= -3 && diffDias < 0) setFasePagamento(3); 
+          else setFasePagamento(4); 
         }
       }
     }
-    carregarHorarios();
+    carregarDadosLoja();
   }, [barbeiros]);
 
   const switchSub = (next: DonoSubTab) => {
-    const order: DonoSubTab[] = ["resumo", "dashboard", "config"];
+    const order: DonoSubTab[] = ["resumo", "dashboard", "automacoes", "config"];
     setSubDir(order.indexOf(next) > order.indexOf(subTab) ? 1 : -1);
     setSubTab(next);
   };
 
   const handleAddBarbeiro = () => {
+    // 🔒 TRAVA DO PLANO STARTER: Máximo 2 Barbeiros
+    if (planoAtual === "starter" && barbeiros.length >= 2) {
+      setModalUpgradeAberto(true);
+      return toast.error("Limite atingido! O Plano Starter permite apenas 2 profissionais.");
+    }
+
     const validacao = barbeiroSchema.safeParse(nBarbeiro);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
     onAddBarbeiro(validacao.data.nome, Number(validacao.data.comissao), validacao.data.email, validacao.data.senha);
@@ -259,7 +266,7 @@ export function VisaoDono({
              <p className="text-white font-mono text-lg select-all">pagamentos@cajtech.net.br</p>
            </div>
 
-           <Button onClick={() => window.open(`https://wa.me/5511999999999?text=Fala equipe CAJ, acabei de realizar o pagamento da minha barbearia para desbloqueio!`, '_blank')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-14 rounded-2xl font-black uppercase tracking-wide text-sm shadow-xl shadow-emerald-600/20">
+           <Button onClick={() => window.open(`https://wa.me/5517992051576?text=Fala equipe CAJ, acabei de realizar o pagamento da minha barbearia para desbloqueio!`, '_blank')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-14 rounded-2xl font-black uppercase tracking-wide text-sm shadow-xl shadow-emerald-600/20">
              Já paguei! Liberar Acesso
            </Button>
         </div>
@@ -270,36 +277,45 @@ export function VisaoDono({
   return (
     <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden text-white">
       
-      {/* 🚦 BANNERS DE AVISO DE PAGAMENTO (Fases 2 e 3) */}
-      {fasePagamento === 2 && diasRestantes !== null && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-[20px] flex items-center justify-between mb-2">
-          <span className="text-yellow-500 text-[10px] sm:text-xs font-black uppercase flex items-center gap-2">
-            <span className="animate-pulse h-2.5 w-2.5 bg-yellow-500 rounded-full shrink-0"></span>
-            Atenção: Seu teste ou plano vence em {diasRestantes} dias.
-          </span>
-          <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-yellow-500 text-black hover:bg-yellow-400 font-black text-[10px] uppercase h-8 px-4 rounded-xl shrink-0">
-            Assinar Agora
-          </Button>
-        </div>
-      )}
+      {/* 🚦 BANNERS DE AVISO DE PAGAMENTO E UPGRADE RÁPIDO */}
+      <div className="flex flex-col gap-2 mx-4 mt-2">
+        {planoAtual === "starter" && fasePagamento === 1 && (
+           <Button variant="outline" onClick={() => setModalUpgradeAberto(true)} className="w-full bg-white/5 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10 font-black text-[10px] uppercase h-9 rounded-xl flex items-center justify-center gap-2">
+             <Crown className="h-4 w-4" /> Fazer Upgrade de Plano
+           </Button>
+        )}
 
-      {fasePagamento === 3 && diasRestantes !== null && (
-        <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-[20px] flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-2">
-          <span className="text-red-500 text-[10px] sm:text-xs font-black uppercase flex items-center gap-2">
-            <span className="animate-pulse h-2.5 w-2.5 bg-red-500 rounded-full shrink-0"></span>
-            🚨 Vencido: Você tem {3 + diasRestantes} dias de cortesia.
-          </span>
-          <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-red-600 text-white hover:bg-red-500 font-black text-[10px] uppercase h-8 px-4 rounded-xl shadow-lg shadow-red-500/20 shrink-0">
-            Renovar Urgente
-          </Button>
-        </div>
-      )}
+        {fasePagamento === 2 && diasRestantes !== null && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-[20px] flex items-center justify-between">
+            <span className="text-yellow-500 text-[10px] sm:text-xs font-black uppercase flex items-center gap-2">
+              <span className="animate-pulse h-2.5 w-2.5 bg-yellow-500 rounded-full shrink-0"></span>
+              Atenção: Seu teste ou plano vence em {diasRestantes} dias.
+            </span>
+            <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-yellow-500 text-black hover:bg-yellow-400 font-black text-[10px] uppercase h-8 px-4 rounded-xl shrink-0">
+              Renovar
+            </Button>
+          </div>
+        )}
+
+        {fasePagamento === 3 && diasRestantes !== null && (
+          <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-[20px] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+            <span className="text-red-500 text-[10px] sm:text-xs font-black uppercase flex items-center gap-2">
+              <span className="animate-pulse h-2.5 w-2.5 bg-red-500 rounded-full shrink-0"></span>
+              🚨 Vencido: Você tem {3 + diasRestantes} dias de cortesia.
+            </span>
+            <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-red-600 text-white hover:bg-red-500 font-black text-[10px] uppercase h-8 px-4 rounded-xl shadow-lg shadow-red-500/20 shrink-0">
+              Renovar Urgente
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* ABAS DE NAVEGAÇÃO */}
-      <div className="flex rounded-2xl border border-white/[0.08] p-1 gap-1" style={glass}>
+      <div className="flex rounded-2xl border border-white/[0.08] p-1 gap-1 mx-4" style={glass}>
         {([
           { id: "resumo" as const, label: "Resumo", Icon: FileText },
-          { id: "dashboard" as const, label: "Dashboard", Icon: BarChart3 },
+          { id: "dashboard" as const, label: "Métricas", Icon: BarChart3 },
+          { id: "automacoes" as const, label: "VIP", Icon: Zap },
           { id: "config" as const, label: "Ajustes", Icon: Settings2 },
         ] as const).map(({ id, label, Icon }) => (
           <MotionButton key={id} type="button" variant="ghost" whileTap={{ scale: 0.95 }} onClick={() => switchSub(id)}
@@ -311,7 +327,7 @@ export function VisaoDono({
       </div>
 
       <AnimatePresence mode="wait" initial={false} custom={subDir}>
-        <motion.div key={subTab} custom={subDir} variants={tabVariants} initial="enter" animate="center" exit="exit" transition={{ type: "spring", stiffness: 400, damping: 36 }} className="space-y-8">
+        <motion.div key={subTab} custom={subDir} variants={tabVariants} initial="enter" animate="center" exit="exit" transition={{ type: "spring", stiffness: 400, damping: 36 }} className="space-y-8 px-4">
           
           {subTab === "resumo" && (
             <>
@@ -388,6 +404,78 @@ export function VisaoDono({
                   ))}
                 </div>
               </div>
+            </section>
+          )}
+
+          {/* 🚀 NOVA ABA: AUTOMAÇÕES VIP (Com Tags "Em Breve") */}
+          {subTab === "automacoes" && (
+            <section className="space-y-4">
+              <div className="flex items-center gap-2 px-1">
+                <Zap className="h-5 w-5" style={{ color: brand }} />
+                <h3 className="font-black text-white uppercase text-xl tracking-tighter italic">Automações VIP</h3>
+              </div>
+
+              {planoAtual === "starter" ? (
+                <Card className="p-8 rounded-[22px] border border-white/[0.08] shadow-xl text-center flex flex-col items-center gap-4" style={glass}>
+                  <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
+                    <Lock className="h-8 w-8 text-zinc-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white uppercase italic">Recursos Bloqueados</h4>
+                    <p className="text-xs text-zinc-400 mt-1 max-w-[250px] mx-auto">Sua barbearia está no plano Starter. Faça o upgrade para desbloquear ferramentas avançadas.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full mt-2 text-left">
+                    <p className="text-[10px] text-emerald-500 uppercase font-black px-2 flex items-center gap-2">
+                      <CheckCircle2 className="h-3 w-3"/> Barbeiros Ilimitados
+                    </p>
+                    <p className="text-[10px] text-emerald-500 uppercase font-black px-2 flex items-center gap-2">
+                      <CheckCircle2 className="h-3 w-3"/> Lembretes via WhatsApp 
+                      <span className="ml-auto bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 text-[8px] px-2 py-0.5 rounded-full tracking-widest">EM BREVE</span>
+                    </p>
+                    <p className="text-[10px] text-emerald-500 uppercase font-black px-2 flex items-center gap-2">
+                      <CheckCircle2 className="h-3 w-3"/> Clube de Assinatura (Netflix)
+                      <span className="ml-auto bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-[8px] px-2 py-0.5 rounded-full tracking-widest">EM BREVE</span>
+                    </p>
+                  </div>
+                  <Button onClick={() => setModalUpgradeAberto(true)} className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase shadow-lg h-12 rounded-xl">
+                    Desbloquear Agora
+                  </Button>
+                </Card>
+              ) : (
+                <div className="grid gap-3">
+                  <Card 
+                    onClick={() => toast.info("🚀 Funcionalidade em fase final de testes. Você será o primeiro a receber!")}
+                    className="p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 cursor-pointer hover:bg-emerald-500/10 transition-colors relative overflow-hidden"
+                  >
+                    <div className="absolute top-3 right-3 bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">
+                      Em Breve
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Zap className="h-8 w-8 text-emerald-500" />
+                      <div>
+                        <h4 className="font-bold text-sm uppercase">Lembretes Automáticos</h4>
+                        <p className="text-[10px] text-zinc-400 font-medium">Disparo de WhatsApp 2 horas antes do corte.</p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card 
+                    onClick={() => toast.info("🚀 Funcionalidade em fase final de testes. Você será o primeiro a receber!")}
+                    className="p-5 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 cursor-pointer hover:bg-yellow-500/10 transition-colors relative overflow-hidden"
+                  >
+                    <div className="absolute top-3 right-3 bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">
+                      Em Breve
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Crown className="h-8 w-8 text-yellow-500" />
+                      <div>
+                        <h4 className="font-bold text-sm uppercase">Clube de Assinatura</h4>
+                        <p className="text-[10px] text-zinc-400 font-medium">Crie planos mensais para seus clientes fiéis.</p>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              )}
             </section>
           )}
 
@@ -572,7 +660,81 @@ export function VisaoDono({
         </motion.div>
       </AnimatePresence>
 
-      {/* 💳 MODAL DE ASSINATURA / UPGRADE / RENOVAÇÃO */}
+      {/* 💳 MODAL DE UPGRADE / ESCOLHA DE PLANOS */}
+      {modalUpgradeAberto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto pt-20 pb-10">
+          <div className="w-full max-w-4xl space-y-6">
+            <div className="flex justify-between items-center px-4">
+              <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Planos CAJ TECH</h2>
+              <button onClick={() => setModalUpgradeAberto(false)} className="text-zinc-500 hover:text-white transition-colors bg-white/5 h-10 w-10 rounded-full flex items-center justify-center">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-2">
+              
+              {/* CARD: STARTER */}
+              <Card className="p-6 rounded-3xl border border-zinc-800 bg-black flex flex-col justify-between">
+                <div>
+                  <h3 className="text-zinc-400 font-black uppercase text-sm tracking-widest">Starter</h3>
+                  <p className="text-[10px] text-zinc-500 mt-1 h-8">Para sair do papel e do WhatsApp.</p>
+                  <p className="text-4xl font-black text-white my-4 italic">R$ 50<span className="text-sm text-zinc-500 not-italic">/mês</span></p>
+                  <div className="space-y-3 mb-6">
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500"/> Link de Agendamento</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500"/> Até 2 Barbeiros</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500"/> Controle de Caixa</p>
+                  </div>
+                </div>
+                <Button disabled={planoAtual === "starter"} onClick={() => window.open(`https://wa.me/5517992051576?text=Quero mudar para o plano Starter!`, '_blank')} className="w-full bg-zinc-800 text-white font-bold h-12 rounded-xl">
+                  {planoAtual === "starter" ? "Seu Plano Atual" : "Selecionar"}
+                </Button>
+              </Card>
+
+              {/* CARD: PRO (Destaque) */}
+              <Card className="p-6 rounded-3xl border-2 border-emerald-500 bg-emerald-500/5 flex flex-col justify-between relative transform scale-105 shadow-2xl shadow-emerald-500/20 z-10">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                  Mais Vendido
+                </div>
+                <div>
+                  <h3 className="text-emerald-500 font-black uppercase text-sm tracking-widest">Pro</h3>
+                  <p className="text-[10px] text-zinc-400 mt-1 h-8">A máquina de automação e gestão.</p>
+                  <p className="text-5xl font-black text-white my-4 italic">R$ 99<span className="text-sm text-zinc-500 not-italic">,90/mês</span></p>
+                  <div className="space-y-3 mb-6">
+                    <p className="text-xs font-semibold text-white flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500"/> Tudo do Starter +</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500"/> WhatsApp Automático</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500"/> Barbeiros Ilimitados</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500"/> Clube de Assinatura</p>
+                  </div>
+                </div>
+                <Button disabled={planoAtual === "pro"} onClick={() => window.open(`https://wa.me/5517992051576?text=Quero assinar o Plano Pro!`, '_blank')} className="w-full bg-emerald-500 text-black font-black uppercase h-12 rounded-xl">
+                  {planoAtual === "pro" ? "Seu Plano Atual" : "Assinar Plano Pro"}
+                </Button>
+              </Card>
+
+              {/* CARD: ELITE */}
+              <Card className="p-6 rounded-3xl border border-yellow-500/50 bg-black flex flex-col justify-between">
+                <div>
+                  <h3 className="text-yellow-500 font-black uppercase text-sm tracking-widest flex items-center gap-2"><Crown className="h-4 w-4"/> Elite</h3>
+                  <p className="text-[10px] text-zinc-500 mt-1 h-8">SaaS + Marketing por nossa conta.</p>
+                  <p className="text-4xl font-black text-white my-4 italic">R$ 497<span className="text-sm text-zinc-500 not-italic">/mês</span></p>
+                  <div className="space-y-3 mb-6">
+                    <p className="text-xs font-semibold text-white flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-yellow-500"/> Tudo do Pro +</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-yellow-500"/> Criação de Logos e Design</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-yellow-500"/> Gestão de Tráfego Pago</p>
+                    <p className="text-xs font-semibold text-zinc-300 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-yellow-500"/> Redes Sociais Especializadas</p>
+                  </div>
+                </div>
+                <Button disabled={planoAtual === "elite"} onClick={() => window.open(`https://wa.me/5517992051576?text=Quero falar com um consultor sobre o Plano Elite!`, '_blank')} className="w-full bg-yellow-500 text-black font-black uppercase h-12 rounded-xl">
+                  {planoAtual === "elite" ? "Seu Plano Atual" : "Falar com Consultor"}
+                </Button>
+              </Card>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💳 MODAL DE ASSINATURA / RENOVAÇÃO SIMPLES */}
       {modalPagamentoAberto && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm transition-all">
           <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-[32px] p-6 space-y-6 shadow-2xl relative overflow-hidden">
