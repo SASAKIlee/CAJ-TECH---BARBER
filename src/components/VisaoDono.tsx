@@ -754,7 +754,7 @@ export function VisaoDono({
               
               <div className="bg-black p-5 rounded-2xl border border-zinc-800 flex flex-col items-center justify-center gap-2 shadow-inner">
                  <span className="text-[10px] uppercase font-black text-emerald-500 tracking-widest">Chave PIX E-mail</span>
-                 <span className="text-white font-mono text-lg select-all bg-white/5 px-4 py-2 rounded-lg border border-white/10 w-full">pagamentos@cajtech.net.br</span>
+                 <span className="text-white font-mono text-lg select-all bg-white/5 px-4 py-2 rounded-lg border border-white/10 w-full">2409d86d-1e1e-45a1-a90c-691908fc1baf</span>
               </div>
             </div>
 
