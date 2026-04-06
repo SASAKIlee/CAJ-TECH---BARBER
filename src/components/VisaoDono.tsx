@@ -9,7 +9,6 @@ import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-
 import imageCompression from 'browser-image-compression';
 
 const MotionButton = motion.create(Button);
@@ -77,8 +76,13 @@ export function VisaoDono({
   const [novaDataFechada, setNovaDataFechada] = useState("");
   const [isSavingHorario, setIsSavingHorario] = useState(false);
   
-  // 🚀 ESTADO DA BARREIRA
+  // 🚀 ESTADO DA BARREIRA DE BLOQUEIO MANUAL
   const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
+
+  // 🚦 ESTADOS DO SEMÁFORO DE PAGAMENTO
+  const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
+  const [fasePagamento, setFasePagamento] = useState<1 | 2 | 3 | 4>(1);
+  const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
 
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
@@ -94,13 +98,14 @@ export function VisaoDono({
     async function carregarHorarios() {
       const slugAtivo = barbeiros[0]?.barbearia_slug;
       if (!slugAtivo) return;
-      // 🚀 BUSCANDO O STATUS "ATIVO" NO BANCO
+      
+      // 🚀 BUSCANDO DADOS E A DATA DE VENCIMENTO NO BANCO
       const { data, error } = await supabase.from('barbearias')
-        .select('horario_abertura, horario_fechamento, dias_trabalho, inicio_almoco, fim_almoco, datas_fechadas, ativo')
+        .select('horario_abertura, horario_fechamento, dias_trabalho, inicio_almoco, fim_almoco, datas_fechadas, ativo, data_vencimento')
         .eq('slug', slugAtivo).single();
         
       if (data && !error) {
-        setIsLojaAtiva(data.ativo !== false); // Se for nulo ou true, está ativa
+        setIsLojaAtiva(data.ativo !== false); 
         setHorariosLoja({
           abertura: data.horario_abertura || "09:00", 
           fechamento: data.horario_fechamento || "18:00",
@@ -109,6 +114,23 @@ export function VisaoDono({
           dias_trabalho: Array.isArray(data.dias_trabalho) ? data.dias_trabalho : [1, 2, 3, 4, 5, 6],
           datas_fechadas: Array.isArray(data.datas_fechadas) ? data.datas_fechadas : []
         });
+
+        // 🚦 CÁLCULO DO SEMÁFORO DE PAGAMENTO
+        if (data.data_vencimento) {
+          const hoje = new Date();
+          const vencimento = new Date(data.data_vencimento);
+          
+          // Calcula a diferença em dias
+          const diffTime = vencimento.getTime() - hoje.getTime();
+          const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          setDiasRestantes(diffDias);
+
+          if (diffDias > 3) setFasePagamento(1); // 🟢 Fase 1: Seguro
+          else if (diffDias >= 0 && diffDias <= 3) setFasePagamento(2); // 🟡 Fase 2: Alerta Amarelo
+          else if (diffDias >= -3 && diffDias < 0) setFasePagamento(3); // 🔴 Fase 3: Carência
+          else setFasePagamento(4); // 🛑 Fase 4: Bloqueio Total
+        }
       }
     }
     carregarHorarios();
@@ -200,7 +222,7 @@ export function VisaoDono({
 
   const tabVariants = { enter: (dir: number) => ({ x: dir * 56, opacity: 0 }), center: { x: 0, opacity: 1 }, exit: (dir: number) => ({ x: dir * -56, opacity: 0 }) };
 
-  // 🚀 BARREIRA DE BLOQUEIO PARA O DONO
+  // 🚀 BARREIRA 1: BLOQUEIO MANUAL PELO CEO
   if (isLojaAtiva === false) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
@@ -209,7 +231,7 @@ export function VisaoDono({
         </div>
         <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-3">Acesso Suspenso</h2>
         <p className="text-zinc-400 max-w-md text-sm leading-relaxed mb-6">
-          Sua assinatura encontra-se pendente de regularização. O painel administrativo e o agendamento público da sua barbearia foram desativados.
+          Sua conta encontra-se pendente de regularização manual. O painel administrativo e o agendamento público da sua barbearia foram desativados.
         </p>
         <p className="text-zinc-600 text-xs font-bold uppercase tracking-[0.2em] bg-zinc-900/50 px-4 py-2 rounded-lg border border-zinc-800">
           Entre em contato com o suporte CAJ TECH.
@@ -218,8 +240,62 @@ export function VisaoDono({
     );
   }
 
+  // 🚀 BARREIRA 2: BLOQUEIO AUTOMÁTICO POR FALTA DE PAGAMENTO (Fase 4)
+  if (fasePagamento === 4) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[75vh] text-center px-4">
+        <div className="bg-zinc-900 border border-red-500/40 p-8 rounded-[32px] max-w-md w-full text-center space-y-6 shadow-[0_0_60px_rgba(239,68,68,0.15)] relative overflow-hidden">
+           <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
+           <div className="mx-auto w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-2">
+             <Lock className="w-8 h-8 text-red-500" />
+           </div>
+           <div>
+             <h2 className="text-3xl font-black text-white uppercase italic tracking-tight">Sistema Bloqueado</h2>
+             <p className="text-zinc-400 text-sm font-bold mt-2">O prazo de carência encerrou. Renove sua assinatura para liberar a agenda e não perder clientes.</p>
+           </div>
+           
+           <div className="p-5 bg-black rounded-2xl border border-zinc-800 space-y-2">
+             <p className="text-[10px] uppercase font-black text-emerald-500 tracking-widest">Chave PIX (E-mail)</p>
+             <p className="text-white font-mono text-lg select-all">pagamentos@cajtech.net.br</p>
+           </div>
+
+           <Button onClick={() => window.open(`https://wa.me/5511999999999?text=Fala equipe CAJ, acabei de realizar o pagamento da minha barbearia para desbloqueio!`, '_blank')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white h-14 rounded-2xl font-black uppercase tracking-wide text-sm shadow-xl shadow-emerald-600/20">
+             Já paguei! Liberar Acesso
+           </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden text-white">
+      
+      {/* 🚦 BANNERS DE AVISO DE PAGAMENTO (Fases 2 e 3) */}
+      {fasePagamento === 2 && diasRestantes !== null && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-[20px] flex items-center justify-between mb-2">
+          <span className="text-yellow-500 text-[10px] sm:text-xs font-black uppercase flex items-center gap-2">
+            <span className="animate-pulse h-2.5 w-2.5 bg-yellow-500 rounded-full shrink-0"></span>
+            Atenção: Seu teste ou plano vence em {diasRestantes} dias.
+          </span>
+          <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-yellow-500 text-black hover:bg-yellow-400 font-black text-[10px] uppercase h-8 px-4 rounded-xl shrink-0">
+            Assinar Agora
+          </Button>
+        </div>
+      )}
+
+      {fasePagamento === 3 && diasRestantes !== null && (
+        <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-[20px] flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-2">
+          <span className="text-red-500 text-[10px] sm:text-xs font-black uppercase flex items-center gap-2">
+            <span className="animate-pulse h-2.5 w-2.5 bg-red-500 rounded-full shrink-0"></span>
+            🚨 Vencido: Você tem {3 + diasRestantes} dias de cortesia.
+          </span>
+          <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-red-600 text-white hover:bg-red-500 font-black text-[10px] uppercase h-8 px-4 rounded-xl shadow-lg shadow-red-500/20 shrink-0">
+            Renovar Urgente
+          </Button>
+        </div>
+      )}
+
+      {/* ABAS DE NAVEGAÇÃO */}
       <div className="flex rounded-2xl border border-white/[0.08] p-1 gap-1" style={glass}>
         {([
           { id: "resumo" as const, label: "Resumo", Icon: FileText },
@@ -280,14 +356,14 @@ export function VisaoDono({
                   <p className="text-sm font-semibold text-white">Produção por Profissional</p>
                 </div>
                 <div className="h-64 w-full mt-4">
-                  {chartData.length > 0 && chartData.some(d => d.Total > 0) ? (
+                  {chartData.length > 0 && chartData.some((d: any) => d.Total > 0) ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <XAxis dataKey="name" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
                         <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
                         <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }} formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Produção']} />
                         <Bar dataKey="Total" radius={[6, 6, 6, 6]}>
-                          {chartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === 0 ? brand : hexToRgba(brand, 0.4)} />))}
+                          {chartData.map((entry: any, index: number) => (<Cell key={`cell-${index}`} fill={index === 0 ? brand : hexToRgba(brand, 0.4)} />))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -495,6 +571,41 @@ export function VisaoDono({
           )}
         </motion.div>
       </AnimatePresence>
+
+      {/* 💳 MODAL DE ASSINATURA / UPGRADE / RENOVAÇÃO */}
+      {modalPagamentoAberto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm transition-all">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-[32px] p-6 space-y-6 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
+            
+            <div className="flex justify-between items-center pb-2">
+              <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Renovar Plano</h2>
+              <button onClick={() => setModalPagamentoAberto(false)} className="text-zinc-500 hover:text-white transition-colors bg-white/5 h-8 w-8 rounded-full flex items-center justify-center">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-center">
+              <p className="text-zinc-400 text-xs font-bold leading-relaxed">
+                Faça o PIX no valor do seu plano para garantir seu acesso contínuo e não perder clientes na agenda.
+              </p>
+              
+              <div className="bg-black p-5 rounded-2xl border border-zinc-800 flex flex-col items-center justify-center gap-2 shadow-inner">
+                 <span className="text-[10px] uppercase font-black text-emerald-500 tracking-widest">Chave PIX E-mail</span>
+                 <span className="text-white font-mono text-lg select-all bg-white/5 px-4 py-2 rounded-lg border border-white/10 w-full">pagamentos@cajtech.net.br</span>
+              </div>
+            </div>
+
+            <Button 
+              onClick={() => window.open(`https://wa.me/5517992051576?text=Fala equipe CAJ, acabei de renovar meu plano, segue o comprovante!`, '_blank')} 
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl text-sm uppercase italic tracking-wide shadow-xl shadow-emerald-600/20"
+            >
+              Já Paguei! Enviar Comprovante
+            </Button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

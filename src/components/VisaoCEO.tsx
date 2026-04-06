@@ -70,43 +70,48 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const statConvertidos = leadsRecentes.filter(l => l.status === 'convertido').length;
   const taxaConversao = leadsRecentes.length > 0 ? ((statConvertidos / leadsRecentes.length) * 100).toFixed(0) : 0;
 
-  // 1. APROVAÇÃO
-  const handleAprovarContrato = async (lead: any) => {
-    const slugDesejado = slugs[lead.id];
-    const planoEscolhido = planos[lead.id] || "pro";
-    const extras = lead.dados_adicionais || {};
+// 1. APROVAÇÃO (Com Gatilho de 7 Dias de Teste)
+const handleAprovarContrato = async (lead: any) => {
+  const slugDesejado = slugs[lead.id];
+  const planoEscolhido = planos[lead.id] || "pro";
+  const extras = lead.dados_adicionais || {};
 
-    if (!slugDesejado) return toast.error("Defina o Slug antes de aprovar.");
-    if (!extras.email_dono || !extras.senha_temp) return toast.error("Este lead não possui e-mail e senha.");
+  if (!slugDesejado) return toast.error("Defina o Slug antes de aprovar.");
+  if (!extras.email_dono || !extras.senha_temp) return toast.error("Este lead não possui e-mail e senha.");
 
-    toast.loading("Instanciando sistema...", { id: "aprovacao" });
+  toast.loading("Instanciando sistema...", { id: "aprovacao" });
 
-    try {
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
-        auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-loja-${Math.random()}` } 
-      });
-      
-      const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: extras.email_dono, password: extras.senha_temp });
-      if (authError) throw new Error(authError.message);
-      
-      const novoDonoId = authData.user!.id;
-      await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
+  try {
+    const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
+      auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-loja-${Math.random()}` } 
+    });
+    
+    const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: extras.email_dono, password: extras.senha_temp });
+    if (authError) throw new Error(authError.message);
+    
+    const novoDonoId = authData.user!.id;
+    await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
 
-      const { error: barbError } = await supabase.from("barbearias").insert({
-        nome: lead.nome_barbearia, slug: slugDesejado, dono_id: novoDonoId,
-        cor_primaria: extras.cor_primaria || "#D4AF37", plano: planoEscolhido, ativo: true
-      });
-      if (barbError) throw new Error(barbError.message);
+    // 🚀 AQUI ESTÁ A MÁGICA: Somamos 7 dias a partir de hoje
+    const dataVencimento = new Date();
+    dataVencimento.setDate(dataVencimento.getDate() + 7);
 
-      await supabase.from("leads").update({ status: 'convertido' }).eq('id', lead.id);
+    const { error: barbError } = await supabase.from("barbearias").insert({
+      nome: lead.nome_barbearia, slug: slugDesejado, dono_id: novoDonoId,
+      cor_primaria: extras.cor_primaria || "#D4AF37", plano: planoEscolhido, ativo: true,
+      data_vencimento: dataVencimento.toISOString() // Salvando a data no banco
+    });
+    if (barbError) throw new Error(barbError.message);
 
-      toast.success("✅ Cliente Ativado!", { id: "aprovacao" });
-      setLeadsRecentes(prev => prev.map(l => l.id === lead.id ? { ...l, status: 'convertido' } : l));
-      setExpandido(null);
-    } catch (err: any) {
-      toast.error(err.message, { id: "aprovacao" });
-    }
-  };
+    await supabase.from("leads").update({ status: 'convertido' }).eq('id', lead.id);
+
+    toast.success("✅ Cliente Ativado com 7 dias de teste!", { id: "aprovacao" });
+    setLeadsRecentes(prev => prev.map(l => l.id === lead.id ? { ...l, status: 'convertido' } : l));
+    setExpandido(null);
+  } catch (err: any) {
+    toast.error(err.message, { id: "aprovacao" });
+  }
+};
 
   // 2. CADASTRAR NOVO CONSULTOR (COM O EMAIL ENVIADO PRO BANCO)
   const handleCadastrarConsultor = async () => {

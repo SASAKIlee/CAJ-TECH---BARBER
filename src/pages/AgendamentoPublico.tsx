@@ -58,6 +58,7 @@ type BarbeariaRow = {
   fim_almoco?: string | null;
   datas_fechadas?: string[] | null;
   ativo?: boolean | null;
+  data_vencimento?: string | null; // Adicionado para checar o semáforo
 };
 
 export default function AgendamentoPublico() {
@@ -173,8 +174,22 @@ export default function AgendamentoPublico() {
     );
   }
 
-  // 🚀 BARREIRA DE BLOQUEIO PARA O CLIENTE FINAL
-  if (config?.ativo === false) {
+  // 🚀 LÓGICA DE BLOQUEIO POR FALTA DE PAGAMENTO (Fase 4 do Semáforo)
+  let bloqueadoPorInadimplencia = false;
+  if (config?.data_vencimento) {
+    const hoje = new Date();
+    const vencimento = new Date(config.data_vencimento);
+    const diffTime = vencimento.getTime() - hoje.getTime();
+    const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Se o vencimento já passou há mais de 3 dias (saiu da carência)
+    if (diffDias < -3) {
+      bloqueadoPorInadimplencia = true;
+    }
+  }
+
+  // 🚀 BARREIRA DE BLOQUEIO PARA O CLIENTE FINAL (Avaliando Inativo manual ou Inadimplência)
+  if (config?.ativo === false || bloqueadoPorInadimplencia) {
     return (
       <div className="min-h-[100dvh] relative isolate flex flex-col items-center justify-center text-white p-6 text-center" style={{ backgroundColor: "#18181B" }}>
         <div className="bg-red-500/10 p-6 rounded-[2rem] mb-6 border border-red-500/20 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
