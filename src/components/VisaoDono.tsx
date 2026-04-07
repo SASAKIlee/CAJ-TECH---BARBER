@@ -94,7 +94,6 @@ export function VisaoDono({
   const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
   const [fasePagamento, setFasePagamento] = useState<1 | 2 | 3 | 4>(1);
 
-  // LOGICA DE PAGAMENTO INTEGRADA
   const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter");
   const [isGerandoPix, setIsGerandoPix] = useState(false);
   const [pixGerado, setPixGerado] = useState<string | null>(null);
@@ -214,6 +213,55 @@ export function VisaoDono({
     } catch (err) { toast.error("Erro ao salvar."); } finally { setIsSavingHorario(false); }
   };
 
+  const handleUploadImagem = async (file: File, bucket: string) => {
+    try {
+      const compressed = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 600 });
+      const fileName = `${Math.random()}.${compressed.name.split('.').pop()}`;
+      const { error } = await supabase.storage.from(bucket).upload(fileName, compressed);
+      if (error) throw error;
+      return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
+    } catch (err) {
+      toast.error("Erro no processamento da imagem.");
+      return null;
+    }
+  };
+
+  const handleAddBarbeiroComFotoETrava = async () => {
+    if (planoAtual === "starter" && barbeiros.length >= 2) {
+      setModalUpgradeAberto(true);
+      return toast.error("Upgrade necessário: Plano Starter permite 2 profissionais.");
+    }
+    const validacao = barbeiroSchema.safeParse(nBarbeiro);
+    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
+    
+    setIsUploadingBarbeiro(true);
+    let urlFinal = null;
+    if (imagemBarbeiro) {
+      urlFinal = await handleUploadImagem(imagemBarbeiro, 'equipe');
+    }
+
+    onAddBarbeiro(validacao.data.nome, Number(validacao.data.comissao), validacao.data.email, validacao.data.senha, urlFinal);
+    setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
+    setImagemBarbeiro(null);
+    setIsUploadingBarbeiro(false);
+  };
+
+  const handleAddServicoComFoto = async () => {
+    const validacao = servicoSchema.safeParse(nServico);
+    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
+    
+    setIsUploadingServico(true);
+    let urlFinal = null;
+    if (imagemServico) {
+      urlFinal = await handleUploadImagem(imagemServico, 'servicos');
+    }
+
+    onAddServico(validacao.data.nome, Number(validacao.data.preco), Number(validacao.data.duracao_minutos), urlFinal);
+    setNServico({ nome: "", preco: "", duracao_minutos: "30" });
+    setImagemServico(null);
+    setIsUploadingServico(false);
+  };
+
   const toggleDiaSemana = (idDia: number) => {
     setHorariosLoja(prev => {
       const isSelected = prev.dias_trabalho.includes(idDia);
@@ -227,16 +275,27 @@ export function VisaoDono({
     setNovaDataFechada("");
   };
 
+  const handleRemoveDataFechada = (dataParaRemover: string) => {
+    setHorariosLoja(prev => ({ ...prev, datas_fechadas: prev.datas_fechadas.filter(d => d !== dataParaRemover) }));
+  };
+
+  const formatarDataBR = (dataIso: string) => {
+    const [ano, mes, dia] = dataIso.split("-");
+    return `${dia}/${mes}/${ano}`;
+  };
+
   if (isLojaAtiva === false) return renderBloqueioManual();
   if (fasePagamento === 4) return renderBloqueioInadimplencia();
 
   return (
     <div className="flex flex-col gap-6 pb-40 pt-4 w-full overflow-x-hidden text-white">
       
+      {/* 🚦 BANNERS DE ALERTA - MOBILE RESPONSIVE */}
       <div className="px-4 flex flex-col gap-3">
         {renderBannersAlerta()}
       </div>
 
+      {/* 📱 NAVEGAÇÃO SUPERIOR ESTILO APP */}
       <div className="px-4">
         <div className="flex rounded-[20px] border border-white/[0.08] p-1.5 gap-1.5 shadow-2xl" style={glass}>
           {([
@@ -246,7 +305,7 @@ export function VisaoDono({
             { id: "config", label: "Ajustes", Icon: Settings2 },
           ] as const).map(({ id, label, Icon }) => (
             <MotionButton key={id} type="button" variant="ghost" whileTap={{ scale: 0.95 }} onClick={() => switchSub(id as DonoSubTab)}
-              className={cn("flex-1 h-12 rounded-[14px] text-[10px] font-black uppercase tracking-widest px-0 transition-all", subTab === id ? "shadow-lg" : "text-white/40 hover:text-white/70")}
+              className={cn("flex-1 h-12 rounded-[14px] text-[10px] font-black uppercase tracking-widest px-0 transition-all", subTab === id ? "shadow-lg border-0" : "text-white/40 hover:text-white/70")}
               style={subTab === id ? { backgroundColor: brand, color: ctaFg } : undefined}>
               <div className="flex flex-col items-center gap-1">
                 <Icon className="h-3.5 w-3.5" />
@@ -257,6 +316,7 @@ export function VisaoDono({
         </div>
       </div>
 
+      {/* 🚀 CONTEÚDO PRINCIPAL - ESPAÇAMENTO LATERAL CORRIGIDO */}
       <div className="px-4">
         <AnimatePresence mode="wait" initial={false} custom={subDir}>
           <motion.div key={subTab} custom={subDir} variants={tabVariants} initial="enter" animate="center" exit="exit" 
@@ -299,6 +359,12 @@ export function VisaoDono({
     </div>
   );
 
+  /**
+   * ==========================================
+   * SUB-COMPONENTES DE RENDERIZAÇÃO
+   * ==========================================
+   */
+
   function renderBannersAlerta() {
     if (planoAtual === "starter" && fasePagamento === 1) {
       return (
@@ -336,7 +402,8 @@ export function VisaoDono({
             <ResponsiveContainer>
               <BarChart data={data} margin={{ left: -30 }}>
                 <XAxis dataKey="name" stroke="#555" fontSize={10} axisLine={false} tickLine={false} />
-                <YAxis stroke="#555" fontSize={10} axisLine={false} tickLine={false} />
+                <YAxis stroke="#555" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v}`} />
+                <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '12px', fontSize: '10px' }} />
                 <Bar dataKey="Total" radius={[6, 6, 6, 6]}>{data.map((_, i) => <Cell key={i} fill={i === 0 ? brand : hexToRgba(brand, 0.3)} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -357,27 +424,27 @@ export function VisaoDono({
               <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-3"><CheckCircle2 className="h-4 w-4"/> WhatsApp Automático</p>
               <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-3"><CheckCircle2 className="h-4 w-4"/> Clube de Assinatura</p>
             </div>
-            <Button onClick={() => setModalUpgradeAberto(true)} className="w-full bg-emerald-600 text-white font-black uppercase h-16 rounded-2xl shadow-xl text-sm">Desbloquear PRO</Button>
+            <Button onClick={() => setModalUpgradeAberto(true)} className="w-full bg-emerald-600 text-white font-black uppercase h-16 rounded-2xl shadow-xl text-sm italic">Desbloquear Agora</Button>
           </Card>
         ) : (
           <div className="grid gap-4">
-             <Card onClick={() => toast.info("🚀 Em fase final de testes!")} className="p-6 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 cursor-pointer relative group transition-all hover:bg-emerald-500/10">
-               <span className="absolute top-4 right-4 text-[9px] bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full font-black uppercase tracking-widest">Em Breve</span>
+             <Card onClick={() => toast.info("🚀 Operação automática de disparos ativada!")} className="p-6 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 cursor-pointer relative group transition-all hover:bg-emerald-500/10">
+               <span className="absolute top-4 right-4 text-[9px] bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full font-black uppercase tracking-widest">Ativo</span>
                <div className="flex items-center gap-4">
-                  <Zap className="h-6 w-6 text-emerald-500" />
+                  <div className="h-12 w-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center"><Zap className="h-6 w-6 text-emerald-500" /></div>
                   <div>
                     <h4 className="font-black text-sm uppercase">Lembretes Automáticos</h4>
-                    <p className="text-xs text-zinc-400 font-medium mt-1">WhatsApp 2h antes do agendamento.</p>
+                    <p className="text-xs text-zinc-400 font-medium mt-1 italic">WhatsApp 2h antes do corte.</p>
                   </div>
                </div>
              </Card>
-             <Card onClick={() => toast.info("🚀 Em fase de homologação!")} className="p-6 rounded-3xl border border-yellow-500/20 bg-yellow-500/5 cursor-pointer relative group transition-all hover:bg-yellow-500/10">
+             <Card onClick={() => toast.info("🚀 Módulo em homologação final.")} className="p-6 rounded-3xl border border-yellow-500/20 bg-yellow-500/5 cursor-pointer relative group transition-all hover:bg-yellow-500/10">
                <span className="absolute top-4 right-4 text-[9px] bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full font-black uppercase tracking-widest">Em Breve</span>
                <div className="flex items-center gap-4">
-                  <Crown className="h-6 w-6 text-yellow-500" />
+                  <div className="h-12 w-12 bg-yellow-500/10 rounded-2xl flex items-center justify-center"><Crown className="h-6 w-6 text-yellow-500" /></div>
                   <div>
                     <h4 className="font-black text-sm uppercase">Clube de Assinatura</h4>
-                    <p className="text-xs text-zinc-400 font-medium mt-1">Planos mensais para clientes recorrentes.</p>
+                    <p className="text-xs text-zinc-400 font-medium mt-1 italic">Crie planos mensais recorrentes.</p>
                   </div>
                </div>
              </Card>
@@ -390,6 +457,7 @@ export function VisaoDono({
   function renderTabConfig() {
     return (
       <div className="flex flex-col gap-10 pb-20">
+        {/* HORÁRIOS */}
         <div className="flex flex-col gap-4">
           <h3 className="font-black text-white uppercase text-lg italic flex items-center gap-2 px-1"><Clock className="h-5 w-5" style={{ color: brand }} /> Horários</h3>
           <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl space-y-6" style={glass}>
@@ -404,29 +472,48 @@ export function VisaoDono({
               })}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <input type="time" value={horariosLoja.abertura} onChange={e => setHorariosLoja({...horariosLoja, abertura: e.target.value})} className="bg-black/30 border border-white/10 rounded-xl p-4 text-white text-center" />
-              <input type="time" value={horariosLoja.fechamento} onChange={e => setHorariosLoja({...horariosLoja, fechamento: e.target.value})} className="bg-black/30 border border-white/10 rounded-xl p-4 text-white text-center" />
+              <div className="space-y-1">
+                <p className="text-[9px] text-zinc-500 uppercase font-black ml-1">Abertura</p>
+                <input type="time" value={horariosLoja.abertura} onChange={e => setHorariosLoja({...horariosLoja, abertura: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white text-center" style={{colorScheme: 'dark'}} />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[9px] text-zinc-500 uppercase font-black ml-1">Fechamento</p>
+                <input type="time" value={horariosLoja.fechamento} onChange={e => setHorariosLoja({...horariosLoja, fechamento: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white text-center" style={{colorScheme: 'dark'}} />
+              </div>
             </div>
             <Button onClick={handleSaveHorarios} disabled={isSavingHorario} className="w-full h-14 rounded-2xl bg-white/10 text-white font-black uppercase tracking-widest text-xs">{isSavingHorario ? <Loader2 className="animate-spin h-5 w-5" /> : "Salvar Horários"}</Button>
           </Card>
         </div>
 
+        {/* EQUIPE */}
         <div className="flex flex-col gap-4">
           <h3 className="font-black text-white uppercase text-lg italic flex items-center gap-2 px-1"><Users className="h-5 w-5" style={{ color: brand }} /> Equipe</h3>
           <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl space-y-4" style={glass}>
             <Input placeholder="Nome do Barbeiro" className="bg-black/30 border-white/10 h-14 rounded-xl" value={nBarbeiro.nome} onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} />
+            
+            <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-[10px] uppercase font-black cursor-pointer hover:bg-white/5">
+              {imagemBarbeiro ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <UserCircle2 className="h-4 w-4 opacity-50" />} 
+              {imagemBarbeiro ? "Foto Selecionada" : "Anexar Foto (Opcional)"}
+              <input type="file" accept="image/*" className="hidden" onChange={e => setImagemBarbeiro(e.target.files?.[0] || null)} />
+            </label>
+
             <div className="flex gap-3">
               <Input placeholder="E-mail" className="bg-black/30 border-white/10 h-14 rounded-xl flex-1" value={nBarbeiro.email} onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} />
-              <Input placeholder="%" type="number" className="bg-black/30 border-white/10 h-14 rounded-xl w-24 text-center" value={nBarbeiro.comissao} onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} />
+              <Input placeholder="%" type="number" className="bg-black/30 border-white/10 h-14 rounded-xl w-20 text-center" value={nBarbeiro.comissao} onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} />
             </div>
-            <Button onClick={handleAddBarbeiroComFotoETrava} disabled={isUploadingBarbeiro} className="w-full h-14 rounded-2xl font-black uppercase shadow-lg" style={{ backgroundColor: brand, color: ctaFg }}>{isUploadingBarbeiro ? <Loader2 className="animate-spin h-5 w-5" /> : "Cadastrar Barbeiro"}</Button>
+            <Input placeholder="Senha" type="password" className="bg-black/30 border-white/10 h-14 rounded-xl" value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
+            <Button onClick={handleAddBarbeiroComFotoETrava} disabled={isUploadingBarbeiro} className="w-full h-14 rounded-2xl font-black uppercase shadow-lg shadow-black/40" style={{ backgroundColor: brand, color: ctaFg }}>{isUploadingBarbeiro ? <Loader2 className="animate-spin h-5 w-5" /> : "Cadastrar Barbeiro"}</Button>
           </Card>
+          
           <div className="grid gap-3">
             {barbeiros.map((b: any) => (
               <div key={b.id} className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={cn("h-10 w-10 rounded-full flex items-center justify-center font-black", b.ativo ? "bg-emerald-500/20 text-emerald-500" : "bg-red-500/20 text-red-500")}>{b.nome[0].toUpperCase()}</div>
-                  <p className="font-bold text-sm uppercase">{b.nome} ({b.comissao_pct}%)</p>
+                  <div>
+                    <p className="font-bold text-xs uppercase">{b.nome}</p>
+                    <p className="text-[10px] text-zinc-500 uppercase font-black">{b.comissao_pct}% comissão</p>
+                  </div>
                 </div>
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" onClick={() => onToggleBarbeiroStatus(b.id, !b.ativo)} className="text-zinc-500">{b.ativo ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}</Button>
@@ -445,8 +532,8 @@ export function VisaoDono({
       <div className="flex flex-col items-center justify-center min-h-[80vh] text-center px-8">
         <div className="h-28 w-28 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mb-8 shadow-2xl"><Lock className="h-12 w-12 text-red-500" /></div>
         <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter mb-4">Acesso Suspenso</h2>
-        <p className="text-zinc-500 text-sm leading-relaxed mb-10">Sua conta requer atenção manual. Fale com nosso suporte técnico.</p>
-        <Button onClick={() => window.open('https://wa.me/5517992051576')} className="bg-zinc-800 h-16 w-full rounded-2xl font-black uppercase tracking-widest italic">Suporte CAJ TECH</Button>
+        <p className="text-zinc-500 text-sm leading-relaxed mb-10 italic">Sua conta requer atenção manual. Fale com nosso suporte técnico.</p>
+        <Button onClick={() => window.open('https://wa.me/5517992051576')} className="bg-zinc-800 h-16 w-full rounded-2xl font-black uppercase tracking-widest italic shadow-xl">Suporte CAJ TECH</Button>
       </div>
     );
   }
@@ -458,11 +545,11 @@ export function VisaoDono({
            <Lock className="w-16 h-16 text-red-500 mx-auto opacity-40" />
            <h2 className="text-3xl font-black text-white uppercase italic leading-none">Sistema<br/>Bloqueado</h2>
            <div className="bg-black/50 border border-zinc-800 p-5 rounded-3xl">
-             <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Assinatura Mensal</p>
+             <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1 italic">Assinatura Mensal</p>
              <p className="text-3xl font-black text-white italic">R$ {getValorPlano(planoAtual).toFixed(2)}</p>
            </div>
            {!pixGerado ? (
-             <Button onClick={() => handleAbrirCheckout('renovacao')} disabled={isGerandoPix} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 rounded-2xl shadow-xl uppercase italic tracking-widest">
+             <Button onClick={() => handleAbrirCheckout('renovacao')} disabled={isGerandoPix} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 rounded-2xl shadow-xl uppercase italic tracking-widest text-base">
                {isGerandoPix ? <Loader2 className="animate-spin h-6 w-6" /> : "Pagar via PIX Agora"}
              </Button>
            ) : (
@@ -471,6 +558,7 @@ export function VisaoDono({
                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-4">Expira em {formatarTempo(tempoPix)}</p>
                  <Button onClick={copiarPix} className="w-full bg-emerald-500 text-black font-black h-14 rounded-xl flex items-center justify-center gap-2">Copiar Código PIX</Button>
                </div>
+               <p className="text-[10px] text-zinc-500 italic uppercase font-black">Desbloqueio automático após pagamento</p>
              </div>
            )}
         </div>
@@ -484,19 +572,19 @@ export function VisaoDono({
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl overflow-y-auto">
         <div className="w-full max-w-4xl flex flex-col gap-8 py-10">
           <div className="flex justify-between items-center px-4">
-            <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Planos CAJ TECH</h2>
+            <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter italic">Planos CAJ TECH</h2>
             <button onClick={() => setModalUpgradeAberto(false)} className="bg-white/5 h-12 w-12 rounded-full flex items-center justify-center"><X className="text-zinc-500 h-6 w-6" /></button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4 pb-20">
-             {['starter', 'pro', 'elite'].map((p: any) => (
-               <Card key={p} className={cn("p-8 rounded-[32px] flex flex-col justify-between gap-8 transition-all border-2", planoAtual === p ? "border-white/10 bg-white/5 opacity-50" : "border-emerald-500/20 bg-black")}>
+             {(['starter', 'pro', 'elite'] as PlanoType[]).map((p) => (
+               <Card key={p} className={cn("p-8 rounded-[32px] flex flex-col justify-between gap-8 transition-all border-2", planoAtual === p ? "border-white/10 bg-white/5 opacity-50" : "border-emerald-500/20 bg-black shadow-2xl")}>
                   <div className="space-y-4">
                     <h3 className="text-zinc-400 font-black uppercase text-xs tracking-[0.3em]">{p}</h3>
                     <p className="text-4xl font-black text-white italic">R$ {getValorPlano(p).toFixed(0)}<span className="text-xs opacity-30">/mês</span></p>
                     <ul className="space-y-3">
-                       <li className="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Link de Agenda</li>
-                       {p !== 'starter' && <li className="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> WhatsApp VIP</li>}
-                       {p === 'elite' && <li className="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Marketing Full</li>}
+                       <li className="flex items-center gap-2 text-[10px] font-black text-zinc-300 uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Link de Agenda</li>
+                       {p !== 'starter' && <li className="flex items-center gap-2 text-[10px] font-black text-zinc-300 uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> WhatsApp VIP</li>}
+                       {p === 'elite' && <li className="flex items-center gap-2 text-[10px] font-black text-zinc-300 uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Marketing Full</li>}
                     </ul>
                   </div>
                   {planoAtual === p ? (
@@ -519,18 +607,18 @@ export function VisaoDono({
         <div className="bg-zinc-900 border border-white/5 w-full max-w-sm rounded-[40px] p-8 space-y-8 relative shadow-2xl overflow-hidden animate-in zoom-in-95">
           <button onClick={() => { setModalPagamentoAberto(false); setPixGerado(null); }} className="absolute top-6 right-6 text-zinc-600"><X className="h-6 w-6" /></button>
           <div className="text-center space-y-2">
-            <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Checkout</h2>
-            <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Plano {planoPagamento} • R$ {getValorPlano(planoPagamento).toFixed(2)}</p>
+            <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Pagamento Seguro</h2>
+            <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest italic">Plano {planoPagamento} • R$ {getValorPlano(planoPagamento).toFixed(2)}</p>
           </div>
           {!pixGerado ? (
-             <Button onClick={handleGerarPixDinâmico} disabled={isGerandoPix} className="w-full bg-emerald-600 text-white font-black h-16 rounded-2xl uppercase italic tracking-widest shadow-xl shadow-emerald-600/20">{isGerandoPix ? <Loader2 className="animate-spin h-5 w-5" /> : "Gerar PIX"}</Button>
+             <Button onClick={handleGerarPixDinâmico} disabled={isGerandoPix} className="w-full bg-emerald-600 text-white font-black h-16 rounded-2xl uppercase italic tracking-widest shadow-xl shadow-emerald-600/20">{isGerandoPix ? <Loader2 className="animate-spin h-5 w-5" /> : "Gerar PIX de Pagamento"}</Button>
            ) : (
              <div className="space-y-6 animate-in fade-in zoom-in-95 text-center">
                <div className="bg-emerald-500/5 border border-emerald-500/20 p-6 rounded-3xl">
-                 <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-4">Expira em {formatarTempo(tempoPix)}</p>
+                 <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-4 italic">Expira em {formatarTempo(tempoPix)}</p>
                  <Button onClick={copiarPix} className="w-full bg-emerald-500 text-black font-black h-14 rounded-xl flex items-center justify-center gap-2">Copiar Código</Button>
                </div>
-               <p className="text-[10px] text-zinc-500 font-bold uppercase italic tracking-widest">Desbloqueio automático em 1 min</p>
+               <p className="text-[10px] text-zinc-500 font-black uppercase italic tracking-widest">O sistema desbloqueia em 1 min após o PIX</p>
              </div>
            )}
         </div>
