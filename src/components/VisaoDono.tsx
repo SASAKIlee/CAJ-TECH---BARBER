@@ -69,6 +69,9 @@ export function VisaoDono({
   onAddBarbeiro, onRemoveBarbeiro, onAddServico, onRemoveServico, onToggleBarbeiroStatus, corPrimaria = "#D4AF37",
 }: any) {
   
+  // SOLUÇÃO: Estado seguro para guardar o Slug da loja sem depender de array de barbeiros
+  const [meuSlug, setMeuSlug] = useState<string>("");
+
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
   const [imagemBarbeiro, setImagemBarbeiro] = useState<File | null>(null);
   const [isUploadingBarbeiro, setIsUploadingBarbeiro] = useState(false);
@@ -94,8 +97,7 @@ export function VisaoDono({
   const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
   const [fasePagamento, setFasePagamento] = useState<1 | 2 | 3 | 4>(1);
 
-  // ESTADOS DO PIX DINÂMICO INTEGRADO
-  const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter"); // Qual plano o cara está comprando AGORA
+  const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter");
   const [isGerandoPix, setIsGerandoPix] = useState(false);
   const [pixGerado, setPixGerado] = useState<string | null>(null);
   const [tempoPix, setTempoPix] = useState(900);
@@ -105,6 +107,7 @@ export function VisaoDono({
   const glass = { backgroundColor: hexToRgba(brand, 0.1), backdropFilter: "blur(14px)" } as const;
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
+  // SOLUÇÃO: tabVariants dentro do escopo correto
   const tabVariants = {
     enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
     center: { x: 0, opacity: 1 },
@@ -113,12 +116,18 @@ export function VisaoDono({
 
   useEffect(() => {
     async function carregarDadosLoja() {
-      const slugAtivo = barbeiros[0]?.barbearia_slug;
-      if (!slugAtivo) return;
+      // SOLUÇÃO: Busca blindada - Pega a barbearia pelo ID do usuário logado
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return;
       
-      const { data, error } = await supabase.from('barbearias').select('*').eq('slug', slugAtivo).single();
+      const { data, error } = await supabase
+        .from('barbearias')
+        .select('*')
+        .eq('dono_id', authData.user.id)
+        .single();
         
       if (data && !error) {
+        setMeuSlug(data.slug);
         setIsLojaAtiva(data.ativo !== false); 
         setPlanoAtual(data.plano || "starter");
         setHorariosLoja({
@@ -142,7 +151,7 @@ export function VisaoDono({
       }
     }
     carregarDadosLoja();
-  }, [barbeiros]);
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -167,9 +176,8 @@ export function VisaoDono({
     return 99.90;
   };
 
-  // ROTEADOR CENTRAL DE PAGAMENTOS E UPGRADES
   const handleAbrirCheckout = (tipo: 'renovacao' | 'upgrade', planoAlvo?: PlanoType) => {
-    setPixGerado(null); // Reseta PIX anterior se houver
+    setPixGerado(null);
     if (tipo === 'renovacao') {
       setPlanoPagamento(planoAtual);
       setModalPagamentoAberto(true);
@@ -183,17 +191,18 @@ export function VisaoDono({
   const handleGerarPixDinâmico = async () => {
     setIsGerandoPix(true);
     try {
-      const slugAtivo = barbeiros[0]?.barbearia_slug;
-      if (!slugAtivo) throw new Error("Barbearia não identificada.");
+      // SOLUÇÃO: Garante a identificação do dono blindada
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) throw new Error("Usuário não autenticado.");
 
-      const { data: barbearia } = await supabase.from('barbearias').select('id').eq('slug', slugAtivo).single();
-      if (!barbearia) throw new Error("Erro ao localizar ID da barbearia.");
+      const { data: barbearia } = await supabase.from('barbearias').select('id').eq('dono_id', authData.user.id).single();
+      if (!barbearia) throw new Error("Barbearia não identificada. Entre em contato com o suporte.");
 
       const { data, error } = await supabase.functions.invoke('mercado-pago-pix', {
         body: {
           barbearia_id: barbearia.id,
-          plano: planoPagamento, // USA O PLANO SELECIONADO (Evolução ou Renovação)
-          email_dono: "financeiro@cajtech.net.br"
+          plano: planoPagamento,
+          email_dono: authData.user.email || "financeiro@cajtech.net.br"
         }
       });
 
@@ -274,18 +283,24 @@ export function VisaoDono({
   };
 
   const handleSaveHorarios = async () => {
-    const slugAtivo = barbeiros[0]?.barbearia_slug;
-    if (!slugAtivo) return;
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return toast.error("Autenticação inválida.");
+    
     setIsSavingHorario(true);
     try {
       const { error } = await supabase.from('barbearias').update({
         horario_abertura: horariosLoja.abertura, horario_fechamento: horariosLoja.fechamento, 
         dias_trabalho: horariosLoja.dias_trabalho, inicio_almoco: horariosLoja.inicio_almoco, 
         fim_almoco: horariosLoja.fim_almoco, datas_fechadas: horariosLoja.datas_fechadas
-      }).eq('slug', slugAtivo);
+      }).eq('dono_id', authData.user.id);
+      
       if (error) throw error;
-      toast.success("Configurações salvas!");
-    } catch (err) { toast.error("Erro ao salvar."); } finally { setIsSavingHorario(false); }
+      toast.success("Configurações salvas com sucesso!");
+    } catch (err) { 
+      toast.error("Erro ao salvar horários."); 
+    } finally { 
+      setIsSavingHorario(false); 
+    }
   };
 
   const toggleDiaSemana = (idDia: number) => {
@@ -379,7 +394,7 @@ export function VisaoDono({
   }
 
   function renderTabResumo() {
-    const slug = barbeiros[0]?.barbearia_slug || "seu-slug";
+    const slug = meuSlug || "seu-slug";
     return (
       <>
         <section>
@@ -436,7 +451,7 @@ export function VisaoDono({
 
   function renderTabVIP() {
     return (
-      <section className="space-y-4">
+      <section className="space-y-4 animate-in fade-in duration-500">
         <h3 className="font-black text-white uppercase text-xl italic flex items-center gap-2">
           <Zap className="h-5 w-5" style={{ color: brand }} /> Automações VIP
         </h3>
