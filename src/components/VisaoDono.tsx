@@ -3,7 +3,7 @@ import {
   Users, Scissors, Trash2, Plus, Power, PowerOff, 
   Copy, FileText, Settings2, Clock, Save, 
   BarChart3, CalendarX2, ImagePlus, Loader2, Lock, 
-  Zap, Crown, CheckCircle2, X, Timer, QrCode, CheckCircle
+  Zap, Crown, CheckCircle2, X, Timer, QrCode, CheckCircle, UserCircle2
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import imageCompression from 'browser-image-compression';
 
-/**
- * ==========================================
- * CONSTANTES E TIPAGENS
- * ==========================================
- */
 const MotionButton = motion.create(Button);
 
 const DIAS_SEMANA = [
@@ -74,50 +69,47 @@ export function VisaoDono({
   onAddBarbeiro, onRemoveBarbeiro, onAddServico, onRemoveServico, onToggleBarbeiroStatus, corPrimaria = "#D4AF37",
 }: any) {
   
-  // --- ESTADOS DE DADOS (CADASTROS) ---
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
-  const [nServico, setNServico] = useState({ nome: "", preco: "", duracao_minutos: "30" });
+  const [imagemBarbeiro, setImagemBarbeiro] = useState<File | null>(null);
+  const [isUploadingBarbeiro, setIsUploadingBarbeiro] = useState(false);
 
-  // --- ESTADOS DE UI/NAVEGAÇÃO ---
+  const [nServico, setNServico] = useState({ nome: "", preco: "", duracao_minutos: "30" });
+  const [imagemServico, setImagemServico] = useState<File | null>(null);
+  const [isUploadingServico, setIsUploadingServico] = useState(false);
+
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
 
-  // --- ESTADOS DE CONFIGURAÇÃO DA LOJA ---
   const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
   const [planoAtual, setPlanoAtual] = useState<PlanoType>("starter");
   const [horariosLoja, setHorariosLoja] = useState({ 
     abertura: "09:00", fechamento: "18:00", dias_trabalho: [1, 2, 3, 4, 5, 6],
     inicio_almoco: "12:00", fim_almoco: "13:00", datas_fechadas: [] as string[]
   });
+  const [novaDataFechada, setNovaDataFechada] = useState("");
   const [isSavingHorario, setIsSavingHorario] = useState(false);
 
-  // --- ESTADOS DO SEMÁFORO DE PAGAMENTO ---
   const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
   const [fasePagamento, setFasePagamento] = useState<1 | 2 | 3 | 4>(1);
 
-  // 🚀 NOVOS ESTADOS: SIMULAÇÃO DO PIX DINÂMICO
   const [isGerandoPix, setIsGerandoPix] = useState(false);
   const [pixGerado, setPixGerado] = useState<string | null>(null);
-  const [tempoPix, setTempoPix] = useState(900); // 15 minutos em segundos
-
-  const tabVariants = {
-    enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
-    center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir * -56, opacity: 0 })
-  };
+  const [tempoPix, setTempoPix] = useState(900);
 
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
   const glass = { backgroundColor: hexToRgba(brand, 0.1), backdropFilter: "blur(14px)" } as const;
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
-  /**
-   * ==========================================
-   * LÓGICA DE NEGÓCIO E EFEITOS
-   * ==========================================
-   */
+  // CONFIGURAÇÃO DAS ANIMAÇÕES (Resolve o erro tabVariants)
+  const tabVariants = {
+    enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir * -56, opacity: 0 })
+  };
+
   useEffect(() => {
     async function carregarDadosLoja() {
       const slugAtivo = barbeiros[0]?.barbearia_slug;
@@ -151,13 +143,12 @@ export function VisaoDono({
     carregarDadosLoja();
   }, [barbeiros]);
 
-  // 🚀 LÓGICA DO CRONÔMETRO DO PIX
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (pixGerado && tempoPix > 0) {
       interval = setInterval(() => setTempoPix(t => t - 1), 1000);
     } else if (tempoPix === 0) {
-      setPixGerado(null); // Expirou
+      setPixGerado(null);
     }
     return () => clearInterval(interval);
   }, [pixGerado, tempoPix]);
@@ -181,31 +172,22 @@ export function VisaoDono({
       const slugAtivo = barbeiros[0]?.barbearia_slug;
       if (!slugAtivo) throw new Error("Barbearia não identificada.");
 
-      // 1. Buscamos o ID real da barbearia no banco (o Mercado Pago precisa do ID para confirmar quem pagou depois)
-      const { data: barbearia } = await supabase
-        .from('barbearias')
-        .select('id')
-        .eq('slug', slugAtivo)
-        .single();
-
+      const { data: barbearia } = await supabase.from('barbearias').select('id').eq('slug', slugAtivo).single();
       if (!barbearia) throw new Error("Erro ao localizar ID da barbearia.");
 
-      // 2. Chamamos o robô (Edge Function) que você acabou de criar no Supabase!
       const { data, error } = await supabase.functions.invoke('mercado-pago-pix', {
         body: {
           barbearia_id: barbearia.id,
           plano: planoAtual,
-          email_dono: "financeiro@cajtech.net.br" // Email padrão de cobrança
+          email_dono: "financeiro@cajtech.net.br"
         }
       });
 
-      // 3. Tratamento de Erros
       if (error) throw new Error("Erro na comunicação com o servidor de pagamentos.");
       if (data?.error) throw new Error(data.error);
 
-      // 4. Sucesso! Mostra o PIX real Copia e Cola na tela
       setPixGerado(data.qr_code); 
-      setTempoPix(900); // Inicia o timer de 15 minutos
+      setTempoPix(900);
       toast.success("PIX gerado com sucesso! Copie o código abaixo.");
       
     } catch (err: any) {
@@ -214,6 +196,7 @@ export function VisaoDono({
       setIsGerandoPix(false);
     }
   };
+
   const copiarPix = () => {
     if (pixGerado) {
       navigator.clipboard.writeText(pixGerado);
@@ -227,15 +210,97 @@ export function VisaoDono({
     setSubTab(next);
   };
 
-  // --- BLOQUEIOS DE SEGURANÇA ---
+  const handleUploadImagem = async (file: File, bucket: string) => {
+    try {
+      const compressed = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 600 });
+      const fileName = `${Math.random()}.${compressed.name.split('.').pop()}`;
+      const { error } = await supabase.storage.from(bucket).upload(fileName, compressed);
+      if (error) throw error;
+      return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
+    } catch (err) {
+      toast.error("Erro no processamento da imagem.");
+      return null;
+    }
+  };
+
+  const handleAddBarbeiroComFotoETrava = async () => {
+    if (planoAtual === "starter" && barbeiros.length >= 2) {
+      setModalUpgradeAberto(true);
+      return toast.error("Upgrade necessário: Plano Starter permite 2 profissionais.");
+    }
+    const validacao = barbeiroSchema.safeParse(nBarbeiro);
+    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
+    
+    setIsUploadingBarbeiro(true);
+    let urlFinal = null;
+    if (imagemBarbeiro) {
+      urlFinal = await handleUploadImagem(imagemBarbeiro, 'equipe');
+    }
+
+    onAddBarbeiro(validacao.data.nome, Number(validacao.data.comissao), validacao.data.email, validacao.data.senha, urlFinal);
+    setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
+    setImagemBarbeiro(null);
+    setIsUploadingBarbeiro(false);
+  };
+
+  const handleAddServicoComFoto = async () => {
+    const validacao = servicoSchema.safeParse(nServico);
+    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
+    
+    setIsUploadingServico(true);
+    let urlFinal = null;
+    if (imagemServico) {
+      urlFinal = await handleUploadImagem(imagemServico, 'servicos');
+    }
+
+    onAddServico(validacao.data.nome, Number(validacao.data.preco), Number(validacao.data.duracao_minutos), urlFinal);
+    setNServico({ nome: "", preco: "", duracao_minutos: "30" });
+    setImagemServico(null);
+    setIsUploadingServico(false);
+  };
+
+  const handleSaveHorarios = async () => {
+    const slugAtivo = barbeiros[0]?.barbearia_slug;
+    if (!slugAtivo) return;
+    setIsSavingHorario(true);
+    try {
+      const { error } = await supabase.from('barbearias').update({
+        horario_abertura: horariosLoja.abertura, horario_fechamento: horariosLoja.fechamento, 
+        dias_trabalho: horariosLoja.dias_trabalho, inicio_almoco: horariosLoja.inicio_almoco, 
+        fim_almoco: horariosLoja.fim_almoco, datas_fechadas: horariosLoja.datas_fechadas
+      }).eq('slug', slugAtivo);
+      if (error) throw error;
+      toast.success("Configurações salvas!");
+    } catch (err) { toast.error("Erro ao salvar."); } finally { setIsSavingHorario(false); }
+  };
+
+  const toggleDiaSemana = (idDia: number) => {
+    setHorariosLoja(prev => {
+      const isSelected = prev.dias_trabalho.includes(idDia);
+      const novosDias = isSelected ? prev.dias_trabalho.filter(d => d !== idDia) : [...prev.dias_trabalho, idDia].sort();
+      return { ...prev, dias_trabalho: novosDias };
+    });
+  };
+
+  const handleAddDataFechada = () => {
+    if (!novaDataFechada) return;
+    if (horariosLoja.datas_fechadas.includes(novaDataFechada)) return toast.error("Esta data já está bloqueada.");
+    setHorariosLoja(prev => ({ ...prev, datas_fechadas: [...prev.datas_fechadas, novaDataFechada].sort() }));
+    setNovaDataFechada("");
+  };
+
+  const handleRemoveDataFechada = (dataParaRemover: string) => {
+    setHorariosLoja(prev => ({ ...prev, datas_fechadas: prev.datas_fechadas.filter(d => d !== dataParaRemover) }));
+  };
+
+  const formatarDataBR = (dataIso: string) => {
+    const [ano, mes, dia] = dataIso.split("-");
+    return `${dia}/${mes}/${ano}`;
+  };
+
   if (isLojaAtiva === false) return renderBloqueioManual();
   if (fasePagamento === 4) return renderBloqueioInadimplencia();
 
-  /**
-   * ==========================================
-   * RENDERIZAÇÃO PRINCIPAL (UI)
-   * ==========================================
-   */
   return (
     <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden text-white">
       {renderBannersAlerta()}
@@ -254,12 +319,6 @@ export function VisaoDono({
       {renderModalRenovacao()}
     </div>
   );
-
-  /**
-   * ==========================================
-   * FUNÇÕES DE RENDERIZAÇÃO ESPECÍFICAS
-   * ==========================================
-   */
 
   function renderBannersAlerta() {
     return (
@@ -362,31 +421,254 @@ export function VisaoDono({
   }
 
   function renderTabVIP() {
-    // (Código do VIP mantido idêntico para poupar espaço)
     return (
       <section className="space-y-4">
         <h3 className="font-black text-white uppercase text-xl italic flex items-center gap-2">
           <Zap className="h-5 w-5" style={{ color: brand }} /> Automações VIP
         </h3>
-        <p className="text-zinc-500 text-[10px] uppercase font-bold italic">Aba em homologação.</p>
+        {planoAtual === "starter" ? (
+          <Card className="p-8 rounded-[22px] border border-white/[0.08] text-center flex flex-col items-center gap-4" style={glass}>
+            <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
+               <Lock className="h-8 w-8 text-zinc-600" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-lg font-bold text-white uppercase italic">Recursos Bloqueados</h4>
+              <p className="text-sm text-zinc-400 max-w-[220px] mx-auto">Sua barbearia está no plano Starter. Evolua para o PRO para liberar:</p>
+            </div>
+            <div className="space-y-3 w-full text-left bg-black/30 p-5 rounded-2xl border border-white/5">
+              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4"/> Lembretes WhatsApp <span className="ml-auto text-[8px] bg-white/10 px-2 py-1 rounded-full tracking-widest">EM BREVE</span></p>
+              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4"/> Clube de Assinatura <span className="ml-auto text-[8px] bg-white/10 px-2 py-1 rounded-full tracking-widest">EM BREVE</span></p>
+              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4"/> Barbeiros Ilimitados</p>
+            </div>
+            <Button onClick={() => setModalUpgradeAberto(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg shadow-emerald-600/20 text-sm">Desbloquear Agora</Button>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+             <Card onClick={() => toast.info("🚀 Funcionalidade em fase final de testes. Você será o primeiro a receber!")} className="p-6 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 cursor-pointer relative group transition-all hover:bg-emerald-500/10">
+               <span className="absolute top-4 right-4 text-[9px] bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full font-black uppercase tracking-widest group-hover:scale-110 transition-transform">Em Breve</span>
+               <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 bg-emerald-500/10 rounded-full flex items-center justify-center">
+                    <Zap className="h-6 w-6 text-emerald-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-sm uppercase">Lembretes Automáticos</h4>
+                    <p className="text-xs text-zinc-400 font-medium mt-1">WhatsApp disparado 2h antes de cada agendamento.</p>
+                  </div>
+               </div>
+             </Card>
+
+             <Card onClick={() => toast.info("🚀 Em fase de homologação. Em breve na sua barbearia!")} className="p-6 rounded-3xl border border-yellow-500/20 bg-yellow-500/5 cursor-pointer relative group transition-all hover:bg-yellow-500/10">
+               <span className="absolute top-4 right-4 text-[9px] bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full font-black uppercase tracking-widest group-hover:scale-110 transition-transform">Em Breve</span>
+               <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 bg-yellow-500/10 rounded-full flex items-center justify-center">
+                    <Crown className="h-6 w-6 text-yellow-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-sm uppercase">Clube de Assinatura</h4>
+                    <p className="text-xs text-zinc-400 font-medium mt-1">Crie planos mensais recorrentes para seus clientes VIP.</p>
+                  </div>
+               </div>
+             </Card>
+          </div>
+        )}
       </section>
     );
   }
 
   function renderTabConfig() {
-    // (Código de Config mantido idêntico para poupar espaço)
     return (
-      <section className="space-y-8 animate-in fade-in duration-500">
-        <p className="text-zinc-500 text-[10px] uppercase font-bold italic text-center">Acesse pelo PC para ajustes de horário e equipe.</p>
+      <section className="space-y-10 animate-in fade-in duration-500">
+        
+        {/* CONFIGURAÇÃO DE HORÁRIOS */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Clock className="h-5 w-5" style={{ color: brand }} />
+            <h3 className="font-black text-white uppercase text-lg tracking-tight italic">Horário de Funcionamento</h3>
+          </div>
+          <Card className="p-5 sm:p-6 rounded-[22px] border border-white/[0.08] shadow-xl space-y-6" style={glass}>
+            <div className="space-y-3">
+              <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Dias de Atendimento</p>
+              <div className="flex justify-between gap-1.5 sm:gap-2">
+                {DIAS_SEMANA.map((dia) => {
+                  const isSelected = horariosLoja.dias_trabalho.includes(dia.id);
+                  return (
+                    <button key={dia.id} onClick={() => toggleDiaSemana(dia.id)}
+                      className={cn("h-12 flex-1 rounded-xl text-sm font-black transition-all border", isSelected ? "border-transparent shadow-lg" : "bg-black/30 border-white/[0.08] text-white/40")}
+                      style={isSelected ? { backgroundColor: brand, color: ctaFg } : {}}>
+                      {dia.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 space-y-2">
+                <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Abertura</label>
+                <input type="time" value={horariosLoja.abertura} onChange={e => setHorariosLoja({...horariosLoja, abertura: e.target.value})} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{colorScheme: 'dark'}} />
+              </div>
+              <div className="flex-1 space-y-2">
+                <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Fechamento</label>
+                <input type="time" value={horariosLoja.fechamento} onChange={e => setHorariosLoja({...horariosLoja, fechamento: e.target.value})} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{colorScheme: 'dark'}} />
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/[0.05] space-y-3">
+              <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Pausa (Almoço / Descanso)</p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Início Pausa</label>
+                  <input type="time" value={horariosLoja.inicio_almoco} onChange={e => setHorariosLoja({...horariosLoja, inicio_almoco: e.target.value})} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{colorScheme: 'dark'}} />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Fim Pausa</label>
+                  <input type="time" value={horariosLoja.fim_almoco} onChange={e => setHorariosLoja({...horariosLoja, fim_almoco: e.target.value})} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{colorScheme: 'dark'}} />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/[0.05] space-y-3">
+              <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Adicionar dia Fechado (Feriado)</p>
+              <div className="flex gap-2">
+                 <input type="date" value={novaDataFechada} onChange={(e) => setNovaDataFechada(e.target.value)} className="flex-1 rounded-xl border border-white/[0.08] bg-black/30 p-4 text-base text-white outline-none focus:border-white/20" style={{ colorScheme: 'dark' }} />
+                 <Button onClick={handleAddDataFechada} className="h-14 w-14 shrink-0 rounded-xl" style={{ backgroundColor: brand, color: ctaFg }}>
+                   <Plus className="h-6 w-6 stroke-[3px]" />
+                 </Button>
+              </div>
+              {horariosLoja.datas_fechadas.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {horariosLoja.datas_fechadas.map(data => (
+                    <div key={data} className="flex items-center gap-2 bg-black/40 border border-white/[0.08] pl-3 pr-1 py-1 rounded-full">
+                      <span className="text-[11px] font-bold">{formatarDataBR(data)}</span>
+                      <button onClick={() => handleRemoveDataFechada(data)} className="h-6 w-6 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Button onClick={handleSaveHorarios} disabled={isSavingHorario} className="w-full bg-white/10 hover:bg-white/20 text-white h-14 rounded-xl font-black uppercase text-sm tracking-wider mt-4">
+              {isSavingHorario ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Save className="h-5 w-5 mr-2" />} 
+              {isSavingHorario ? "Salvando..." : "Salvar Horários"}
+            </Button>
+          </Card>
+        </div>
+
+        {/* GESTÃO DE EQUIPE */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Users className="h-5 w-5" style={{ color: brand }} />
+            <h3 className="font-black text-white uppercase text-lg tracking-tight italic">Equipe de Barbeiros</h3>
+          </div>
+          <Card className="p-5 sm:p-6 rounded-[22px] border border-white/[0.08] space-y-4" style={glass}>
+            <Input placeholder="Nome completo do barbeiro" className="bg-black/30 border-white/10 h-14 rounded-xl text-base px-4" value={nBarbeiro.nome} onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} />
+            
+            <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-xs uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
+              {imagemBarbeiro ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <UserCircle2 className="h-5 w-5 opacity-50" />} 
+              <span className="opacity-80">{imagemBarbeiro ? "Foto Selecionada: " + imagemBarbeiro.name.substring(0, 15) : "Anexar Foto do Perfil (Opcional)"}</span>
+              <input type="file" accept="image/*" className="hidden" onChange={e => setImagemBarbeiro(e.target.files?.[0] || null)} />
+            </label>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input placeholder="E-mail de acesso" className="flex-1 bg-black/30 border-white/10 h-14 rounded-xl text-base px-4" value={nBarbeiro.email} onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} />
+              <div className="relative w-full sm:w-32">
+                 <span className="absolute right-4 top-4 text-zinc-500 font-black">%</span>
+                 <Input placeholder="Comissão" type="number" className="w-full bg-black/30 border-white/10 h-14 rounded-xl text-base px-4 pr-10" value={nBarbeiro.comissao} onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} />
+              </div>
+            </div>
+            <Input placeholder="Senha de acesso" type="password" className="bg-black/30 border-white/10 h-14 rounded-xl text-base px-4" value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
+            <Button onClick={handleAddBarbeiroComFotoETrava} disabled={isUploadingBarbeiro} className="w-full h-14 rounded-xl font-black uppercase text-sm tracking-wider" style={{ backgroundColor: brand, color: ctaFg }}>
+              {isUploadingBarbeiro ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Plus className="h-5 w-5 mr-2" />}
+              {isUploadingBarbeiro ? "Processando..." : "Cadastrar Profissional"}
+            </Button>
+          </Card>
+          
+          <div className="grid gap-3">
+             {barbeiros.map((b: any) => (
+               <div key={b.id} className="bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl flex items-center justify-between group">
+                 <div className="flex items-center gap-4">
+                    {b.url_foto ? (
+                      <img src={b.url_foto} alt={b.nome} className={cn("h-12 w-12 rounded-full object-cover border-2", b.ativo ? "border-emerald-500" : "border-red-500 grayscale opacity-50")} />
+                    ) : (
+                      <div className={cn("h-12 w-12 rounded-full flex items-center justify-center text-lg font-black", b.ativo ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50" : "bg-red-500/20 text-red-500 border border-red-500/50")}>
+                        {b.nome.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className={cn("text-base font-black uppercase italic tracking-tight", !b.ativo && "opacity-50 line-through")}>{b.nome}</p>
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Comissão: <span className="text-white">{b.comissao_pct}%</span></p>
+                    </div>
+                 </div>
+                 <div className="flex gap-2">
+                    <Button size="icon" variant="ghost" className="h-10 w-10 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl" onClick={() => onToggleBarbeiroStatus(b.id, !b.ativo)}>
+                      {b.ativo ? <PowerOff className="h-5 w-5" /> : <Power className="h-5 w-5" />}
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-10 w-10 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl" disabled={b.ativo} onClick={() => onRemoveBarbeiro(b.id)}>
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                 </div>
+               </div>
+             ))}
+          </div>
+        </div>
+
+        {/* GESTÃO DE SERVIÇOS */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Scissors className="h-5 w-5" style={{ color: brand }} />
+            <h3 className="font-black text-white uppercase text-lg tracking-tight italic">Serviços e Tabela de Preços</h3>
+          </div>
+          <Card className="p-5 sm:p-6 rounded-[22px] border border-white/[0.08] space-y-4" style={glass}>
+            <Input placeholder="Nome do serviço (ex: Corte Degradê)" className="bg-black/30 border-white/10 h-14 rounded-xl text-base px-4" value={nServico.nome} onChange={e => setNServico({...nServico, nome: e.target.value})} />
+            <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-xs uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
+              {imagemServico ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <ImagePlus className="h-5 w-5 opacity-50" />} 
+              <span className="opacity-80">{imagemServico ? "Foto: " + imagemServico.name.substring(0, 15) : "Anexar Foto Ilustrativa"}</span>
+              <input type="file" accept="image/*" className="hidden" onChange={e => setImagemServico(e.target.files?.[0] || null)} />
+            </label>
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <span className="absolute left-4 top-4 text-zinc-500 font-bold">R$</span>
+                <Input placeholder="0,00" type="number" className="bg-black/30 border-white/10 h-14 pl-12 rounded-xl text-base" value={nServico.preco} onChange={e => setNServico({...nServico, preco: e.target.value})} />
+              </div>
+              <div className="relative w-32 shrink-0">
+                <span className="absolute right-4 top-4 text-zinc-500 font-bold text-xs uppercase">Min</span>
+                <Input placeholder="30" type="number" className="bg-black/30 border-white/10 h-14 pr-12 pl-4 rounded-xl text-base" value={nServico.duracao_minutos} onChange={e => setNServico({...nServico, duracao_minutos: e.target.value})} />
+              </div>
+              <Button onClick={handleAddServicoComFoto} disabled={isUploadingServico} className="h-14 w-14 rounded-xl shrink-0" style={{ backgroundColor: brand, color: ctaFg }}>
+                {isUploadingServico ? <Loader2 className="animate-spin h-6 w-6" /> : <Plus className="h-6 w-6" />}
+              </Button>
+            </div>
+          </Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+             {servicos.map((s: any) => (
+               <div key={s.id} className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between group">
+                 <div className="flex items-center gap-4">
+                   {s.url_imagem ? (
+                     <img src={s.url_imagem} className="h-12 w-12 rounded-xl object-cover border border-white/10" />
+                   ) : (
+                     <div className="h-12 w-12 rounded-xl bg-black/30 flex items-center justify-center border border-white/5">
+                        <Scissors className="h-5 w-5 text-white/20" />
+                     </div>
+                   )}
+                   <div>
+                     <p className="text-sm font-black uppercase italic tracking-tight">{s.nome}</p>
+                     <p className="text-[11px] font-black mt-0.5 tracking-widest uppercase" style={{ color: brand }}>
+                       R$ {formatarMoeda(s.preco)} <span className="text-zinc-500 font-bold ml-1 opacity-70">• {s.duracao_minutos} min</span>
+                     </p>
+                   </div>
+                 </div>
+                 <Button size="icon" variant="ghost" className="h-10 w-10 text-zinc-600 hover:text-red-500 rounded-xl" onClick={() => onRemoveServico(s.id)}>
+                    <Trash2 className="h-5 w-5" />
+                 </Button>
+               </div>
+             ))}
+          </div>
+        </div>
       </section>
     );
   }
-
-  /**
-   * ==========================================
-   * TELAS DE BLOQUEIO (COM PIX DINÂMICO)
-   * ==========================================
-   */
 
   function renderBloqueioManual() {
     return (
@@ -401,7 +683,6 @@ export function VisaoDono({
     );
   }
 
-  // A MÁGICA ACONTECE AQUI
   function renderBloqueioInadimplencia() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 py-10">
@@ -452,18 +733,61 @@ export function VisaoDono({
     );
   }
 
-  /**
-   * ==========================================
-   * MODAIS: Upgrade e Renovação Preventiva
-   * ==========================================
-   */
-
   function renderModalUpgrade() {
-    // (Código de Upgrade idêntico ao que te mandei antes, ocultado para focar no PIX)
-    return null;
+    if (!modalUpgradeAberto) return null;
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto">
+        <div className="w-full max-w-4xl py-10 mt-10">
+          <div className="flex justify-between items-center mb-8 px-4">
+            <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Planos CAJ TECH</h2>
+            <button onClick={() => setModalUpgradeAberto(false)} className="bg-white/5 h-12 w-12 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"><X className="text-zinc-500 h-6 w-6" /></button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
+             {/* STARTER */}
+             <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between opacity-60">
+                <div>
+                  <h3 className="text-zinc-500 font-black uppercase text-xs tracking-widest">Starter</h3>
+                  <p className="text-4xl font-black text-white my-4 italic">R$ 50<span className="text-xs opacity-30">/mês</span></p>
+                  <ul className="text-[11px] text-zinc-400 space-y-3 mb-6">
+                    <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Até 2 Barbeiros</li>
+                    <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Link de Agendamento</li>
+                  </ul>
+                </div>
+                <Button variant="outline" className="border-zinc-800 text-zinc-500 uppercase font-black text-[10px] h-12 rounded-xl" disabled>Seu Plano Atual</Button>
+             </Card>
+             {/* PRO */}
+             <Card className="p-6 bg-emerald-500/5 border-emerald-500 border-2 rounded-3xl relative md:scale-105 shadow-2xl z-10 flex flex-col justify-between">
+                <div>
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[9px] font-black uppercase px-4 py-1 rounded-full shadow-lg">Mais Vendido</span>
+                  <h3 className="text-emerald-500 font-black uppercase text-xs tracking-widest">PRO</h3>
+                  <p className="text-5xl font-black text-white my-4 italic">R$ 99<span className="text-xs opacity-50">,90/mês</span></p>
+                  <ul className="text-[11px] text-zinc-300 space-y-3 mb-6">
+                      <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Barbeiros Ilimitados</li>
+                      <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> WhatsApp VIP (Automação)</li>
+                      <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Clube de Assinatura</li>
+                  </ul>
+                </div>
+                <Button onClick={() => window.open('https://wa.me/5517992051576?text=Quero evoluir para o plano PRO!')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg">Evoluir Agora</Button>
+             </Card>
+             {/* ELITE */}
+             <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between">
+                <div>
+                  <h3 className="text-yellow-500 font-black uppercase text-xs tracking-widest flex items-center gap-2"><Crown className="h-4 w-4" /> Elite</h3>
+                  <p className="text-4xl font-black text-white my-4 italic">R$ 497<span className="text-xs opacity-30">/mês</span></p>
+                  <ul className="text-[11px] text-zinc-400 space-y-3 mb-6">
+                    <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-yellow-500 shrink-0" /> Tudo do Pro +</li>
+                    <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-yellow-500 shrink-0" /> Marketing Completo</li>
+                    <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-yellow-500 shrink-0" /> Gestão de Tráfego Pago</li>
+                  </ul>
+                </div>
+                <Button onClick={() => window.open('https://wa.me/5517992051576?text=Tenho interesse no plano Elite!') } variant="outline" className="border-zinc-800 text-white uppercase font-black text-[10px] h-12 rounded-xl">Falar com Consultor</Button>
+             </Card>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  // O PIX DINÂMICO TAMBÉM NO MODAL (Para quem quer pagar ANTES de bloquear)
   function renderModalRenovacao() {
     if (!modalPagamentoAberto) return null;
     return (
