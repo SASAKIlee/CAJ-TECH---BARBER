@@ -14,6 +14,7 @@ import Auth from "./pages/Auth.tsx";
 import SelecionarPapel from "./pages/SelecionarPapel.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AgendamentoPublico from "./pages/AgendamentoPublico.tsx";
+import Checkin from "./pages/Checkin.tsx"; // ✅ IMPORTAÇÃO DA NOVA PÁGINA DE CHECKIN
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,17 +31,18 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="dark min-h-screen bg-background flex items-center justify-center">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* 🌐 ROTA PÚBLICA (VITRINE DO CLIENTE) */}
+      {/* 🌐 ROTAS PÚBLICAS (Acesso sem Login) */}
       <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
+      <Route path="/checkin/:slug/:ticket" element={<Checkin />} /> {/* 🚀 NOVA ROTA DO QR CODE AQUI */}
 
-      {/* 🔒 ÁREA ADMINISTRATIVA / VENDAS */}
+      {/* 🔒 ÁREA ADMINISTRATIVA / VENDAS (Acesso com Login) */}
       {!user ? (
         <>
           <Route path="/auth" element={<Auth />} />
@@ -48,7 +50,7 @@ function AppRoutes() {
         </>
       ) : (
         <>
-          {/* 🚀 LOGICA DE REDIRECIONAMENTO POR PAPEL:
+          {/* 🚀 LÓGICA DE REDIRECIONAMENTO POR PAPEL:
             Se o cara tem QUALQUER role (dono, barbeiro ou VENDEDOR), ele vai para a Index.
             A Index vai ser o nosso "porteiro" que decide qual Dashboard mostrar.
           */}

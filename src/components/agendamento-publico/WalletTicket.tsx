@@ -3,6 +3,9 @@ import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 
 export const WALLET_TICKET_CAPTURE_ID = "wallet-ticket-capture";
 
+/**
+ * TIPAGENS DO INGRESSO
+ */
 type BarbeariaConfig = {
   nome?: string | null;
   cor_primaria?: string | null;
@@ -24,118 +27,124 @@ type WalletTicketProps = {
   ticketCodigo: string;
 };
 
+/**
+ * COMPONENTE PRINCIPAL: O Ingresso Digital do Cliente
+ */
 export function WalletTicket({ config, selecao, slug, ticketCodigo }: WalletTicketProps) {
+  
+  // --- IDENTIDADE VISUAL ---
   const brand = config?.cor_primaria || "#D4AF37";
   const onBrand = contrastTextOnBrand(brand);
   const logoUrl = config?.url_logo?.trim() || null;
   const nomeBarbearia = config?.nome || "Barbearia";
 
-  const dataFmt =
-    selecao.data.length >= 10
-      ? selecao.data.split("-").reverse().join("/")
-      : selecao.data;
+  // --- FORMATAÇÃO DE DATA ---
+  const dataFmt = selecao.data.length >= 10 
+    ? selecao.data.split("-").reverse().join("/") 
+    : selecao.data;
 
-  const qrPayload = JSON.stringify({
-    v: 1,
-    slug: slug ?? "",
-    ref: ticketCodigo,
-    data: selecao.data,
-    horario: selecao.horario,
-  });
+  /**
+   * 🚀 O SEGREDO DO QR CODE (AÇÃO INTELIGENTE)
+   * Antes: Era um objeto JSON inútil para a câmera do celular.
+   * Agora: É um Link Universal (URL). 
+   * Quando o barbeiro escanear, vai abrir o painel da CAJ TECH na página de Check-in para dar baixa no agendamento.
+   */
+  const dominioBase = window.location.origin; // Ex: https://cajtech.net.br
+  const linkCheckin = `${dominioBase}/checkin/${slug}/${ticketCodigo}`;
 
   return (
     <div
       id={WALLET_TICKET_CAPTURE_ID}
       className="w-full max-w-[340px] mx-auto overflow-hidden rounded-[28px] bg-[#f2f2f7] shadow-[0_25px_80px_rgba(0,0,0,0.35)] ring-1 ring-black/[0.06]"
     >
-      <div
-        className="h-1.5 w-full"
-        style={{ backgroundColor: brand }}
-        aria-hidden
-      />
+      {/* Barra de cor da marca (Topo) */}
+      <div className="h-2 w-full" style={{ backgroundColor: brand }} aria-hidden />
 
-      <div className="bg-white px-8 pt-10 pb-8 text-center">
+      {/* CABEÇALHO: LOGO E NOME DA BARBEARIA */}
+      <div className="bg-white px-8 pt-8 pb-6 text-center">
         {logoUrl ? (
           <img
             src={logoUrl}
             alt={nomeBarbearia}
             crossOrigin="anonymous"
-            className="mx-auto h-16 w-16 object-contain mb-5"
+            className="mx-auto h-20 w-20 object-contain mb-4 rounded-xl shadow-sm"
           />
         ) : (
           <div
-            className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-bold tracking-tight"
-            style={{
-              backgroundColor: hexToRgba(brand, 0.12),
-              color: brand,
-            }}
+            className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl text-4xl font-black tracking-tight shadow-sm"
+            style={{ backgroundColor: hexToRgba(brand, 0.12), color: brand }}
           >
             {nomeBarbearia.slice(0, 1).toUpperCase()}
           </div>
         )}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-          Agendamento
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">
+          Agendamento Confirmado
         </p>
-        <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">{nomeBarbearia}</h2>
+        <h2 className="mt-1 text-2xl font-black tracking-tighter text-zinc-950 italic">
+          {nomeBarbearia}
+        </h2>
       </div>
 
       <div className="h-px bg-gradient-to-r from-transparent via-zinc-300 to-transparent mx-6" />
 
-      <div className="space-y-5 bg-white px-8 py-7">
-        <TicketRow label="Serviço" value={selecao.servico?.nome ?? "—"} />
-        <TicketRow label="Data" value={dataFmt} />
-        <TicketRow label="Horário" value={selecao.horario || "—"} />
-        <TicketRow
-          label="Profissional"
-          value={selecao.barbeiro?.nome ?? "—"}
-          valueClassName="uppercase"
-        />
+      {/* CORPO: DADOS DO AGENDAMENTO */}
+      <div className="space-y-4 bg-white px-8 py-6">
+        <TicketRow label="Serviço Escolhido" value={selecao.servico?.nome ?? "—"} />
+        <div className="flex justify-between gap-4">
+           <TicketRow label="Data" value={dataFmt} />
+           <TicketRow label="Horário" value={selecao.horario || "—"} />
+        </div>
+        <TicketRow label="Profissional" value={selecao.barbeiro?.nome ?? "—"} valueClassName="uppercase" />
         <TicketRow label="Cliente" value={selecao.nome || "—"} />
-        <div className="flex justify-between items-baseline pt-1">
-          <span className="text-xs font-medium text-zinc-400">Valor</span>
-          <span className="text-xl font-bold tabular-nums" style={{ color: brand }}>
+        
+        {/* Valor em Destaque */}
+        <div className="flex justify-between items-baseline pt-3 mt-2 border-t border-dashed border-zinc-200">
+          <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Valor a Pagar</span>
+          <span className="text-2xl font-black tabular-nums tracking-tighter" style={{ color: brand }}>
             R$ {Number(selecao.servico?.preco ?? 0).toFixed(2)}
           </span>
         </div>
       </div>
 
-      <div className="border-t border-dashed border-zinc-200 bg-[#fafafa] px-8 py-8">
-        <p className="text-center text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-4">
-          Apresente na chegada
+      {/* RODAPÉ: QR CODE INTELIGENTE */}
+      <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-8 relative">
+        {/* Efeito visual de "picote" de ingresso */}
+        <div className="absolute -top-3 -left-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
+        <div className="absolute -top-3 -right-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
+
+        <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">
+          Apresente na recepção
         </p>
-        <div className="mx-auto flex justify-center rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04] w-fit">
-          <QRCode value={qrPayload} size={132} level="M" />
+        
+        <div className="mx-auto flex justify-center rounded-2xl bg-white p-4 shadow-md ring-1 ring-black/[0.05] w-fit relative group">
+          {/* QR Code agora contém o link de check-in */}
+          <QRCode value={linkCheckin} size={140} level="H" />
         </div>
-        <p className="mt-4 text-center font-mono text-[10px] text-zinc-400 tracking-wide">
-          {ticketCodigo.slice(0, 8).toUpperCase()}…
+        
+        <p className="mt-4 text-center font-mono text-[9px] text-zinc-400 tracking-[0.2em] font-bold">
+          ID: {ticketCodigo.split('-')[0].toUpperCase()}
         </p>
       </div>
 
+      {/* BARRA INFERIOR DE STATUS */}
       <div
-        className="py-4 text-center text-[11px] font-semibold"
-        style={{ backgroundColor: hexToRgba(brand, 0.14), color: onBrand }}
+        className="py-4 text-center text-[11px] font-black uppercase tracking-widest"
+        style={{ backgroundColor: hexToRgba(brand, 0.15), color: brand }}
       >
-        Confirmado
+        Válido para entrada
       </div>
     </div>
   );
 }
 
-function TicketRow({
-  label,
-  value,
-  valueClassName,
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
+/**
+ * SUB-COMPONENTE: Linha de informação do ticket
+ */
+function TicketRow({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string; }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-xs font-medium text-zinc-400">{label}</span>
-      <span
-        className={`text-[15px] font-semibold leading-snug text-zinc-950 tracking-tight ${valueClassName ?? ""}`}
-      >
+      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</span>
+      <span className={`text-sm font-black leading-snug text-zinc-800 tracking-tight ${valueClassName ?? ""}`}>
         {value}
       </span>
     </div>
