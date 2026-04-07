@@ -94,6 +94,8 @@ export function VisaoDono({
   const [diasRestantes, setDiasRestantes] = useState<number | null>(null);
   const [fasePagamento, setFasePagamento] = useState<1 | 2 | 3 | 4>(1);
 
+  // ESTADOS DO PIX DINÂMICO INTEGRADO
+  const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter"); // Qual plano o cara está comprando AGORA
   const [isGerandoPix, setIsGerandoPix] = useState(false);
   const [pixGerado, setPixGerado] = useState<string | null>(null);
   const [tempoPix, setTempoPix] = useState(900);
@@ -103,7 +105,6 @@ export function VisaoDono({
   const glass = { backgroundColor: hexToRgba(brand, 0.1), backdropFilter: "blur(14px)" } as const;
   const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
-  // CONFIGURAÇÃO DAS ANIMAÇÕES (Resolve o erro tabVariants)
   const tabVariants = {
     enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
     center: { x: 0, opacity: 1 },
@@ -159,11 +160,24 @@ export function VisaoDono({
     return `${m}:${s}`;
   };
 
-  const getValorPlano = () => {
-    if (planoAtual === 'starter') return 50.00;
-    if (planoAtual === 'pro') return 99.90;
-    if (planoAtual === 'elite') return 497.00;
+  const getValorPlano = (planoTarget: PlanoType) => {
+    if (planoTarget === 'starter') return 50.00;
+    if (planoTarget === 'pro') return 99.90;
+    if (planoTarget === 'elite') return 497.00;
     return 99.90;
+  };
+
+  // ROTEADOR CENTRAL DE PAGAMENTOS E UPGRADES
+  const handleAbrirCheckout = (tipo: 'renovacao' | 'upgrade', planoAlvo?: PlanoType) => {
+    setPixGerado(null); // Reseta PIX anterior se houver
+    if (tipo === 'renovacao') {
+      setPlanoPagamento(planoAtual);
+      setModalPagamentoAberto(true);
+    } else if (tipo === 'upgrade' && planoAlvo) {
+      setModalUpgradeAberto(false);
+      setPlanoPagamento(planoAlvo);
+      setModalPagamentoAberto(true);
+    }
   };
 
   const handleGerarPixDinâmico = async () => {
@@ -178,7 +192,7 @@ export function VisaoDono({
       const { data, error } = await supabase.functions.invoke('mercado-pago-pix', {
         body: {
           barbearia_id: barbearia.id,
-          plano: planoAtual,
+          plano: planoPagamento, // USA O PLANO SELECIONADO (Evolução ou Renovação)
           email_dono: "financeiro@cajtech.net.br"
         }
       });
@@ -331,13 +345,13 @@ export function VisaoDono({
         {fasePagamento === 2 && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-[20px] flex items-center justify-between text-yellow-500 text-[10px] font-black uppercase">
             <span className="flex items-center gap-2"><span className="animate-pulse h-2.5 w-2.5 bg-yellow-500 rounded-full" /> Vencimento em {diasRestantes} dias</span>
-            <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-yellow-500 text-black h-10 px-6 rounded-xl font-black">Pagar</Button>
+            <Button size="sm" onClick={() => handleAbrirCheckout('renovacao')} className="bg-yellow-500 text-black h-10 px-6 rounded-xl font-black">Pagar</Button>
           </div>
         )}
         {fasePagamento === 3 && (
           <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-[20px] flex flex-col sm:flex-row gap-3 items-center justify-between text-red-500 text-[10px] font-black uppercase">
             <span className="flex items-center gap-2"><span className="animate-pulse h-2.5 w-2.5 bg-red-500 rounded-full" /> Vencido: {3 + (diasRestantes || 0)} dias de carência</span>
-            <Button size="sm" onClick={() => setModalPagamentoAberto(true)} className="bg-red-600 text-white h-10 px-6 rounded-xl shadow-lg shadow-red-500/20 font-black">Regularizar Agora</Button>
+            <Button size="sm" onClick={() => handleAbrirCheckout('renovacao')} className="bg-red-600 text-white h-10 px-6 rounded-xl shadow-lg shadow-red-500/20 font-black">Regularizar Agora</Button>
           </div>
         )}
       </div>
@@ -440,7 +454,7 @@ export function VisaoDono({
               <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4"/> Clube de Assinatura <span className="ml-auto text-[8px] bg-white/10 px-2 py-1 rounded-full tracking-widest">EM BREVE</span></p>
               <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4"/> Barbeiros Ilimitados</p>
             </div>
-            <Button onClick={() => setModalUpgradeAberto(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg shadow-emerald-600/20 text-sm">Desbloquear Agora</Button>
+            <Button onClick={() => setModalUpgradeAberto(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg shadow-emerald-600/20 text-sm">Evoluir e Desbloquear</Button>
           </Card>
         ) : (
           <div className="grid gap-4">
@@ -697,20 +711,16 @@ export function VisaoDono({
 
            <div className="bg-black/50 border border-zinc-800 p-5 rounded-3xl relative z-10">
              <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Plano Atual: {planoAtual}</p>
-             <p className="text-4xl font-black text-white italic">R$ {getValorPlano().toFixed(2)}</p>
+             <p className="text-4xl font-black text-white italic">R$ {getValorPlano(planoAtual).toFixed(2)}</p>
            </div>
 
            {!pixGerado ? (
              <Button 
-                onClick={handleGerarPixDinâmico} 
+                onClick={() => handleAbrirCheckout('renovacao')} 
                 disabled={isGerandoPix}
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 rounded-2xl shadow-xl uppercase italic tracking-wide text-base"
              >
-               {isGerandoPix ? (
-                 <span className="flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> Conectando ao Banco...</span>
-               ) : (
-                 <span className="flex items-center gap-2"><QrCode className="h-5 w-5" /> Pagar via PIX Agora</span>
-               )}
+               <span className="flex items-center gap-2"><QrCode className="h-5 w-5" /> Pagar via PIX Agora</span>
              </Button>
            ) : (
              <div className="space-y-4 animate-in slide-in-from-bottom-4">
@@ -767,7 +777,11 @@ export function VisaoDono({
                       <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Clube de Assinatura</li>
                   </ul>
                 </div>
-                <Button onClick={() => window.open('https://wa.me/5517992051576?text=Quero evoluir para o plano PRO!')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg">Evoluir Agora</Button>
+                {planoAtual === 'pro' ? (
+                   <Button variant="outline" className="w-full bg-emerald-500/10 border-emerald-500/30 text-emerald-500 font-black uppercase h-14 rounded-xl" disabled>Seu Plano Atual</Button>
+                ) : (
+                   <Button onClick={() => handleAbrirCheckout('upgrade', 'pro')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg">Evoluir e Pagar</Button>
+                )}
              </Card>
              {/* ELITE */}
              <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between">
@@ -780,7 +794,11 @@ export function VisaoDono({
                     <li className="flex gap-2 font-bold uppercase"><CheckCircle2 className="h-4 w-4 text-yellow-500 shrink-0" /> Gestão de Tráfego Pago</li>
                   </ul>
                 </div>
-                <Button onClick={() => window.open('https://wa.me/5517992051576?text=Tenho interesse no plano Elite!') } variant="outline" className="border-zinc-800 text-white uppercase font-black text-[10px] h-12 rounded-xl">Falar com Consultor</Button>
+                {planoAtual === 'elite' ? (
+                   <Button variant="outline" className="border-zinc-800 text-zinc-500 uppercase font-black text-[10px] h-12 rounded-xl" disabled>Seu Plano Atual</Button>
+                ) : (
+                   <Button onClick={() => handleAbrirCheckout('upgrade', 'elite')} className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-black uppercase h-14 rounded-xl shadow-lg">Evoluir e Pagar</Button>
+                )}
              </Card>
           </div>
         </div>
@@ -792,13 +810,13 @@ export function VisaoDono({
     if (!modalPagamentoAberto) return null;
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-        <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-[32px] p-8 space-y-6 relative shadow-2xl overflow-hidden">
+        <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-[32px] p-8 space-y-6 relative shadow-2xl overflow-hidden animate-in zoom-in-95">
           <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
-          <button onClick={() => { setModalPagamentoAberto(false); setPixGerado(null); }} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X className="h-5 w-5" /></button>
+          <button onClick={() => { setModalPagamentoAberto(false); setPixGerado(null); }} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X className="h-6 w-6" /></button>
           
           <div className="text-center space-y-2">
-            <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Renovar Assinatura</h2>
-            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Plano {planoAtual} • R$ {getValorPlano().toFixed(2)}</p>
+            <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Pagamento Seguro</h2>
+            <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Plano {planoPagamento} • R$ {getValorPlano(planoPagamento).toFixed(2)}</p>
           </div>
 
           {!pixGerado ? (
