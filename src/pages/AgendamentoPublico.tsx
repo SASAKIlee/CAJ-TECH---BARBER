@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, Loader2, Lock, CalendarX2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Lock, CalendarX2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,7 +57,7 @@ function formatarDataYMD(date: Date) {
 function gerarProximosDias(quantidade = 30) {
   const dias = [];
   const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0); // Zera a hora para evitar bugs de fuso horário
+  hoje.setHours(0, 0, 0, 0); 
   
   for (let i = 0; i < quantidade; i++) {
     const d = new Date(hoje);
@@ -228,17 +228,13 @@ export default function AgendamentoPublico() {
     );
   }
 
-  // Lógica de bloqueio por inadimplência
   let bloqueadoPorInadimplencia = false;
   if (config?.data_vencimento) {
     const hoje = new Date();
     const vencimento = new Date(config.data_vencimento);
     const diffTime = vencimento.getTime() - hoje.getTime();
     const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDias < -3) {
-      bloqueadoPorInadimplencia = true;
-    }
+    if (diffDias < -3) bloqueadoPorInadimplencia = true;
   }
 
   if (config?.ativo === false || bloqueadoPorInadimplencia) {
@@ -271,8 +267,14 @@ export default function AgendamentoPublico() {
     <div className="min-h-[100dvh] relative isolate font-sans antialiased overflow-x-hidden transition-colors duration-500" style={{ backgroundColor: bg }}>
       <AppHeroBackdrop imageUrl={heroImageUrl} />
       
-      {/* Esconde a barra de rolagem horizontal mas permite o deslize */}
-      <style dangerouslySetInnerHTML={{__html: `.hide-scrollbar::-webkit-scrollbar { display: none; }`}} />
+      {/* 🚀 CSS PREMIUM: Barra de rolagem estilo pílula e scroll suave nativo */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .premium-scrollbar::-webkit-scrollbar { height: 4px; }
+        .premium-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.03); border-radius: 10px; margin-inline: 4px; }
+        .premium-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
+        .premium-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+        .premium-scrollbar { scroll-behavior: smooth; }
+      `}} />
 
       <div className="relative z-10 flex min-h-[100dvh] flex-col">
         <motion.header
@@ -355,41 +357,56 @@ export default function AgendamentoPublico() {
                 {etapa === 3 && (
                   <motion.section className="space-y-8">
                     
-                    {/* 🚀 O NOVO CARROSSEL DE DATAS PREMIUM */}
-                    <div className="space-y-4">
-                      <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Escolha a data</h2>
-                      <div className="flex overflow-x-auto gap-3 pb-4 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                        {proximosDias.map((dia) => {
-                           const isSelected = selecao.data === dia.ymd;
-                           const isTrabalho = diasTrabalho.includes(dia.dateObj.getDay());
-                           const isFechado = datasFechadas.includes(dia.ymd);
-                           const isDisponivel = isTrabalho && !isFechado;
+                    {/* 🚀 O CARROSSEL DE DATAS PREMIUM */}
+                    <div className="space-y-3 relative">
+                      <div className="flex items-center justify-between mb-1">
+                        <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Escolha a data</h2>
+                        
+                        {/* 🚀 AVISO VISUAL DE DESLIZE (A ABINHA) */}
+                        <div className="flex items-center gap-1 opacity-60 animate-pulse" style={{ color: textHighlight }}>
+                          <span className="text-[9px] font-black uppercase tracking-widest">Deslize</span>
+                          <ChevronRight className="h-3 w-3" />
+                        </div>
+                      </div>
 
-                           return (
-                             <motion.button
-                               key={dia.ymd}
-                               type="button"
-                               disabled={!isDisponivel}
-                               onClick={() => { setSelecao({ ...selecao, data: dia.ymd, horario: "" }); }}
-                               className={cn(
-                                 "min-w-[76px] flex flex-col items-center justify-center p-4 rounded-[24px] transition-all snap-center border shrink-0",
-                                 !isDisponivel ? "opacity-20 cursor-not-allowed" : "hover:bg-white/5"
-                               )}
-                               style={{
-                                 backgroundColor: isSelected ? brand : hexToRgba(bg, 0.8),
-                                 borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.08),
-                                 color: isSelected ? ctaFg : textHighlight,
-                                 boxShadow: isSelected ? `0 10px 30px ${hexToRgba(brand, 0.3)}` : 'none'
-                               }}
-                               whileHover={isDisponivel && !isSelected ? { scale: 1.05, borderColor: brand } : undefined}
-                               whileTap={isDisponivel ? { scale: 0.95 } : undefined}
-                             >
-                               <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">{dia.diaSemana}</span>
-                               <span className="text-2xl font-black tabular-nums leading-none mb-1">{dia.diaMes}</span>
-                               <span className="text-[10px] font-bold uppercase opacity-70">{dia.mes}</span>
-                             </motion.button>
-                           );
-                        })}
+                      <div className="relative">
+                        {/* Máscara de Desvanecimento na Direita para induzir o arrasto */}
+                        <div className="absolute top-0 right-0 bottom-6 w-12 pointer-events-none z-10" style={{ background: `linear-gradient(to right, transparent, ${bg})` }} />
+                        
+                        {/* Container do Carrossel com Scrollbar Premium */}
+                        <div className="flex overflow-x-auto gap-3 pb-4 snap-x premium-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          {proximosDias.map((dia) => {
+                             const isSelected = selecao.data === dia.ymd;
+                             const isTrabalho = diasTrabalho.includes(dia.dateObj.getDay());
+                             const isFechado = datasFechadas.includes(dia.ymd);
+                             const isDisponivel = isTrabalho && !isFechado;
+
+                             return (
+                               <motion.button
+                                 key={dia.ymd}
+                                 type="button"
+                                 disabled={!isDisponivel}
+                                 onClick={() => { setSelecao({ ...selecao, data: dia.ymd, horario: "" }); }}
+                                 className={cn(
+                                   "min-w-[76px] flex flex-col items-center justify-center p-4 rounded-[24px] transition-all snap-center border shrink-0 relative",
+                                   !isDisponivel ? "opacity-20 cursor-not-allowed" : "hover:bg-white/5"
+                                 )}
+                                 style={{
+                                   backgroundColor: isSelected ? brand : hexToRgba(bg, 0.8),
+                                   borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.08),
+                                   color: isSelected ? ctaFg : textHighlight,
+                                   boxShadow: isSelected ? `0 10px 30px ${hexToRgba(brand, 0.3)}` : 'none'
+                                 }}
+                                 whileHover={isDisponivel && !isSelected ? { scale: 1.05, borderColor: brand } : undefined}
+                                 whileTap={isDisponivel ? { scale: 0.95 } : undefined}
+                               >
+                                 <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">{dia.diaSemana}</span>
+                                 <span className="text-2xl font-black tabular-nums leading-none mb-1">{dia.diaMes}</span>
+                                 <span className="text-[10px] font-bold uppercase opacity-70">{dia.mes}</span>
+                               </motion.button>
+                             );
+                          })}
+                        </div>
                       </div>
                     </div>
 
@@ -400,11 +417,11 @@ export default function AgendamentoPublico() {
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-8 rounded-[28px] text-center border border-dashed" style={{ borderColor: hexToRgba(textHighlight, 0.15), backgroundColor: hexToRgba(bg, 0.4) }}>
                           <CalendarX2 className="h-10 w-10 mx-auto mb-4 opacity-40" style={{ color: textHighlight }} />
                           <p className="text-sm font-medium opacity-60 max-w-[200px] mx-auto leading-relaxed" style={{ color: textHighlight }}>
-                            Toque em um dia no calendário acima para ver os horários.
+                            Selecione um dia no calendário acima para ver os horários.
                           </p>
                         </motion.div>
                       ) : (
-                        <div className="grid grid-cols-3 gap-3 max-h-[min(52vh,22rem)] overflow-y-auto pr-2 pb-4 hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        <div className="grid grid-cols-3 gap-3 max-h-[min(52vh,22rem)] overflow-y-auto pr-2 pb-4 premium-scrollbar">
                           {horariosDoDia.map((h) => {
                             const qtdeBlocosNecessarios = Math.ceil((selecao.servico?.duracao_minutos || 30) / 30);
                             let espacoInsuficiente = false;
