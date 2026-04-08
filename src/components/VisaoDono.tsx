@@ -3,7 +3,8 @@ import {
   Users, Scissors, Trash2, Plus, Power, PowerOff, 
   Copy, FileText, Settings2, Clock, Save, 
   BarChart3, CalendarX2, ImagePlus, Loader2, Lock, 
-  Zap, Crown, CheckCircle2, X, Timer, QrCode, CheckCircle, UserCircle2
+  Zap, Crown, CheckCircle2, X, Timer, QrCode, CheckCircle, UserCircle2,
+  PieChart as PieChartIcon
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,8 @@ import { cn } from "@/lib/utils";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-// Importamos o CartesianGrid para dar o visual de painel financeiro
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+// 🚀 NOVOS IMPORTS: PieChart, Pie e Legend adicionados para o Gráfico de Rosca
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, PieChart, Pie, Legend } from 'recharts';
 import imageCompression from 'browser-image-compression';
 
 const MotionButton = motion.create(Button);
@@ -112,7 +113,6 @@ export function VisaoDono({
 
   useEffect(() => {
     async function carregarDadosLoja() {
-      // 🛡️ BLINDAGEM: Verifica autenticação com segurança
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError || !authData.user) return;
       
@@ -232,7 +232,6 @@ export function VisaoDono({
   const handleUploadImagem = async (file: File, bucket: string) => {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 600 });
-      // 🛡️ BLINDAGEM: Criptografia para gerar nomes de arquivos únicos e evitar substituições
       const uniqueId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
       const fileName = `${uniqueId}.${compressed.name.split('.').pop()}`;
       
@@ -403,33 +402,47 @@ export function VisaoDono({
   }
 
   function renderTabDashboard() {
-    // Tratamento seguro dos dados: Garante que "Total" seja um número válido
-    const data = comissaoPorBarbeiroHoje.map((item: any) => ({ 
+    // Dados para o Gráfico de Barras (Equipe)
+    const dataEquipe = comissaoPorBarbeiroHoje.map((item: any) => ({ 
       name: item.barbeiro?.nome?.split(' ')[0] || "...", 
       Total: Number(item.total) || 0 
     })).sort((a: any, b: any) => b.Total - a.Total);
+    const hasDataEquipe = dataEquipe.some((d: any) => d.Total > 0);
 
-    const hasData = data.some((d: any) => d.Total > 0);
+    // Dados para o Gráfico de Rosca (Faturamento Divisão)
+    const lucro = Number(lucroRealHoje) || 0;
+    const comissao = Number(comissoesAPagarHoje) || 0;
+    const dataFinanceiro = [
+      { name: 'Lucro Líquido', value: lucro },
+      { name: 'Comissões', value: comissao }
+    ];
+    const hasDataFinanceiro = lucro > 0 || comissao > 0;
+    
+    // Cores: Cor da marca para o Lucro, Cor mais escura/cinza para a comissão
+    const COLORS = [brand, hexToRgba(brand, 0.25)];
 
     return (
       <div className="flex flex-col gap-6">
         <h3 className="font-black text-white uppercase text-lg italic flex items-center gap-2 px-1">
-          <BarChart3 className="h-5 w-5" style={{ color: brand }} /> Desempenho
+          <BarChart3 className="h-5 w-5" style={{ color: brand }} /> Desempenho Hoje
         </h3>
         
+        {/* GRÁFICO 1: PRODUÇÃO DA EQUIPE */}
         <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl relative" style={glass}>
-          {!hasData ? (
-            // 🛡️ NOVO: Empty State Bonito (Impede de ficar aquele buraco vazio feio)
-            <div className="flex flex-col items-center justify-center h-48 text-center space-y-3 opacity-60">
-               <BarChart3 className="h-10 w-10 text-zinc-500 mb-2" />
-               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Nenhuma produção registrada hoje</p>
-               <p className="text-xs font-medium text-zinc-500">As métricas da sua equipe aparecerão aqui.</p>
+          <div className="flex items-center gap-2 mb-6">
+             <Users className="h-4 w-4 opacity-50" />
+             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Produção por Profissional</p>
+          </div>
+
+          {!hasDataEquipe ? (
+            <div className="flex flex-col items-center justify-center h-40 text-center space-y-3 opacity-60">
+               <BarChart3 className="h-8 w-8 text-zinc-600 mb-1" />
+               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nenhum corte registrado</p>
             </div>
           ) : (
-            // 🛡️ NOVO: Gráfico com Grid e MaxBarSize (Impede o tijolo amarelo)
-            <div className="h-64 w-full mt-2">
+            <div className="h-64 w-full">
               <ResponsiveContainer>
-                <BarChart data={data} margin={{ left: -30 }}>
+                <BarChart data={dataEquipe} margin={{ left: -30 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                   <XAxis dataKey="name" stroke="#777" fontSize={10} axisLine={false} tickLine={false} dy={10} />
                   <YAxis stroke="#777" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v}`} />
@@ -439,11 +452,57 @@ export function VisaoDono({
                     itemStyle={{ color: brand }}
                     formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Produção']}
                   />
-                  {/* O "maxBarSize={45}" é o salva-vidas do visual! */}
                   <Bar dataKey="Total" radius={[6, 6, 6, 6]} maxBarSize={45}>
-                    {data.map((_, i) => <Cell key={i} fill={i === 0 ? brand : hexToRgba(brand, 0.4)} />)}
+                    {dataEquipe.map((_, i) => <Cell key={i} fill={i === 0 ? brand : hexToRgba(brand, 0.4)} />)}
                   </Bar>
                 </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        {/* GRÁFICO 2: DIVISÃO FINANCEIRA (ROSCA) */}
+        <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl relative" style={glass}>
+          <div className="flex items-center gap-2 mb-2">
+             <PieChartIcon className="h-4 w-4 opacity-50" />
+             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Distribuição do Faturamento</p>
+          </div>
+
+          {!hasDataFinanceiro ? (
+            <div className="flex flex-col items-center justify-center h-48 text-center space-y-3 opacity-60">
+               <PieChartIcon className="h-8 w-8 text-zinc-600 mb-1" />
+               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Sem entradas financeiras</p>
+            </div>
+          ) : (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={dataFinanceiro}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {dataFinanceiro.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '16px', fontSize: '12px', fontWeight: 'bold' }} 
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value: number) => [`R$ ${value.toFixed(2)}`, '']}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    iconType="circle"
+                    formatter={(value) => <span className="text-xs font-bold text-zinc-300 uppercase tracking-widest">{value}</span>}
+                  />
+                </PieChart>
               </ResponsiveContainer>
             </div>
           )}
