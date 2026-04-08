@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, Loader2, Lock } from "lucide-react";
+import { ChevronLeft, Loader2, Lock, CalendarX2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,9 @@ import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { WalletTicket, WALLET_TICKET_CAPTURE_ID } from "@/components/agendamento-publico/WalletTicket";
 import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackdrop";
 
+// ==========================================
+// FUNÇÕES AUXILIARES DE DATA E HORA
+// ==========================================
 function gerarHorarios(abertura = "09:00", fechamento = "18:00", inicioAlmoco = "12:00", fimAlmoco = "13:00") {
   const horarios = [];
   let [horaAtual, minAtual] = abertura.split(':').map(Number);
@@ -41,10 +44,43 @@ function gerarHorarios(abertura = "09:00", fechamento = "18:00", inicioAlmoco = 
   return horarios;
 }
 
+const DIAS_SEMANA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const MESES_CURTO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+function formatarDataYMD(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function gerarProximosDias(quantidade = 30) {
+  const dias = [];
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0); // Zera a hora para evitar bugs de fuso horário
+  
+  for (let i = 0; i < quantidade; i++) {
+    const d = new Date(hoje);
+    d.setDate(hoje.getDate() + i);
+    dias.push({
+      dateObj: d,
+      ymd: formatarDataYMD(d),
+      diaSemana: DIAS_SEMANA_CURTO[d.getDay()],
+      diaMes: String(d.getDate()).padStart(2, '0'),
+      mes: MESES_CURTO[d.getMonth()]
+    });
+  }
+  return dias;
+}
+
+// ==========================================
+// CONFIGURAÇÕES DE ANIMAÇÃO
+// ==========================================
 const listContainer = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.04 } } };
 const listItem = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 380, damping: 34 } } };
 
 type BarbeariaRow = {
+  id?: string;
   nome?: string | null;
   cor_primaria?: string | null;
   cor_secundaria?: string | null;
@@ -58,7 +94,8 @@ type BarbeariaRow = {
   fim_almoco?: string | null;
   datas_fechadas?: string[] | null;
   ativo?: boolean | null;
-  data_vencimento?: string | null; // Adicionado para checar o semáforo
+  data_vencimento?: string | null;
+  meta_fidelidade?: number | null;
 };
 
 export default function AgendamentoPublico() {
@@ -81,6 +118,8 @@ export default function AgendamentoPublico() {
   const bg = config?.cor_secundaria?.trim() || "#18181B"; 
   const textHighlight = config?.cor_destaque?.trim() || "#FFFFFF";
   const ctaFg = contrastTextOnBrand(brand);
+
+  const dataMinimaHoje = formatarDataYMD(new Date());
 
   useEffect(() => {
     async function carregarDados() {
@@ -121,22 +160,37 @@ export default function AgendamentoPublico() {
   }, [selecao.data, selecao.barbeiro, servicos]);
 
   const handleFinalizar = async () => {
+    if (!selecao.nome.trim() || selecao.nome.length < 2) {
+      return toast.error("Por favor, preencha o seu nome completo.");
+    }
+    
+    const numeroLimpo = selecao.whatsapp.replace(/\D/g, '');
+    if (numeroLimpo.length < 10) {
+      return toast.error("Por favor, informe um número de WhatsApp válido com DDD.");
+    }
+
     const toastId = toast.loading("Reservando seu horário…");
     const { error } = await supabase.from("agendamentos").insert({
-      nome_cliente: selecao.nome, telefone_cliente: selecao.whatsapp,
-      servico_id: selecao.servico!.id, barbeiro_id: selecao.barbeiro!.id,
-      data: selecao.data, horario: selecao.horario, barbearia_slug: slug, status: "Pendente",
+      nome_cliente: selecao.nome.trim(), 
+      telefone_cliente: numeroLimpo, 
+      servico_id: selecao.servico!.id, 
+      barbeiro_id: selecao.barbeiro!.id,
+      data: selecao.data, 
+      horario: selecao.horario, 
+      barbearia_slug: slug, 
+      status: "Pendente",
     });
 
     toast.dismiss(toastId);
+    
     if (error) {
-      if (error.code === "23505") return toast.error("Ops! Alguém acabou de pegar esse horário. Escolha outro.");
-      return toast.error("Erro ao agendar. Tente novamente.");
+      if (error.code === "23505") return toast.error("Ops! Outra pessoa acabou de reservar esse horário. Escolha outro.");
+      return toast.error("Ocorreu um erro no servidor. Tente novamente.");
     }
 
     setTicketCodigo(typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`);
     setEtapa(5);
-    toast.success("Agendamento confirmado.");
+    toast.success("Agendamento confirmado com sucesso!");
   };
 
   const salvarTicketComoImagem = useCallback(async () => {
@@ -174,7 +228,7 @@ export default function AgendamentoPublico() {
     );
   }
 
-  // 🚀 LÓGICA DE BLOQUEIO POR FALTA DE PAGAMENTO (Fase 4 do Semáforo)
+  // Lógica de bloqueio por inadimplência
   let bloqueadoPorInadimplencia = false;
   if (config?.data_vencimento) {
     const hoje = new Date();
@@ -182,13 +236,11 @@ export default function AgendamentoPublico() {
     const diffTime = vencimento.getTime() - hoje.getTime();
     const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    // Se o vencimento já passou há mais de 3 dias (saiu da carência)
     if (diffDias < -3) {
       bloqueadoPorInadimplencia = true;
     }
   }
 
-  // 🚀 BARREIRA DE BLOQUEIO PARA O CLIENTE FINAL (Avaliando Inativo manual ou Inadimplência)
   if (config?.ativo === false || bloqueadoPorInadimplencia) {
     return (
       <div className="min-h-[100dvh] relative isolate flex flex-col items-center justify-center text-white p-6 text-center" style={{ backgroundColor: "#18181B" }}>
@@ -206,18 +258,21 @@ export default function AgendamentoPublico() {
   const heroImageUrl = config?.url_fundo?.trim() || APP_HERO_FALLBACK_BG;
   const horariosDoDia = gerarHorarios(config?.horario_abertura || "09:00", config?.horario_fechamento || "18:00", config?.inicio_almoco || "12:00", config?.fim_almoco || "13:00");
   
-  const dataSelecionada = selecao.data ? new Date(selecao.data + 'T00:00:00') : null;
-  const diaDaSemana = dataSelecionada ? dataSelecionada.getDay() : -1;
   const diasTrabalho = config?.dias_trabalho || [1, 2, 3, 4, 5, 6];
   const datasFechadas = Array.isArray(config?.datas_fechadas) ? config.datas_fechadas : [];
   
-  const isAbertoHoje = dataSelecionada 
-    ? (diasTrabalho.includes(diaDaSemana) && !datasFechadas.includes(selecao.data))
-    : true;
+  const isHoje = selecao.data === dataMinimaHoje;
+  const horaAtualReal = new Date().getHours();
+  const minutoAtualReal = new Date().getMinutes();
+
+  const proximosDias = gerarProximosDias(30);
 
   return (
     <div className="min-h-[100dvh] relative isolate font-sans antialiased overflow-x-hidden transition-colors duration-500" style={{ backgroundColor: bg }}>
       <AppHeroBackdrop imageUrl={heroImageUrl} />
+      
+      {/* Esconde a barra de rolagem horizontal mas permite o deslize */}
+      <style dangerouslySetInnerHTML={{__html: `.hide-scrollbar::-webkit-scrollbar { display: none; }`}} />
 
       <div className="relative z-10 flex min-h-[100dvh] flex-col">
         <motion.header
@@ -299,23 +354,69 @@ export default function AgendamentoPublico() {
 
                 {etapa === 3 && (
                   <motion.section className="space-y-8">
-                    <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Data e horário</h2>
-                    <Input type="date" className="h-14 rounded-2xl font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.data} onChange={(e) => setSelecao({ ...selecao, data: e.target.value, horario: "" })} />
+                    
+                    {/* 🚀 O NOVO CARROSSEL DE DATAS PREMIUM */}
+                    <div className="space-y-4">
+                      <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Escolha a data</h2>
+                      <div className="flex overflow-x-auto gap-3 pb-4 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        {proximosDias.map((dia) => {
+                           const isSelected = selecao.data === dia.ymd;
+                           const isTrabalho = diasTrabalho.includes(dia.dateObj.getDay());
+                           const isFechado = datasFechadas.includes(dia.ymd);
+                           const isDisponivel = isTrabalho && !isFechado;
+
+                           return (
+                             <motion.button
+                               key={dia.ymd}
+                               type="button"
+                               disabled={!isDisponivel}
+                               onClick={() => { setSelecao({ ...selecao, data: dia.ymd, horario: "" }); }}
+                               className={cn(
+                                 "min-w-[76px] flex flex-col items-center justify-center p-4 rounded-[24px] transition-all snap-center border shrink-0",
+                                 !isDisponivel ? "opacity-20 cursor-not-allowed" : "hover:bg-white/5"
+                               )}
+                               style={{
+                                 backgroundColor: isSelected ? brand : hexToRgba(bg, 0.8),
+                                 borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.08),
+                                 color: isSelected ? ctaFg : textHighlight,
+                                 boxShadow: isSelected ? `0 10px 30px ${hexToRgba(brand, 0.3)}` : 'none'
+                               }}
+                               whileHover={isDisponivel && !isSelected ? { scale: 1.05, borderColor: brand } : undefined}
+                               whileTap={isDisponivel ? { scale: 0.95 } : undefined}
+                             >
+                               <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">{dia.diaSemana}</span>
+                               <span className="text-2xl font-black tabular-nums leading-none mb-1">{dia.diaMes}</span>
+                               <span className="text-[10px] font-bold uppercase opacity-70">{dia.mes}</span>
+                             </motion.button>
+                           );
+                        })}
+                      </div>
+                    </div>
 
                     <motion.div className="space-y-4">
-                      <p className="text-sm font-medium" style={{ color: hexToRgba(textHighlight, 0.5) }}>Horários</p>
+                      <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Horários disponíveis</h2>
                       
-                      {!isAbertoHoje && selecao.data ? (
-                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="p-4 rounded-2xl text-center border shadow-lg" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: "rgba(239,68,68,0.3)" }}>
-                          <p className="text-[15px] font-bold text-red-400">Fechado neste dia.</p>
-                          <p className="text-[12px] text-red-400/70 mt-1">Por favor, escolha outra data no calendário.</p>
+                      {!selecao.data ? (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-8 rounded-[28px] text-center border border-dashed" style={{ borderColor: hexToRgba(textHighlight, 0.15), backgroundColor: hexToRgba(bg, 0.4) }}>
+                          <CalendarX2 className="h-10 w-10 mx-auto mb-4 opacity-40" style={{ color: textHighlight }} />
+                          <p className="text-sm font-medium opacity-60 max-w-[200px] mx-auto leading-relaxed" style={{ color: textHighlight }}>
+                            Toque em um dia no calendário acima para ver os horários.
+                          </p>
                         </motion.div>
                       ) : (
-                        <div className="grid grid-cols-3 gap-2.5 max-h-[min(52vh,22rem)] overflow-y-auto pr-1 pb-2">
+                        <div className="grid grid-cols-3 gap-3 max-h-[min(52vh,22rem)] overflow-y-auto pr-2 pb-4 hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                           {horariosDoDia.map((h) => {
                             const qtdeBlocosNecessarios = Math.ceil((selecao.servico?.duracao_minutos || 30) / 30);
                             let espacoInsuficiente = false;
+                            let horarioJaPassou = false;
+                            
                             let [horaAvaliada, minAvaliado] = h.split(':').map(Number);
+
+                            if (isHoje) {
+                               if (horaAvaliada < horaAtualReal || (horaAvaliada === horaAtualReal && minAvaliado <= minutoAtualReal)) {
+                                  horarioJaPassou = true;
+                               }
+                            }
                             
                             for (let i = 0; i < qtdeBlocosNecessarios; i++) {
                               const horaChecadaStr = `${String(horaAvaliada).padStart(2,'0')}:${String(minAvaliado).padStart(2,'0')}`;
@@ -326,11 +427,11 @@ export default function AgendamentoPublico() {
                               if (minAvaliado >= 60) { minAvaliado -= 60; horaAvaliada += 1; }
                             }
 
-                            const isOcupado = ocupados.includes(h) || espacoInsuficiente;
+                            const isOcupado = ocupados.includes(h) || espacoInsuficiente || horarioJaPassou;
 
                             return (
                               <motion.button key={h} type="button" disabled={isOcupado || !selecao.data} onClick={() => { setSelecao({ ...selecao, horario: h }); setEtapa(4); }}
-                                className={cn("rounded-2xl py-3 text-xs font-semibold tracking-wide transition-all border", isOcupado || !selecao.data ? "opacity-25 cursor-not-allowed line-through" : "hover:bg-white/5")}
+                                className={cn("rounded-2xl py-3 text-sm font-bold tracking-wide transition-all border", isOcupado || !selecao.data ? "opacity-20 cursor-not-allowed line-through" : "hover:bg-white/5")}
                                 style={{ backgroundColor: isOcupado || !selecao.data ? hexToRgba(bg, 0.3) : hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }}
                                 whileHover={!isOcupado && selecao.data ? { scale: 1.04, borderColor: brand } : undefined} whileTap={!isOcupado && selecao.data ? { scale: 0.96 } : undefined}>
                                 {h}
@@ -348,7 +449,7 @@ export default function AgendamentoPublico() {
                     <h2 className="text-xl font-bold tracking-tight text-center" style={{ color: textHighlight }}>Seus dados</h2>
                     <div className="space-y-5">
                       <Input placeholder="Nome completo" className="h-14 rounded-2xl text-center text-[17px] font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.nome} onChange={(e) => setSelecao({ ...selecao, nome: e.target.value })} />
-                      <Input placeholder="WhatsApp com DDD" className="h-14 rounded-2xl text-center text-[17px] font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.whatsapp} onChange={(e) => setSelecao({ ...selecao, whatsapp: e.target.value })} />
+                      <Input placeholder="WhatsApp com DDD" type="tel" className="h-14 rounded-2xl text-center text-[17px] font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.whatsapp} onChange={(e) => setSelecao({ ...selecao, whatsapp: e.target.value })} />
                       <Button className="w-full h-14 rounded-2xl text-[17px] font-bold shadow-lg border-0" style={{ backgroundColor: brand, color: ctaFg }} onClick={handleFinalizar}>
                         Confirmar Agendamento
                       </Button>
@@ -361,7 +462,7 @@ export default function AgendamentoPublico() {
                 <p className="text-center text-sm font-medium max-w-xs" style={{ color: hexToRgba(textHighlight, 0.6) }}>Seu ingresso digital. Apresente na chegada ou salve no rolo da câmera.</p>
                 <WalletTicket config={config} selecao={selecao} slug={slug} ticketCodigo={ticketCodigo} />
                 <div className="flex w-full max-w-[340px] flex-col gap-3">
-                  <Button type="button" className="h-12 rounded-2xl font-semibold w-full" style={{ backgroundColor: brand, color: ctaFg }} onClick={() => void salvarTicketComoImagem()}>Salvar no dispositivo</Button>
+                  <Button type="button" className="h-12 rounded-2xl font-semibold w-full shadow-lg" style={{ backgroundColor: brand, color: ctaFg }} onClick={() => void salvarTicketComoImagem()}>Salvar no dispositivo</Button>
                   <Button type="button" variant="ghost" className="hover:bg-white/10 rounded-2xl" style={{ color: hexToRgba(textHighlight, 0.7) }} onClick={() => window.location.reload()}>Novo agendamento</Button>
                 </div>
               </motion.div>
