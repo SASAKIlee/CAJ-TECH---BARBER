@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+// Importamos o CartesianGrid para dar o visual de painel financeiro
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import imageCompression from 'browser-image-compression';
 
 const MotionButton = motion.create(Button);
@@ -102,7 +103,6 @@ export function VisaoDono({
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
   const glass = { backgroundColor: hexToRgba(brand, 0.05), backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" } as const;
-  const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
   const tabVariants = {
     enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
@@ -112,8 +112,9 @@ export function VisaoDono({
 
   useEffect(() => {
     async function carregarDadosLoja() {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) return;
+      // 🛡️ BLINDAGEM: Verifica autenticação com segurança
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) return;
       
       const { data, error } = await supabase.from('barbearias').select('*').eq('dono_id', authData.user.id).single();
       if (data && !error) {
@@ -177,21 +178,29 @@ export function VisaoDono({
   const handleGerarPixDinâmico = async () => {
     setIsGerandoPix(true);
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const { data: barbearia } = await supabase.from('barbearias').select('id').eq('dono_id', authData.user?.id).single();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("Sessão expirada. Recarregue a página.");
+
+      const { data: barbearia } = await supabase.from('barbearias').select('id').eq('dono_id', authData.user.id).single();
       if (!barbearia) throw new Error("Barbearia não identificada.");
 
       const { data, error } = await supabase.functions.invoke('mercado-pago-pix', {
-        body: { barbearia_id: barbearia.id, plano: planoPagamento, email_dono: authData.user?.email }
+        body: { barbearia_id: barbearia.id, plano: planoPagamento, email_dono: authData.user.email }
       });
 
-      if (error || data?.error) throw new Error(data?.error || "Erro no servidor.");
-      setPixGerado(data.qr_code); setTempoPix(900);
-      toast.success("PIX gerado!");
-    } catch (err: any) { toast.error(err.message); } finally { setIsGerandoPix(false); }
+      if (error || data?.error) throw new Error(data?.error || "Erro na comunicação com o servidor de pagamentos.");
+      
+      setPixGerado(data.qr_code); 
+      setTempoPix(900);
+      toast.success("PIX gerado com segurança!");
+    } catch (err: any) { 
+      toast.error(err.message); 
+    } finally { 
+      setIsGerandoPix(false); 
+    }
   };
 
-  const copiarPix = () => { if (pixGerado) { navigator.clipboard.writeText(pixGerado); toast.success("Copiado!"); } };
+  const copiarPix = () => { if (pixGerado) { navigator.clipboard.writeText(pixGerado); toast.success("Código copiado!"); } };
 
   const switchSub = (next: DonoSubTab) => {
     const order: DonoSubTab[] = ["resumo", "dashboard", "automacoes", "config"];
@@ -200,25 +209,36 @@ export function VisaoDono({
   };
 
   const handleSaveHorarios = async () => {
-    const { data: authData } = await supabase.auth.getUser();
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) return toast.error("Sessão expirada.");
+    
     setIsSavingHorario(true);
     try {
       const { error } = await supabase.from('barbearias').update({
         horario_abertura: horariosLoja.abertura, horario_fechamento: horariosLoja.fechamento, 
         dias_trabalho: horariosLoja.dias_trabalho, inicio_almoco: horariosLoja.inicio_almoco, 
         fim_almoco: horariosLoja.fim_almoco, datas_fechadas: horariosLoja.datas_fechadas
-      }).eq('dono_id', authData.user?.id);
+      }).eq('dono_id', authData.user.id);
+      
       if (error) throw error;
-      toast.success("Horários salvos!");
-    } catch (err) { toast.error("Erro ao salvar."); } finally { setIsSavingHorario(false); }
+      toast.success("Horários salvos com sucesso!");
+    } catch (err) { 
+      toast.error("Erro ao salvar."); 
+    } finally { 
+      setIsSavingHorario(false); 
+    }
   };
 
   const handleUploadImagem = async (file: File, bucket: string) => {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 600 });
-      const fileName = `${Math.random()}.${compressed.name.split('.').pop()}`;
+      // 🛡️ BLINDAGEM: Criptografia para gerar nomes de arquivos únicos e evitar substituições
+      const uniqueId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
+      const fileName = `${uniqueId}.${compressed.name.split('.').pop()}`;
+      
       const { error } = await supabase.storage.from(bucket).upload(fileName, compressed);
       if (error) throw error;
+      
       return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
     } catch (err) {
       toast.error("Erro no processamento da imagem.");
@@ -229,7 +249,7 @@ export function VisaoDono({
   const handleAddBarbeiroComFotoETrava = async () => {
     if (planoAtual === "starter" && barbeiros.length >= 2) {
       setModalUpgradeAberto(true);
-      return toast.error("Upgrade necessário: Plano Starter permite 2 profissionais.");
+      return toast.error("Seu plano Starter permite apenas 2 profissionais.");
     }
     const validacao = barbeiroSchema.safeParse(nBarbeiro);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
@@ -289,13 +309,10 @@ export function VisaoDono({
 
   return (
     <div className="flex flex-col gap-6 pb-40 pt-4 w-full overflow-x-hidden text-white">
-      
-      {/* 🚦 BANNERS DE ALERTA - MOBILE RESPONSIVE */}
       <div className="px-4 flex flex-col gap-3">
         {renderBannersAlerta()}
       </div>
 
-      {/* 📱 NAVEGAÇÃO SUPERIOR ESTILO APP */}
       <div className="px-4">
         <div className="flex rounded-[20px] border border-white/[0.08] p-1.5 gap-1.5 shadow-2xl" style={glass}>
           {([
@@ -316,7 +333,6 @@ export function VisaoDono({
         </div>
       </div>
 
-      {/* 🚀 CONTEÚDO PRINCIPAL - ESPAÇAMENTO LATERAL CORRIGIDO */}
       <div className="px-4">
         <AnimatePresence mode="wait" initial={false} custom={subDir}>
           <motion.div key={subTab} custom={subDir} variants={tabVariants} initial="enter" animate="center" exit="exit" 
@@ -331,7 +347,7 @@ export function VisaoDono({
                       <code className="text-xs text-zinc-400 font-mono break-all leading-relaxed">cajtech.net.br/agendar/{meuSlug || "..."}</code>
                     </div>
                     <Button size="lg" className="h-14 rounded-2xl font-black uppercase tracking-widest text-xs w-full shadow-lg" style={{ backgroundColor: brand, color: ctaFg }}
-                      onClick={() => { navigator.clipboard.writeText(`https://cajtech.net.br/agendar/${meuSlug}`); toast.success("Copiado!"); }}>
+                      onClick={() => { navigator.clipboard.writeText(`https://cajtech.net.br/agendar/${meuSlug}`); toast.success("Copiado com sucesso!"); }}>
                       <Copy className="h-4 w-4 mr-2" /> Copiar Link
                     </Button>
                   </div>
@@ -358,12 +374,6 @@ export function VisaoDono({
       {renderModalRenovacao()}
     </div>
   );
-
-  /**
-   * ==========================================
-   * SUB-COMPONENTES DE RENDERIZAÇÃO
-   * ==========================================
-   */
 
   function renderBannersAlerta() {
     if (planoAtual === "starter" && fasePagamento === 1) {
@@ -393,21 +403,50 @@ export function VisaoDono({
   }
 
   function renderTabDashboard() {
-    const data = comissaoPorBarbeiroHoje.map((item: any) => ({ name: item.barbeiro?.nome?.split(' ')[0] || "...", Total: item.total })).sort((a: any, b: any) => b.Total - a.Total);
+    // Tratamento seguro dos dados: Garante que "Total" seja um número válido
+    const data = comissaoPorBarbeiroHoje.map((item: any) => ({ 
+      name: item.barbeiro?.nome?.split(' ')[0] || "...", 
+      Total: Number(item.total) || 0 
+    })).sort((a: any, b: any) => b.Total - a.Total);
+
+    const hasData = data.some((d: any) => d.Total > 0);
+
     return (
       <div className="flex flex-col gap-6">
-        <h3 className="font-black text-white uppercase text-lg italic flex items-center gap-2 px-1"><BarChart3 className="h-5 w-5" style={{ color: brand }} /> Desempenho</h3>
-        <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl" style={glass}>
-          <div className="h-64 w-full">
-            <ResponsiveContainer>
-              <BarChart data={data} margin={{ left: -30 }}>
-                <XAxis dataKey="name" stroke="#555" fontSize={10} axisLine={false} tickLine={false} />
-                <YAxis stroke="#555" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v}`} />
-                <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '12px', fontSize: '10px' }} />
-                <Bar dataKey="Total" radius={[6, 6, 6, 6]}>{data.map((_, i) => <Cell key={i} fill={i === 0 ? brand : hexToRgba(brand, 0.3)} />)}</Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <h3 className="font-black text-white uppercase text-lg italic flex items-center gap-2 px-1">
+          <BarChart3 className="h-5 w-5" style={{ color: brand }} /> Desempenho
+        </h3>
+        
+        <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl relative" style={glass}>
+          {!hasData ? (
+            // 🛡️ NOVO: Empty State Bonito (Impede de ficar aquele buraco vazio feio)
+            <div className="flex flex-col items-center justify-center h-48 text-center space-y-3 opacity-60">
+               <BarChart3 className="h-10 w-10 text-zinc-500 mb-2" />
+               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Nenhuma produção registrada hoje</p>
+               <p className="text-xs font-medium text-zinc-500">As métricas da sua equipe aparecerão aqui.</p>
+            </div>
+          ) : (
+            // 🛡️ NOVO: Gráfico com Grid e MaxBarSize (Impede o tijolo amarelo)
+            <div className="h-64 w-full mt-2">
+              <ResponsiveContainer>
+                <BarChart data={data} margin={{ left: -30 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                  <XAxis dataKey="name" stroke="#777" fontSize={10} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis stroke="#777" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <Tooltip 
+                    cursor={{fill: 'rgba(255,255,255,0.05)'}} 
+                    contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '16px', fontSize: '12px', fontWeight: 'bold' }} 
+                    itemStyle={{ color: brand }}
+                    formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Produção']}
+                  />
+                  {/* O "maxBarSize={45}" é o salva-vidas do visual! */}
+                  <Bar dataKey="Total" radius={[6, 6, 6, 6]} maxBarSize={45}>
+                    {data.map((_, i) => <Cell key={i} fill={i === 0 ? brand : hexToRgba(brand, 0.4)} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
       </div>
     );
@@ -457,7 +496,6 @@ export function VisaoDono({
   function renderTabConfig() {
     return (
       <div className="flex flex-col gap-10 pb-20">
-        {/* HORÁRIOS */}
         <div className="flex flex-col gap-4">
           <h3 className="font-black text-white uppercase text-lg italic flex items-center gap-2 px-1"><Clock className="h-5 w-5" style={{ color: brand }} /> Horários</h3>
           <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl space-y-6" style={glass}>
@@ -485,7 +523,6 @@ export function VisaoDono({
           </Card>
         </div>
 
-        {/* EQUIPE */}
         <div className="flex flex-col gap-4">
           <h3 className="font-black text-white uppercase text-lg italic flex items-center gap-2 px-1"><Users className="h-5 w-5" style={{ color: brand }} /> Equipe</h3>
           <Card className="p-6 rounded-[28px] border border-white/[0.08] shadow-xl space-y-4" style={glass}>
