@@ -4,7 +4,7 @@ import {
   Copy, FileText, Settings2, Clock, Save, 
   BarChart3, CalendarX2, ImagePlus, Loader2, Lock, 
   Zap, Crown, CheckCircle2, X, Timer, QrCode, CheckCircle, UserCircle2,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon, TrendingUp, Award, Activity
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,12 +72,10 @@ export function VisaoDono({
   
   const [meuSlug, setMeuSlug] = useState<string>("");
 
-  // Estados Equipe
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
   const [imagemBarbeiro, setImagemBarbeiro] = useState<File | null>(null);
   const [isUploadingBarbeiro, setIsUploadingBarbeiro] = useState(false);
 
-  // Estados Serviços (VOLTARAM!)
   const [nServico, setNServico] = useState({ nome: "", preco: "", duracao_minutos: "30" });
   const [imagemServico, setImagemServico] = useState<File | null>(null);
   const [isUploadingServico, setIsUploadingServico] = useState(false);
@@ -90,7 +88,6 @@ export function VisaoDono({
   const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
   const [planoAtual, setPlanoAtual] = useState<PlanoType>("starter");
   
-  // Estados Horários Completos (VOLTARAM!)
   const [horariosLoja, setHorariosLoja] = useState({ 
     abertura: "09:00", fechamento: "18:00", dias_trabalho: [1, 2, 3, 4, 5, 6],
     inicio_almoco: "12:00", fim_almoco: "13:00", datas_fechadas: [] as string[]
@@ -443,27 +440,60 @@ export function VisaoDono({
   }
 
   function renderTabDashboard() {
+    // Tratamento de Dados
     const dataEquipe = comissaoPorBarbeiroHoje.map((item: any) => ({ 
       name: item.barbeiro?.nome?.split(' ')[0] || "...", 
       Total: Number(item.total) || 0 
     })).sort((a: any, b: any) => b.Total - a.Total);
     const hasDataEquipe = dataEquipe.some((d: any) => d.Total > 0);
 
+    const faturamento = Number(faturamentoHoje) || 0;
     const lucro = Number(lucroRealHoje) || 0;
     const comissao = Number(comissoesAPagarHoje) || 0;
+    
+    // Insights Calculados
+    const margem = faturamento > 0 ? Math.round((lucro / faturamento) * 100) : 0;
+    const topBarbeiro = hasDataEquipe ? dataEquipe[0] : null;
+    const barbeirosAtivosHoje = dataEquipe.filter((d: any) => d.Total > 0).length;
+    const mediaPorBarbeiro = barbeirosAtivosHoje > 0 ? (faturamento / barbeirosAtivosHoje).toFixed(2) : "0.00";
+
     const dataFinanceiro = [
       { name: 'Lucro Líquido', value: lucro },
-      { name: 'Comissões', value: comissao }
+      { name: 'Comissões Pagas', value: comissao }
     ];
     const hasDataFinanceiro = lucro > 0 || comissao > 0;
     const COLORS = [brand, hexToRgba(brand, 0.25)];
 
     return (
       <div className="flex flex-col gap-6">
-        <h3 className="font-black text-white uppercase text-xl italic flex items-center gap-2">
-          <BarChart3 className="h-5 w-5" style={{ color: brand }} /> Desempenho da Equipe
-        </h3>
         
+        {/* 🚀 NOVOS CARDS DE INSIGHTS (MINI-CARDS) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <Card className="p-4 rounded-[20px] border border-white/[0.08]" style={glass}>
+            <div className="flex items-center gap-1.5 mb-2 opacity-60">
+              <TrendingUp className="h-3 w-3" />
+              <p className="text-[9px] font-black uppercase tracking-widest">Margem de Lucro</p>
+            </div>
+            <p className="text-xl font-black tabular-nums" style={{ color: brand }}>{margem}%</p>
+          </Card>
+          
+          <Card className="p-4 rounded-[20px] border border-white/[0.08]" style={glass}>
+            <div className="flex items-center gap-1.5 mb-2 opacity-60">
+              <Award className="h-3 w-3" />
+              <p className="text-[9px] font-black uppercase tracking-widest">Destaque do Dia</p>
+            </div>
+            <p className="text-xl font-black truncate text-white">{topBarbeiro ? topBarbeiro.name : '-'}</p>
+          </Card>
+
+          <Card className="p-4 rounded-[20px] border border-white/[0.08] col-span-2 sm:col-span-1" style={glass}>
+            <div className="flex items-center gap-1.5 mb-2 opacity-60">
+              <Activity className="h-3 w-3" />
+              <p className="text-[9px] font-black uppercase tracking-widest">Média / Profissional</p>
+            </div>
+            <p className="text-xl font-black text-white tabular-nums">R$ {mediaPorBarbeiro}</p>
+          </Card>
+        </div>
+
         {/* GRÁFICO 1: EQUIPE */}
         <Card className="p-5 rounded-[22px] border border-white/[0.08] shadow-xl relative" style={glass}>
           <div className="flex items-center gap-2 mb-6">
@@ -473,7 +503,7 @@ export function VisaoDono({
           {!hasDataEquipe ? (
             <div className="flex flex-col items-center justify-center h-40 text-center space-y-3 opacity-60">
                <BarChart3 className="h-8 w-8 text-zinc-600 mb-1" />
-               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nenhum corte hoje</p>
+               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nenhum corte registrado hoje</p>
             </div>
           ) : (
             <div className="h-64 w-full">
@@ -501,7 +531,7 @@ export function VisaoDono({
           {!hasDataFinanceiro ? (
             <div className="flex flex-col items-center justify-center h-48 text-center space-y-3 opacity-60">
                <PieChartIcon className="h-8 w-8 text-zinc-600 mb-1" />
-               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Sem entradas hoje</p>
+               <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Sem faturamento no momento</p>
             </div>
           ) : (
             <div className="h-64 w-full">
@@ -576,7 +606,7 @@ export function VisaoDono({
     return (
       <section className="space-y-10 animate-in fade-in duration-500 pb-10">
         
-        {/* BLOCO 1: HORÁRIOS COMPLETO (RESTAURADO!) */}
+        {/* BLOCO 1: HORÁRIOS COMPLETO */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Clock className="h-5 w-5" style={{ color: brand }} />
@@ -654,7 +684,7 @@ export function VisaoDono({
           </Card>
         </div>
 
-        {/* BLOCO 2: GESTÃO DE EQUIPE (RESTAURADO) */}
+        {/* BLOCO 2: GESTÃO DE EQUIPE */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Users className="h-5 w-5" style={{ color: brand }} />
@@ -712,7 +742,7 @@ export function VisaoDono({
           </div>
         </div>
 
-        {/* BLOCO 3: GESTÃO DE SERVIÇOS (RESTAURADO!) */}
+        {/* BLOCO 3: GESTÃO DE SERVIÇOS */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Scissors className="h-5 w-5" style={{ color: brand }} />
@@ -797,7 +827,7 @@ export function VisaoDono({
              <p className="text-4xl font-black text-white italic">R$ {getValorPlano(planoAtual).toFixed(2)}</p>
            </div>
            {!pixGerado ? (
-             <Button onClick={() => handleAbrirCheckout('renovacao')} disabled={isGerandoPix} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 rounded-2xl shadow-xl uppercase italic tracking-wide text-base relative z-10">
+             <Button onClick={() => handleAbrirCheckout('renovacao')} disabled={isGerandoPix} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 rounded-2xl shadow-xl uppercase italic tracking-widest text-base relative z-10">
                <span className="flex items-center justify-center gap-2"><QrCode className="h-5 w-5" /> Pagar via PIX Agora</span>
              </Button>
            ) : (
@@ -821,7 +851,7 @@ export function VisaoDono({
   function renderModalUpgrade() {
     if (!modalUpgradeAberto) return null;
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl overflow-y-auto">
         <div className="w-full max-w-4xl py-10 mt-10">
           <div className="flex justify-between items-center mb-8 px-4">
             <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Planos CAJ TECH</h2>
@@ -909,7 +939,7 @@ export function VisaoDono({
                    <CheckCircle className="h-4 w-4" /> PIX Gerado com Sucesso
                  </p>
                  <Button onClick={copiarPix} className="w-full bg-emerald-500 text-black hover:bg-emerald-400 font-black h-14 rounded-xl flex items-center gap-2 text-sm">
-                    <Copy className="h-5 w-5" /> Copiar Código
+                    <Copy className="h-5 w-5" /> Copiar Código (Copia e Cola)
                  </Button>
                  <p className="text-[10px] font-bold text-emerald-500/70 uppercase mt-3">Expira em {formatarTempo(tempoPix)}</p>
                </div>
