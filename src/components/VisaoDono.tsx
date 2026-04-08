@@ -80,6 +80,11 @@ export function VisaoDono({
   const [imagemServico, setImagemServico] = useState<File | null>(null);
   const [isUploadingServico, setIsUploadingServico] = useState(false);
 
+  // 🚀 NOVOS ESTADOS: Identidade Visual
+  const [imagemLogo, setImagemLogo] = useState<File | null>(null);
+  const [imagemFundo, setImagemFundo] = useState<File | null>(null);
+  const [isUploadingBranding, setIsUploadingBranding] = useState(false);
+
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
@@ -306,6 +311,40 @@ export function VisaoDono({
     }
   };
 
+  // 🚀 NOVA FUNÇÃO: Salvar Identidade Visual
+  const handleSaveBranding = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) return toast.error("Sessão expirada.");
+
+    if (!imagemLogo && !imagemFundo) return toast.info("Nenhuma imagem selecionada para salvar.");
+
+    setIsUploadingBranding(true);
+    try {
+      const updates: any = {};
+      // Usando um bucket chamado 'barbearias' (Lembre-se de criar este bucket no painel do Supabase!)
+      if (imagemLogo) {
+        const urlLogo = await handleUploadImagem(imagemLogo, 'barbearias');
+        if (urlLogo) updates.url_logo = urlLogo;
+      }
+      if (imagemFundo) {
+        const urlFundo = await handleUploadImagem(imagemFundo, 'barbearias');
+        if (urlFundo) updates.url_fundo = urlFundo;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error } = await supabase.from('barbearias').update(updates).eq('dono_id', authData.user.id);
+        if (error) throw error;
+        toast.success("Identidade visual atualizada com sucesso!");
+        setImagemLogo(null);
+        setImagemFundo(null);
+      }
+    } catch (err) {
+      toast.error("Erro ao salvar imagens de identidade visual.");
+    } finally {
+      setIsUploadingBranding(false);
+    }
+  };
+
   const toggleDiaSemana = (idDia: number) => {
     setHorariosLoja(prev => {
       const isSelected = prev.dias_trabalho.includes(idDia);
@@ -440,7 +479,6 @@ export function VisaoDono({
   }
 
   function renderTabDashboard() {
-    // Tratamento de Dados
     const dataEquipe = comissaoPorBarbeiroHoje.map((item: any) => ({ 
       name: item.barbeiro?.nome?.split(' ')[0] || "...", 
       Total: Number(item.total) || 0 
@@ -451,7 +489,6 @@ export function VisaoDono({
     const lucro = Number(lucroRealHoje) || 0;
     const comissao = Number(comissoesAPagarHoje) || 0;
     
-    // Insights Calculados
     const margem = faturamento > 0 ? Math.round((lucro / faturamento) * 100) : 0;
     const topBarbeiro = hasDataEquipe ? dataEquipe[0] : null;
     const barbeirosAtivosHoje = dataEquipe.filter((d: any) => d.Total > 0).length;
@@ -466,8 +503,6 @@ export function VisaoDono({
 
     return (
       <div className="flex flex-col gap-6">
-        
-        {/* 🚀 NOVOS CARDS DE INSIGHTS (MINI-CARDS) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Card className="p-4 rounded-[20px] border border-white/[0.08]" style={glass}>
             <div className="flex items-center gap-1.5 mb-2 opacity-60">
@@ -494,7 +529,6 @@ export function VisaoDono({
           </Card>
         </div>
 
-        {/* GRÁFICO 1: EQUIPE */}
         <Card className="p-5 rounded-[22px] border border-white/[0.08] shadow-xl relative" style={glass}>
           <div className="flex items-center gap-2 mb-6">
              <Users className="h-4 w-4 opacity-50" />
@@ -522,7 +556,6 @@ export function VisaoDono({
           )}
         </Card>
 
-        {/* GRÁFICO 2: ROSCA (FINANCEIRO) */}
         <Card className="p-5 rounded-[22px] border border-white/[0.08] shadow-xl relative" style={glass}>
           <div className="flex items-center gap-2 mb-2">
              <PieChartIcon className="h-4 w-4 opacity-50" />
@@ -707,7 +740,7 @@ export function VisaoDono({
               </div>
             </div>
             <Input placeholder="Senha de acesso" type="password" className="bg-black/30 border-white/10 h-14 rounded-xl text-base px-4" value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
-            <Button onClick={handleAddBarbeiroComFotoETrava} disabled={isUploadingBarbeiro} className="w-full h-14 rounded-xl font-black uppercase text-sm tracking-wider shadow-lg" style={{ backgroundColor: brand, color: ctaFg }}>
+            <Button onClick={handleAddBarbeiroComFotoETrava} disabled={isUploadingBarbeiro} className="w-full h-14 rounded-xl font-black uppercase text-sm tracking-wider shadow-lg shadow-black/40" style={{ backgroundColor: brand, color: ctaFg }}>
               {isUploadingBarbeiro ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Plus className="h-5 w-5 mr-2" />}
               {isUploadingBarbeiro ? "Processando..." : "Cadastrar Profissional"}
             </Button>
@@ -795,6 +828,39 @@ export function VisaoDono({
           </div>
         </div>
 
+        {/* 🚀 NOVO BLOCO 4: IDENTIDADE VISUAL */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <ImagePlus className="h-5 w-5" style={{ color: brand }} />
+            <h3 className="font-black text-white uppercase text-lg tracking-tight italic">Identidade Visual</h3>
+          </div>
+          <Card className="p-5 sm:p-6 rounded-[22px] border border-white/[0.08] shadow-xl space-y-5" style={glass}>
+            
+            <div className="space-y-2">
+              <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Logo da Barbearia</p>
+              <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-[10px] uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
+                {imagemLogo ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <ImagePlus className="h-4 w-4 opacity-50" />} 
+                <span className="opacity-80">{imagemLogo ? "Logo Selecionada" : "Anexar Nova Logo"}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={e => setImagemLogo(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Imagem de Fundo (Capa do App)</p>
+              <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-[10px] uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
+                {imagemFundo ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <ImagePlus className="h-4 w-4 opacity-50" />} 
+                <span className="opacity-80">{imagemFundo ? "Fundo Selecionado" : "Anexar Imagem de Fundo"}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={e => setImagemFundo(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+
+            <Button onClick={handleSaveBranding} disabled={isUploadingBranding} className="w-full h-14 rounded-2xl font-black uppercase tracking-wider shadow-lg shadow-black/40 mt-2" style={{ backgroundColor: brand, color: ctaFg }}>
+              {isUploadingBranding ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Save className="h-5 w-5 mr-2" />}
+              {isUploadingBranding ? "Enviando imagens..." : "Salvar Identidade Visual"}
+            </Button>
+          </Card>
+        </div>
+
       </section>
     );
   }
@@ -819,7 +885,7 @@ export function VisaoDono({
            <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
            <Lock className="w-16 h-16 text-red-500 mx-auto opacity-20 absolute -top-4 -right-4 rotate-12" />
            <div className="space-y-2 relative z-10">
-             <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Sistema Bloqueado</h2>
+             <h2 className="text-3xl font-black text-white uppercase italic leading-none">Sistema<br/>Bloqueado</h2>
              <p className="text-zinc-400 text-sm font-medium">Renove sua assinatura para religar sua agenda online imediatamente.</p>
            </div>
            <div className="bg-black/50 border border-zinc-800 p-5 rounded-3xl relative z-10">
@@ -939,7 +1005,7 @@ export function VisaoDono({
                    <CheckCircle className="h-4 w-4" /> PIX Gerado com Sucesso
                  </p>
                  <Button onClick={copiarPix} className="w-full bg-emerald-500 text-black hover:bg-emerald-400 font-black h-14 rounded-xl flex items-center gap-2 text-sm">
-                    <Copy className="h-5 w-5" /> Copiar Código (Copia e Cola)
+                    <Copy className="h-5 w-5" /> Copiar Código
                  </Button>
                  <p className="text-[10px] font-bold text-emerald-500/70 uppercase mt-3">Expira em {formatarTempo(tempoPix)}</p>
                </div>
