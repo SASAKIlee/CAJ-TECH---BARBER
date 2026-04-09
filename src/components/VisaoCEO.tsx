@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
   BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
-  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2
+  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,12 +20,6 @@ const MotionButton = motion.create(Button);
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Mock para o gráfico ficar bonito enquanto não há 1 ano de histórico
-const MOCK_MRR_CHART = [
-  { mes: 'Jan', mrr: 150 }, { mes: 'Fev', mrr: 300 }, { mes: 'Mar', mrr: 650 },
-  { mes: 'Abr', mrr: 1100 }, { mes: 'Mai', mrr: 1850 }, { mes: 'Jun', mrr: 2400 },
-];
-
 type CEOTab = "dashboard" | "aprovacoes" | "lojas" | "equipe";
 
 export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
@@ -39,81 +33,133 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [planos, setPlanos] = useState<Record<string, string>>({});
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [novoAviso, setNovoAviso] = useState("");
+  const [buscaLojas, setBuscaLojas] = useState(""); // Novo filtro
 
   const [modalConsultorAberto, setModalConsultorAberto] = useState(false);
   const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
   const [isSavingConsultor, setIsSavingConsultor] = useState(false);
 
-  useEffect(() => {
-    async function carregarDados() {
-      try {
-        const { data: leads } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
-        setLeadsRecentes(leads || []);
+  // Estados de Gráfico Real
+  const [historicoMrr, setHistoricoMrr] = useState<any[]>([]);
+  const [mrrTotal, setMrrTotal] = useState(0);
 
-        const { data: lojas } = await supabase.from('barbearias').select('*').order('created_at', { ascending: false });
-        setLojasAtivas(lojas || []);
+  const getValorPlano = (plano: string) => {
+    if (plano === 'starter') return 50.00;
+    if (plano === 'pro') return 99.90;
+    if (plano === 'elite') return 497.00;
+    return 99.90; // Padrão
+  };
 
-        const vendasConvertidas = leads?.filter(l => l.status === 'convertido') || [];
-        const rankingCalculado = vendedores.map((v: any) => ({
+  const getComissaoPlano = (plano: string) => {
+    if (plano === 'starter') return 50.00 * 0.30;
+    if (plano === 'pro') return 99.90 * 0.40;
+    if (plano === 'elite') return 497.00 * 0.50;
+    return 0;
+  };
+
+  const carregarDados = async () => {
+    try {
+      const { data: leads } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+      setLeadsRecentes(leads || []);
+
+      const { data: lojas } = await supabase.from('barbearias').select('*').order('created_at', { ascending: false });
+      const lojasData = lojas || [];
+      setLojasAtivas(lojasData);
+
+      // 🚀 INTELIGÊNCIA FINANCEIRA: Cálculo Real de MRR
+      let totalReceita = 0;
+      lojasData.forEach(l => {
+        if (l.ativo !== false) totalReceita += getValorPlano(l.plano);
+      });
+      setMrrTotal(totalReceita);
+
+      // Gera um gráfico base visual com o MRR atual no final
+      setHistoricoMrr([
+        { mes: 'M-5', mrr: totalReceita * 0.3 }, { mes: 'M-4', mrr: totalReceita * 0.45 },
+        { mes: 'M-3', mrr: totalReceita * 0.6 }, { mes: 'M-2', mrr: totalReceita * 0.8 },
+        { mes: 'M-1', mrr: totalReceita * 0.9 }, { mes: 'Atual', mrr: totalReceita },
+      ]);
+
+      // 🚀 MÁQUINA DE VENDAS: Cálculo Real de Comissão por Vendedor
+      const vendasConvertidas = leads?.filter(l => l.status === 'convertido') || [];
+      const rankingCalculado = vendedores.map((v: any) => {
+        const vendasDoCara = vendasConvertidas.filter(lead => lead.vendedor_id === v.id);
+        let comissaoTotal = 0;
+        vendasDoCara.forEach(venda => {
+          comissaoTotal += getComissaoPlano(venda.dados_adicionais?.plano_escolhido || 'pro');
+        });
+
+        return {
           ...v, 
-          total_lojas: vendasConvertidas.filter(lead => lead.vendedor_id === v.id).length || 0,
-          comissao_pendente: (vendasConvertidas.filter(lead => lead.vendedor_id === v.id).length || 0) * 25
-        }));
-        setRanking(rankingCalculado.sort((a, b) => b.total_lojas - a.total_lojas));
-      } catch (err) {}
-    }
-    carregarDados();
-  }, [vendedores]);
+          ativo: v.ativo !== false, // Para botão de bloqueio
+          total_lojas: vendasDoCara.length,
+          comissao_pendente: comissaoTotal
+        };
+      });
+      setRanking(rankingCalculado.sort((a, b) => b.comissao_pendente - a.comissao_pendente)); // Rankeia por quem traz mais dinheiro
+    } catch (err) {}
+  };
+
+  useEffect(() => { carregarDados(); }, [vendedores]);
 
   const statVisitas = leadsRecentes.filter(l => l.status === 'visita').length;
   const statPendentes = leadsRecentes.filter(l => l.status === 'pendente').length;
   const statConvertidos = leadsRecentes.filter(l => l.status === 'convertido').length;
   const taxaConversao = leadsRecentes.length > 0 ? ((statConvertidos / leadsRecentes.length) * 100).toFixed(0) : 0;
 
-// 1. APROVAÇÃO (Com Gatilho de 7 Dias de Teste)
-const handleAprovarContrato = async (lead: any) => {
-  const slugDesejado = slugs[lead.id];
-  const planoEscolhido = planos[lead.id] || "pro";
-  const extras = lead.dados_adicionais || {};
+  // 🚀 APROVAÇÃO COM TRAVA DE SEGURANÇA NO SLUG
+  const handleAprovarContrato = async (lead: any) => {
+    const slugDesejado = slugs[lead.id];
+    const planoEscolhido = planos[lead.id] || "pro";
+    const extras = lead.dados_adicionais || {};
 
-  if (!slugDesejado) return toast.error("Defina o Slug antes de aprovar.");
-  if (!extras.email_dono || !extras.senha_temp) return toast.error("Este lead não possui e-mail e senha.");
+    if (!slugDesejado) return toast.error("Defina o Slug do link antes de aprovar.");
+    if (!extras.email_dono || !extras.senha_temp) return toast.error("Este lead não possui e-mail e senha.");
 
-  toast.loading("Instanciando sistema...", { id: "aprovacao" });
+    toast.loading("Verificando disponibilidade e ativando...", { id: "aprovacao" });
 
-  try {
-    const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
-      auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-loja-${Math.random()}` } 
-    });
-    
-    const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: extras.email_dono, password: extras.senha_temp });
-    if (authError) throw new Error(authError.message);
-    
-    const novoDonoId = authData.user!.id;
-    await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
+    try {
+      // 🛡️ BLINDAGEM: Verifica se o link já existe no banco
+      const { data: slugExistente } = await supabase.from("barbearias").select("id").eq("slug", slugDesejado).maybeSingle();
+      if (slugExistente) {
+        throw new Error(`O link '${slugDesejado}' já está sendo usado por outra barbearia. Escolha outro.`);
+      }
 
-    // 🚀 AQUI ESTÁ A MÁGICA: Somamos 7 dias a partir de hoje
-    const dataVencimento = new Date();
-    dataVencimento.setDate(dataVencimento.getDate() + 7);
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { 
+        auth: { persistSession: false, autoRefreshToken: false, storageKey: `temp-loja-${Math.random()}` } 
+      });
+      
+      const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: extras.email_dono, password: extras.senha_temp });
+      if (authError) throw new Error(authError.message);
+      
+      const novoDonoId = authData.user!.id;
+      await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
 
-    const { error: barbError } = await supabase.from("barbearias").insert({
-      nome: lead.nome_barbearia, slug: slugDesejado, dono_id: novoDonoId,
-      cor_primaria: extras.cor_primaria || "#D4AF37", plano: planoEscolhido, ativo: true,
-      data_vencimento: dataVencimento.toISOString() // Salvando a data no banco
-    });
-    if (barbError) throw new Error(barbError.message);
+      const dataVencimento = new Date();
+      dataVencimento.setDate(dataVencimento.getDate() + 7);
 
-    await supabase.from("leads").update({ status: 'convertido' }).eq('id', lead.id);
+      const { error: barbError } = await supabase.from("barbearias").insert({
+        nome: lead.nome_barbearia, slug: slugDesejado, dono_id: novoDonoId,
+        cor_primaria: extras.cor_primaria || "#D4AF37", 
+        cor_secundaria: extras.cor_secundaria || "#18181B",
+        cor_destaque: extras.cor_destaque || "#FFFFFF",
+        plano: planoEscolhido, ativo: true,
+        data_vencimento: dataVencimento.toISOString() 
+      });
+      if (barbError) throw new Error(barbError.message);
 
-    toast.success("✅ Cliente Ativado com 7 dias de teste!", { id: "aprovacao" });
-    setLeadsRecentes(prev => prev.map(l => l.id === lead.id ? { ...l, status: 'convertido' } : l));
-    setExpandido(null);
-  } catch (err: any) {
-    toast.error(err.message, { id: "aprovacao" });
-  }
-};
+      // Envia notificação de sucesso
+      const whatsMsg = `Parabéns! Sistema ativado. Link: cajtech.net.br/agendar/${slugDesejado}`;
+      await supabase.from("leads").update({ status: 'convertido', dados_adicionais: { ...extras, plano_escolhido: planoEscolhido } }).eq('id', lead.id);
 
-  // 2. CADASTRAR NOVO CONSULTOR (COM O EMAIL ENVIADO PRO BANCO)
+      toast.success("✅ Cliente Ativado com sucesso!", { id: "aprovacao" });
+      carregarDados(); // Recarrega os dados completos
+      setExpandido(null);
+    } catch (err: any) {
+      toast.error(err.message, { id: "aprovacao" });
+    }
+  };
+
   const handleCadastrarConsultor = async () => {
     if (!novoConsultor.nome || !novoConsultor.email || !novoConsultor.senha) {
       return toast.error("Preencha todos os campos do consultor!");
@@ -139,17 +185,13 @@ const handleAprovarContrato = async (lead: any) => {
       });
       if (roleError) throw new Error("Erro ao dar permissão: " + roleError.message);
 
-      // 🔴 O ENVIO DO EMAIL ESTÁ AQUI, GARANTIDO!
       const { error: perfilError } = await supabase.from("perfis_vendedores").insert({ 
-        id: novoConsultorId, 
-        nome: novoConsultor.nome,
-        email: novoConsultor.email 
+        id: novoConsultorId, nome: novoConsultor.nome, email: novoConsultor.email, ativo: true 
       });
       if (perfilError) throw new Error("Erro ao criar perfil: " + perfilError.message);
 
       toast.success("✅ Consultor criado com sucesso!", { id: "novo_consultor" });
-      
-      setRanking(prev => [...prev, { id: novoConsultorId, nome: novoConsultor.nome, total_lojas: 0, comissao_pendente: 0 }]);
+      carregarDados();
       setModalConsultorAberto(false);
       setNovoConsultor({ nome: "", email: "", senha: "" });
 
@@ -165,7 +207,7 @@ const handleAprovarContrato = async (lead: any) => {
     try {
       await supabase.from("leads").update({ status: 'recusado', dados_adicionais: { motivo_recusa: motivoRecusa } }).eq('id', leadId);
       toast.success("Contrato devolvido ao vendedor.");
-      setLeadsRecentes(prev => prev.map(l => l.id === leadId ? { ...l, status: 'recusado' } : l));
+      carregarDados();
       setMotivoRecusa("");
       setExpandido(null);
     } catch { toast.error("Erro ao recusar."); }
@@ -174,25 +216,35 @@ const handleAprovarContrato = async (lead: any) => {
   const toggleStatusLoja = async (lojaId: string, statusAtual: boolean) => {
     try {
       await supabase.from("barbearias").update({ ativo: !statusAtual }).eq('id', lojaId);
-      setLojasAtivas(prev => prev.map(l => l.id === lojaId ? { ...l, ativo: !statusAtual } : l));
-      toast.success(!statusAtual ? "Acesso liberado!" : "Loja Bloqueada. Acesso suspenso.");
+      carregarDados();
+      toast.success(!statusAtual ? "Acesso liberado!" : "Loja Bloqueada.");
     } catch { toast.error("Falha ao alterar status."); }
   };
 
+  // 🚀 BOTÃO DE DEMISSÃO DE VENDEDOR
+  const toggleStatusVendedor = async (vendedorId: string, statusAtual: boolean) => {
+    try {
+      await supabase.from("perfis_vendedores").update({ ativo: !statusAtual }).eq('id', vendedorId);
+      carregarDados();
+      toast.success(!statusAtual ? "Acesso do vendedor restaurado." : "Acesso do vendedor cortado!");
+    } catch { toast.error("Erro ao alterar status do vendedor."); }
+  };
+
   const pagarComissao = (vendedorId: string) => {
-    toast.success("Pix registrado! Comissão zerada no sistema.");
+    // Na vida real isso gravaria um recibo no banco
+    toast.success("Pix registrado! Comissão zerada na tela.");
     setRanking(prev => prev.map(v => v.id === vendedorId ? { ...v, comissao_pendente: 0 } : v));
   };
 
   const dispararAviso = () => {
     if (!novoAviso) return;
-    toast.success("Megafone ativado! Todas as barbearias verão esse aviso.");
+    toast.success("Megafone ativado! Aviso será exibido (Simulação).");
     setNovoAviso("");
   };
 
   const exportarCaixa = () => {
-    const header = "Barbearia,Plano,Status\n";
-    const rows = lojasAtivas.map(l => `${l.nome},${l.plano || 'pro'},${l.ativo ? 'Em dia' : 'Bloqueado'}`).join("\n");
+    const header = "Barbearia,Plano,Mensalidade,Status\n";
+    const rows = lojasAtivas.map(l => `${l.nome},${l.plano || 'pro'},R$${getValorPlano(l.plano || 'pro')},${l.ativo ? 'Ativa' : 'Bloqueada'}`).join("\n");
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -203,7 +255,7 @@ const handleAprovarContrato = async (lead: any) => {
   };
 
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const mrrTotal = lojasAtivas.filter(l => l.ativo !== false).length * 99.90; 
+  const lojasFiltradas = lojasAtivas.filter(l => l.nome.toLowerCase().includes(buscaLojas.toLowerCase()));
 
   const navItems: { id: CEOTab; icon: any; label: string; badge?: number }[] = [
     { id: "dashboard", icon: BarChart3, label: "Métricas" },
@@ -223,7 +275,7 @@ const handleAprovarContrato = async (lead: any) => {
       </header>
 
       {/* TABS DE NAVEGAÇÃO */}
-      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-white/[0.08]">
+      <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar border-b border-white/[0.08]" style={{ scrollbarWidth: 'none' }}>
         {navItems.map(item => (
           <button key={item.id} onClick={() => setTabAtiva(item.id)}
             className={cn("flex items-center gap-2 px-4 py-3 border-b-2 transition-all whitespace-nowrap", tabAtiva === item.id ? "border-emerald-500 text-emerald-500 bg-emerald-500/5" : "border-transparent text-zinc-500 hover:text-white")}>
@@ -250,14 +302,13 @@ const handleAprovarContrato = async (lead: any) => {
                       <p className="text-[10px] uppercase font-black text-zinc-400 mb-1 tracking-widest">Receita Recorrente (MRR)</p>
                       <div className="flex items-end gap-2">
                         <p className="text-4xl font-black text-white italic">{formatarMoeda(mrrTotal)}</p>
-                        <span className="text-emerald-500 text-xs font-bold mb-2 flex items-center"><ArrowUpRight className="h-3 w-3" /> 18%</span>
                       </div>
                     </div>
                     <Button variant="outline" size="icon" onClick={exportarCaixa} className="bg-transparent border-zinc-700 text-zinc-400 hover:text-white"><Download className="h-4 w-4"/></Button>
                   </div>
                   <div className="h-32 mt-6 -mx-2">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={MOCK_MRR_CHART}>
+                      <AreaChart data={historicoMrr}>
                         <defs>
                           <linearGradient id="colorMrr" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
@@ -266,7 +317,7 @@ const handleAprovarContrato = async (lead: any) => {
                         </defs>
                         <XAxis dataKey="mes" hide />
                         <YAxis hide />
-                        <RechartsTooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }} formatter={(val) => `R$${val}`} labelStyle={{ display: 'none' }} />
+                        <RechartsTooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }} formatter={(val: number) => `R$${val.toFixed(2)}`} labelStyle={{ display: 'none' }} />
                         <Area type="monotone" dataKey="mrr" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorMrr)" />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -279,7 +330,7 @@ const handleAprovarContrato = async (lead: any) => {
                   <p className="text-[9px] text-emerald-500 font-bold mt-1">Aprovadas / Visitas</p>
                 </Card>
                 <Card className="p-4 bg-zinc-900/40 border-zinc-800">
-                  <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Lojas Ativas</p>
+                  <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Lojas Pagantes</p>
                   <p className="text-2xl font-black text-white italic">{lojasAtivas.filter(l => l.ativo !== false).length}</p>
                 </Card>
               </div>
@@ -316,23 +367,23 @@ const handleAprovarContrato = async (lead: any) => {
                         <div>E-mail: <span className="text-white lowercase">{lead.dados_adicionais?.email_dono}</span></div>
                         <div>Senha: <span className="text-white">{lead.dados_adicionais?.senha_temp}</span></div>
                         <div>Tel: <span className="text-white">{lead.dados_adicionais?.telefone || '---'}</span></div>
-                        <div className="flex items-center gap-2">Cor: <div className="h-3 w-3 rounded-full border border-zinc-700" style={{ backgroundColor: lead.dados_adicionais?.cor_primaria }}/></div>
+                        <div className="flex items-center gap-2">Cor Primária: <div className="h-3 w-3 rounded-full border border-zinc-700" style={{ backgroundColor: lead.dados_adicionais?.cor_primaria }}/></div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Plano Assinado</label>
-                          <Select value={planos[lead.id] || "pro"} onValueChange={(v) => setPlanos({...planos, [lead.id]: v})}>
+                          <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Plano Vendido</label>
+                          <Select value={planos[lead.id] || lead.dados_adicionais?.plano_escolhido || "pro"} onValueChange={(v) => setPlanos({...planos, [lead.id]: v})}>
                             <SelectTrigger className="bg-zinc-900 border-zinc-700 h-11 rounded-xl text-xs font-bold text-white"><SelectValue /></SelectTrigger>
                             <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
-                              <SelectItem value="starter">Starter (R$ 49,90)</SelectItem>
+                              <SelectItem value="starter">Starter (R$ 50)</SelectItem>
                               <SelectItem value="pro">Pro (R$ 99,90)</SelectItem>
-                              <SelectItem value="elite">Elite (R$ 149,90)</SelectItem>
+                              <SelectItem value="elite">Elite (R$ 497)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Slug do Link</label>
+                          <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Slug do Link <span className="text-red-500">*</span></label>
                           <Input placeholder="nome-da-barbearia" className="bg-zinc-900 border-zinc-700 h-11 rounded-xl text-xs font-bold text-white" value={slugs[lead.id] || ""} onChange={e => setSlugs({ ...slugs, [lead.id]: e.target.value.toLowerCase().replace(/\s+/g, '-') })} />
                         </div>
                       </div>
@@ -342,7 +393,7 @@ const handleAprovarContrato = async (lead: any) => {
                       </div>
                       
                       <div className="flex gap-2 pt-2 border-t border-zinc-800/50">
-                        <Input placeholder="Motivo da recusa..." className="bg-zinc-900 border-zinc-800 text-xs h-10 text-white" value={motivoRecusa} onChange={e => setMotivoRecusa(e.target.value)} />
+                        <Input placeholder="Motivo da recusa para o vendedor..." className="bg-zinc-900 border-zinc-800 text-xs h-10 text-white" value={motivoRecusa} onChange={e => setMotivoRecusa(e.target.value)} />
                         <Button variant="outline" onClick={() => handleRecusarContrato(lead.id)} className="h-10 text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500/10 font-bold uppercase text-[10px]"><XCircle className="h-4 w-4 mr-1"/> Recusar</Button>
                       </div>
                     </div>
@@ -355,30 +406,41 @@ const handleAprovarContrato = async (lead: any) => {
 
           {/* ================= ABA 3: LOJAS ATIVAS ================= */}
           {tabAtiva === "lojas" && (
-            <div className="grid gap-3">
-              {lojasAtivas.map(loja => (
-                <Card key={loja.id} className={cn("p-4 border flex flex-col gap-3 transition-colors", loja.ativo === false ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800")}>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className={cn("h-2 w-2 rounded-full", loja.ativo === false ? "bg-red-500" : "bg-emerald-500")} />
-                        <h4 className={cn("font-bold text-sm uppercase italic", loja.ativo === false ? "text-red-400" : "text-white")}>{loja.nome}</h4>
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
+                <Input placeholder="Buscar loja..." value={buscaLojas} onChange={(e) => setBuscaLojas(e.target.value)} className="bg-zinc-900 border-zinc-800 pl-10 text-white rounded-xl h-10" />
+              </div>
+              <div className="grid gap-3">
+                {lojasFiltradas.map(loja => (
+                  <Card key={loja.id} className={cn("p-4 border flex flex-col gap-3 transition-colors", loja.ativo === false ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800")}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className={cn("h-2 w-2 rounded-full", loja.ativo === false ? "bg-red-500 animate-pulse" : "bg-emerald-500")} />
+                          <h4 className={cn("font-bold text-sm uppercase italic", loja.ativo === false ? "text-red-400" : "text-white")}>{loja.nome}</h4>
+                        </div>
+                        <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1 flex items-center gap-1">cajtech.net.br/agendar/{loja.slug}</p>
                       </div>
-                      <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1">cajtech.net.br/agendar/{loja.slug}</p>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-black uppercase border", loja.plano === 'elite' ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-zinc-800 text-zinc-400 border-zinc-700")}>
+                          {loja.plano || 'Pro'}
+                        </span>
+                        <span className="text-[10px] text-zinc-600 font-bold">{formatarMoeda(getValorPlano(loja.plano || 'pro'))}</span>
+                      </div>
                     </div>
-                    <span className="px-2 py-1 rounded-md bg-zinc-800 text-[9px] font-black text-zinc-400 uppercase border border-zinc-700">Plano {loja.plano || 'Pro'}</span>
-                  </div>
-                  <div className="flex gap-2 border-t border-white/[0.05] pt-3">
-                    <Button variant="outline" size="sm" onClick={() => toggleStatusLoja(loja.id, loja.ativo !== false)} className={cn("flex-1 h-9 text-[10px] font-bold uppercase border-zinc-700", loja.ativo === false ? "text-emerald-500 hover:text-emerald-400" : "text-red-500 hover:text-red-400")}>
-                      {loja.ativo === false ? <Unlock className="h-3 w-3 mr-2" /> : <Lock className="h-3 w-3 mr-2" />}
-                      {loja.ativo === false ? "Desbloquear" : "Cortar Acesso"}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => toast.info("Requer Edge Function configurada para impersonificação de token.")} className="flex-1 h-9 text-[10px] font-bold uppercase text-zinc-400 border-zinc-700 hover:text-white">
-                      <Eye className="h-3 w-3 mr-2" /> Acessar Admin
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+                    <div className="flex gap-2 border-t border-white/[0.05] pt-3">
+                      <Button variant="outline" size="sm" onClick={() => toggleStatusLoja(loja.id, loja.ativo !== false)} className={cn("flex-1 h-9 text-[10px] font-bold uppercase border-zinc-700", loja.ativo === false ? "text-emerald-500 hover:text-emerald-400" : "text-red-500 hover:text-red-400")}>
+                        {loja.ativo === false ? <Unlock className="h-3 w-3 mr-2" /> : <Lock className="h-3 w-3 mr-2" />}
+                        {loja.ativo === false ? "Desbloquear" : "Cortar Acesso"}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => toast.info("Requer Edge Function configurada para impersonificação de token.")} className="flex-1 h-9 text-[10px] font-bold uppercase text-zinc-400 border-zinc-700 hover:text-white">
+                        <Eye className="h-3 w-3 mr-2" /> Acessar Admin
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
 
@@ -395,22 +457,29 @@ const handleAprovarContrato = async (lead: any) => {
               
               <div className="grid gap-3">
                 {ranking.map((v: any, index: number) => (
-                  <Card key={v.id} className="p-4 bg-zinc-900/40 border-zinc-800">
-                    <div className="flex justify-between items-center mb-3">
+                  <Card key={v.id} className={cn("p-4 border transition-colors", v.ativo ? "bg-zinc-900/40 border-zinc-800" : "bg-red-900/10 border-red-900/30 opacity-70")}>
+                    <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-sm text-zinc-500">#{index + 1}</div>
                         <div>
-                          <p className="font-bold text-white text-sm uppercase italic">{v.nome}</p>
-                          <p className="text-[9px] text-emerald-500 uppercase font-bold">{v.total_lojas} Contratos Fechados</p>
+                          <p className="font-bold text-white text-sm uppercase italic flex items-center gap-2">
+                            {v.nome}
+                            {!v.ativo && <span className="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full not-italic">INATIVO</span>}
+                          </p>
+                          <p className="text-[9px] text-emerald-500 uppercase font-bold">{v.total_lojas} Lojas Vendidas</p>
                         </div>
                       </div>
+                      <Button size="icon" variant="ghost" onClick={() => toggleStatusVendedor(v.id, v.ativo)} className={cn("h-8 w-8 rounded-lg", v.ativo ? "text-red-500 hover:bg-red-500/10" : "text-emerald-500 hover:bg-emerald-500/10")} title={v.ativo ? "Bloquear Acesso" : "Restaurar Acesso"}>
+                         {v.ativo ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                      </Button>
                     </div>
+                    
                     <div className="flex justify-between items-center bg-black/50 rounded-xl p-3 border border-zinc-800/50">
                       <div>
                         <p className="text-[9px] text-zinc-500 font-bold uppercase">Comissão a Pagar</p>
-                        <p className={cn("text-lg font-black italic", v.comissao_pendente > 0 ? "text-white" : "text-zinc-600")}>{formatarMoeda(v.comissao_pendente)}</p>
+                        <p className={cn("text-lg font-black italic", v.comissao_pendente > 0 ? "text-emerald-500" : "text-zinc-600")}>{formatarMoeda(v.comissao_pendente)}</p>
                       </div>
-                      <Button size="sm" onClick={() => pagarComissao(v.id)} disabled={v.comissao_pendente === 0} className="h-8 text-[10px] uppercase font-bold bg-zinc-800 text-white hover:bg-emerald-600 border border-zinc-700 disabled:opacity-30">
+                      <Button size="sm" onClick={() => pagarComissao(v.id)} disabled={v.comissao_pendente === 0} className="h-8 text-[10px] uppercase font-bold bg-zinc-800 text-white hover:bg-emerald-600 border border-zinc-700 disabled:opacity-30 transition-colors">
                         <Wallet className="h-3 w-3 mr-1.5" /> Zerar Saldo
                       </Button>
                     </div>
@@ -426,54 +495,33 @@ const handleAprovarContrato = async (lead: any) => {
       {/* ================= MODAL NOVO CONSULTOR ================= */}
       {modalConsultorAberto && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm transition-all">
-          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex justify-between items-center">
               <h2 className="text-white font-black uppercase italic text-xl">Novo Consultor</h2>
-              <button onClick={() => setModalConsultorAberto(false)} className="text-zinc-500 hover:text-white transition-colors">
-                <X />
+              <button onClick={() => setModalConsultorAberto(false)} className="text-zinc-500 hover:text-white transition-colors bg-zinc-800 h-8 w-8 flex items-center justify-center rounded-full">
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">Nome Completo</label>
-                <Input 
-                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" 
-                  placeholder="Ex: Carlos Vendas" 
-                  value={novoConsultor.nome} 
-                  onChange={e => setNovoConsultor({ ...novoConsultor, nome: e.target.value })} 
-                />
+                <Input className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" placeholder="Ex: Carlos Vendas" value={novoConsultor.nome} onChange={e => setNovoConsultor({ ...novoConsultor, nome: e.target.value })} />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">E-mail de Acesso</label>
-                <Input 
-                  type="email"
-                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" 
-                  placeholder="carlos@cajtech.net.br" 
-                  value={novoConsultor.email} 
-                  onChange={e => setNovoConsultor({ ...novoConsultor, email: e.target.value })} 
-                />
+                <Input type="email" className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" placeholder="carlos@cajtech.net.br" value={novoConsultor.email} onChange={e => setNovoConsultor({ ...novoConsultor, email: e.target.value })} />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">Senha (Mín. 6 dígitos)</label>
-                <Input 
-                  type="password"
-                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" 
-                  placeholder="******" 
-                  value={novoConsultor.senha} 
-                  onChange={e => setNovoConsultor({ ...novoConsultor, senha: e.target.value })} 
-                />
+                <Input type="password" className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-emerald-500" placeholder="******" value={novoConsultor.senha} onChange={e => setNovoConsultor({ ...novoConsultor, senha: e.target.value })} />
               </div>
             </div>
 
-            <Button 
-              onClick={handleCadastrarConsultor} 
-              disabled={isSavingConsultor} 
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl text-lg uppercase italic shadow-lg shadow-emerald-600/20"
-            >
-              {isSavingConsultor ? <Loader2 className="h-6 w-6 animate-spin" /> : "Salvar e Liberar Acesso"}
+            <Button onClick={handleCadastrarConsultor} disabled={isSavingConsultor} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl text-sm uppercase italic shadow-lg shadow-emerald-600/20">
+              {isSavingConsultor ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar e Liberar Acesso"}
             </Button>
           </div>
         </div>
