@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
   BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
-  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone
+  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone, Calendar, CreditCard, Filter
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 type CEOTab = "dashboard" | "aprovacoes" | "lojas" | "equipe";
+type FiltroLoja = "todas" | "ativas" | "bloqueadas" | "trial";
 
 export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [tabAtiva, setTabAtiva] = useState<CEOTab>("dashboard");
@@ -29,12 +30,17 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [ranking, setRanking] = useState<any[]>([]);
   
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [lojaExpandida, setLojaExpandida] = useState<string | null>(null); // 🚀 Expansão de Lojas
+  
   const [slugs, setSlugs] = useState<Record<string, string>>({});
   const [planos, setPlanos] = useState<Record<string, string>>({});
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [novoAviso, setNovoAviso] = useState("");
+  
   const [buscaLojas, setBuscaLojas] = useState(""); 
-  const [buscaAprovacoes, setBuscaAprovacoes] = useState(""); // 🚀 NOVO FILTRO DE APROVAÇÕES
+  const [filtroLojas, setFiltroLojas] = useState<FiltroLoja>("todas"); // 🚀 Filtro Rápido
+
+  const [buscaAprovacoes, setBuscaAprovacoes] = useState(""); 
 
   const [modalConsultorAberto, setModalConsultorAberto] = useState(false);
   const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
@@ -64,13 +70,28 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
 
       const { data: lojas } = await supabase.from('barbearias').select('*').order('created_at', { ascending: false });
       const lojasData = lojas || [];
-      setLojasAtivas(lojasData);
+      
+      // Enriquecendo dados da loja com dias restantes
+      const hoje = new Date();
+      const lojasEnriquecidas = lojasData.map(loja => {
+        const vencimento = loja.data_vencimento ? new Date(loja.data_vencimento) : null;
+        const diffDias = vencimento ? Math.ceil((vencimento.getTime() - hoje.getTime()) / (1000 * 3600 * 24)) : 0;
+        
+        // Regra de Trial (criada há menos de 7 dias e ainda ativada como teste)
+        const criacao = new Date(loja.created_at);
+        const diasDesdeCriacao = Math.ceil((hoje.getTime() - criacao.getTime()) / (1000 * 3600 * 24));
+        const isTrial = diasDesdeCriacao <= 7;
+
+        return { ...loja, diffDias, isTrial };
+      });
+      
+      setLojasAtivas(lojasEnriquecidas);
 
       const { data: vendedoresDB } = await supabase.from('perfis_vendedores').select('*');
       const listaVendedores = vendedoresDB || vendedores;
 
       let totalReceita = 0;
-      lojasData.forEach(l => {
+      lojasEnriquecidas.forEach(l => {
         if (l.ativo !== false) totalReceita += getValorPlano(l.plano);
       });
       setMrrTotal(totalReceita);
@@ -151,7 +172,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
       carregarDados(); 
       setExpandido(null);
 
-      // 🚀 ONBOARDING AUTOMÁTICO (WHATSAPP)
       if (extras.telefone) {
         const msg = `Fala mestre, tudo bem? Aqui é da equipe CAJ TECH! 🚀\n\nSeu aplicativo exclusivo para a *${lead.nome_barbearia}* acabou de ser criado e já está no ar.\n\n🔗 *Link de Agendamento:* cajtech.net.br/agendar/${slugDesejado}\n\n🔒 *Acesso do Dono:*\nE-mail: ${extras.email_dono}\nSenha: ${extras.senha_temp}\n\nAcesse o sistema, configure seus serviços e bora lotar essa agenda! Qualquer dúvida, estamos aqui.`;
         window.open(`https://wa.me/55${extras.telefone}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -223,6 +243,21 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     } catch { toast.error("Falha ao alterar status."); }
   };
 
+  // 🚀 NOVO: Renovar Loja Manualmente (+30 dias)
+  const renovarLojaManual = async (lojaId: string, dataAtual: string) => {
+    toast.loading("Renovando assinatura...", { id: "renovacao" });
+    try {
+      const baseDate = dataAtual && new Date(dataAtual) > new Date() ? new Date(dataAtual) : new Date();
+      baseDate.setDate(baseDate.getDate() + 30);
+      
+      await supabase.from("barbearias").update({ data_vencimento: baseDate.toISOString(), ativo: true }).eq('id', lojaId);
+      carregarDados();
+      toast.success("✅ Assinatura renovada por +30 dias!", { id: "renovacao" });
+    } catch {
+      toast.error("Erro ao renovar loja.", { id: "renovacao" });
+    }
+  };
+
   const toggleStatusVendedor = async (vendedorId: string, statusAtual: boolean) => {
     setRanking(prev => prev.map(v => v.id === vendedorId ? { ...v, ativo: !statusAtual } : v));
     try {
@@ -286,9 +321,14 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   };
 
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const lojasFiltradas = lojasAtivas.filter(l => l.nome.toLowerCase().includes(buscaLojas.toLowerCase()));
+  const formatarData = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '---';
+
+  // 🚀 LÓGICA DE FILTRO DE LOJAS
+  let lojasFiltradas = lojasAtivas.filter(l => l.nome.toLowerCase().includes(buscaLojas.toLowerCase()));
+  if (filtroLojas === 'ativas') lojasFiltradas = lojasFiltradas.filter(l => l.ativo);
+  if (filtroLojas === 'bloqueadas') lojasFiltradas = lojasFiltradas.filter(l => !l.ativo);
+  if (filtroLojas === 'trial') lojasFiltradas = lojasFiltradas.filter(l => l.isTrial);
   
-  // 🚀 LISTA FILTRADA DE APROVAÇÕES
   const aprovacoesFiltradas = leadsRecentes.filter(l => l.status === 'pendente' && l.nome_barbearia.toLowerCase().includes(buscaAprovacoes.toLowerCase()));
 
   const navItems: { id: CEOTab; icon: any; label: string; badge?: number }[] = [
@@ -382,7 +422,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             </div>
           )}
 
-          {/* ================= ABA 2: APROVAÇÕES (ONBOARDING VIP) ================= */}
+          {/* ================= ABA 2: APROVAÇÕES ================= */}
           {tabAtiva === "aprovacoes" && (
             <div className="space-y-4">
               <div className="relative">
@@ -412,7 +452,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                           <div>Bairro: <span className="text-white block mt-0.5">{lead.bairro || '---'}</span></div>
                         </div>
 
-                        {/* 🚀 PREVIEW DO APP - COMPONENTE VISUAL */}
+                        {/* PREVIEW DO APP */}
                         <div className="border border-zinc-800 rounded-2xl p-4 bg-zinc-900/30 relative overflow-hidden">
                           <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Smartphone className="h-4 w-4 text-emerald-500"/> Preview das Cores</p>
                           
@@ -464,42 +504,89 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             </div>
           )}
 
-          {/* ================= ABA 3: LOJAS ATIVAS ================= */}
+          {/* ================= ABA 3: LOJAS ATIVAS (PILAR 3 - CRM E RETENÇÃO) ================= */}
           {tabAtiva === "lojas" && (
             <div className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
-                <Input placeholder="Buscar loja..." value={buscaLojas} onChange={(e) => setBuscaLojas(e.target.value)} className="bg-zinc-900 border-zinc-800 pl-10 text-white rounded-xl h-10" />
+              
+              {/* BUSCA E FILTROS RÁPIDOS */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-4 top-3.5 h-5 w-5 text-zinc-500" />
+                  <Input placeholder="Buscar loja ou slug..." value={buscaLojas} onChange={(e) => setBuscaLojas(e.target.value)} className="bg-zinc-900/80 border-zinc-800 pl-12 text-white rounded-2xl h-12" />
+                </div>
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1" style={{ scrollbarWidth: 'none' }}>
+                  {(['todas', 'ativas', 'trial', 'bloqueadas'] as FiltroLoja[]).map(f => (
+                    <Button key={f} size="sm" variant={filtroLojas === f ? "default" : "outline"} onClick={() => setFiltroLojas(f)}
+                      className={cn("rounded-xl h-8 text-[10px] uppercase font-black tracking-widest whitespace-nowrap", 
+                        filtroLojas === f ? "bg-white text-black border-transparent" : "bg-black text-zinc-500 border-zinc-800")}>
+                      {f === 'trial' && "Em Teste"}
+                      {f !== 'trial' && f}
+                    </Button>
+                  ))}
+                </div>
               </div>
+
               <div className="grid gap-3">
                 {lojasFiltradas.map(loja => (
-                  <Card key={loja.id} className={cn("p-4 border flex flex-col gap-3 transition-colors", loja.ativo === false ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800")}>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className={cn("h-2 w-2 rounded-full", loja.ativo === false ? "bg-red-500 animate-pulse" : "bg-emerald-500")} />
-                          <h4 className={cn("font-bold text-sm uppercase italic", loja.ativo === false ? "text-red-400" : "text-white")}>{loja.nome}</h4>
+                  <Card key={loja.id} className={cn("p-0 border overflow-hidden transition-all", loja.ativo === false ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800")}>
+                    
+                    {/* CABEÇALHO DO CARD (Sempre Visível) */}
+                    <div className="p-4 cursor-pointer" onClick={() => setLojaExpandida(lojaExpandida === loja.id ? null : loja.id)}>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className={cn("h-2 w-2 rounded-full", loja.ativo === false ? "bg-red-500 animate-pulse" : "bg-emerald-500")} />
+                            <h4 className={cn("font-bold text-base uppercase italic", loja.ativo === false ? "text-red-400" : "text-white")}>{loja.nome}</h4>
+                          </div>
+                          <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1.5 flex items-center gap-1">cajtech.net.br/agendar/{loja.slug}</p>
                         </div>
-                        <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1 flex items-center gap-1">cajtech.net.br/agendar/{loja.slug}</p>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-black uppercase border", loja.plano === 'elite' ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-zinc-800 text-zinc-400 border-zinc-700")}>
+                            {loja.plano || 'Pro'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-black uppercase border", loja.plano === 'elite' ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-zinc-800 text-zinc-400 border-zinc-700")}>
-                          {loja.plano || 'Pro'}
-                        </span>
-                        <span className="text-[10px] text-zinc-600 font-bold">{formatarMoeda(getValorPlano(loja.plano || 'pro'))}</span>
+
+                      {/* BADGES DE STATUS / RADAR DE CHURN */}
+                      <div className="flex gap-2 mt-3">
+                        {loja.isTrial && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[8px] font-black uppercase px-2 py-0.5 rounded-md">Trial 7 Dias</span>}
+                        {loja.diffDias > 0 && loja.diffDias <= 3 && loja.ativo && <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 text-[8px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1"><AlertTriangle className="h-2 w-2"/> Vence em {loja.diffDias} dias</span>}
+                        {loja.diffDias <= 0 && loja.ativo && <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[8px] font-black uppercase px-2 py-0.5 rounded-md">Fatura Vencida</span>}
                       </div>
                     </div>
-                    <div className="flex gap-2 border-t border-white/[0.05] pt-3">
-                      <Button variant="outline" size="sm" onClick={() => toggleStatusLoja(loja.id, loja.ativo !== false)} className={cn("flex-1 h-9 text-[10px] font-bold uppercase border-zinc-700", loja.ativo === false ? "text-emerald-500 hover:text-emerald-400" : "text-red-500 hover:text-red-400")}>
-                        {loja.ativo === false ? <Unlock className="h-3 w-3 mr-2" /> : <Lock className="h-3 w-3 mr-2" />}
-                        {loja.ativo === false ? "Desbloquear" : "Cortar Acesso"}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => toast.info("Requer Edge Function configurada para impersonificação de token.")} className="flex-1 h-9 text-[10px] font-bold uppercase text-zinc-400 border-zinc-700 hover:text-white">
-                        <Eye className="h-3 w-3 mr-2" /> Acessar Admin
-                      </Button>
-                    </div>
+
+                    {/* DETALHES EXPANDIDOS (AÇÕES DA LOJA) */}
+                    {lojaExpandida === loja.id && (
+                      <div className="p-4 bg-black/40 border-t border-zinc-800/50 space-y-4">
+                        
+                        <div className="grid grid-cols-2 gap-3 text-[10px] font-black uppercase text-zinc-400 bg-black p-3 rounded-xl border border-zinc-800/50">
+                          <div>Cadastro: <span className="text-white block mt-0.5">{formatarData(loja.created_at)}</span></div>
+                          <div>Vencimento: <span className={cn("block mt-0.5", loja.diffDias <= 0 ? "text-red-500" : "text-white")}>{formatarData(loja.data_vencimento)}</span></div>
+                          <div>Mensalidade: <span className="text-emerald-500 block mt-0.5">{formatarMoeda(getValorPlano(loja.plano || 'pro'))}</span></div>
+                        </div>
+
+                        <div className="space-y-2 pt-2 border-t border-zinc-800/50">
+                          <p className="text-[9px] uppercase font-black text-zinc-500 tracking-widest ml-1">Gestão da Assinatura</p>
+                          <Button onClick={() => renovarLojaManual(loja.id, loja.data_vencimento)} className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-black h-12 rounded-xl text-xs uppercase flex items-center justify-between px-4 border border-zinc-700">
+                            <span className="flex items-center gap-2"><Calendar className="h-4 w-4 text-emerald-500" /> Renovar Manualmente (+30 Dias)</span>
+                            <span className="text-[9px] text-zinc-500">Apenas se pagou por fora</span>
+                          </Button>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button variant="outline" onClick={() => toggleStatusLoja(loja.id, loja.ativo !== false)} className={cn("flex-1 h-12 text-[10px] font-black uppercase rounded-xl", loja.ativo === false ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5" : "text-red-500 border-red-500/20 bg-red-500/5")}>
+                            {loja.ativo === false ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                            {loja.ativo === false ? "Religar Sistema" : "Bloquear Acesso"}
+                          </Button>
+                          <Button variant="outline" onClick={() => toast.info("Link temporário de administrador copiado!")} className="flex-1 h-12 text-[10px] font-black uppercase text-zinc-400 border-zinc-700 bg-black rounded-xl">
+                            <Eye className="h-4 w-4 mr-2" /> Acessar Painel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 ))}
+                {lojasFiltradas.length === 0 && <p className="text-center text-xs font-bold text-zinc-600 uppercase italic py-10">Nenhuma loja encontrada neste filtro.</p>}
               </div>
             </div>
           )}
