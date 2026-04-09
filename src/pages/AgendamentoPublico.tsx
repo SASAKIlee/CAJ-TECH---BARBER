@@ -1,491 +1,522 @@
-import { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import html2canvas from "html2canvas";
-import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, ChevronRight, Loader2, Lock, CalendarX2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
-import { WalletTicket, WALLET_TICKET_CAPTURE_ID } from "@/components/agendamento-publico/WalletTicket";
+import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar } from "lucide-react";
 import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackdrop";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
+import { VisaoDono } from "@/components/VisaoDono";
+import { VisaoVendedor } from "@/components/VisaoVendedor";
+import { VisaoCEO } from "@/components/VisaoCEO";
+import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
+import { IndexPageSkeleton } from "@/components/IndexPageSkeleton";
+import { DataLoadError } from "@/components/DataLoadError";
+import { Button } from "@/components/ui/button";
+import { TermosDeUso } from "@/components/TermosDeUso";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-// ==========================================
-// FUNÇÕES AUXILIARES DE DATA E HORA
-// ==========================================
-function gerarHorarios(abertura = "09:00", fechamento = "18:00", inicioAlmoco = "12:00", fimAlmoco = "13:00") {
-  const horarios = [];
-  let [horaAtual, minAtual] = abertura.split(':').map(Number);
-  const [horaFim, minFim] = fechamento.split(':').map(Number);
-  
-  const [horaIniAlmoco, minIniAlmoco] = inicioAlmoco.split(':').map(Number);
-  const [horaFimAlmoco, minFimAlmoco] = fimAlmoco.split(':').map(Number);
+import { 
+  useBarbearia, useBarbeiros, useServicos, useAgendamentos,
+  useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento
+} from "@/hooks/useQueries";
 
-  while (horaAtual < horaFim || (horaAtual === horaFim && minAtual < minFim)) {
-    const isHoraAlmoco = 
-      (horaAtual > horaIniAlmoco || (horaAtual === horaIniAlmoco && minAtual >= minIniAlmoco)) &&
-      (horaAtual < horaFimAlmoco || (horaAtual === horaFimAlmoco && minAtual < minFimAlmoco));
-
-    if (!isHoraAlmoco) {
-      const hFormated = String(horaAtual).padStart(2, '0');
-      const mFormated = String(minAtual).padStart(2, '0');
-      horarios.push(`${hFormated}:${mFormated}`);
-    }
-
-    minAtual += 30;
-    if (minAtual >= 60) {
-      minAtual -= 60;
-      horaAtual += 1;
-    }
-  }
-  return horarios;
-}
-
-const DIAS_SEMANA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const MESES_CURTO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-function formatarDataYMD(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+const getLocalDate = () => {
+  const agora = new Date();
+  const y = agora.getFullYear();
+  const m = String(agora.getMonth() + 1).padStart(2, "0");
+  const d = String(agora.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-function gerarProximosDias(quantidade = 30) {
-  const dias = [];
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0); 
-  
-  for (let i = 0; i < quantidade; i++) {
-    const d = new Date(hoje);
-    d.setDate(hoje.getDate() + i);
-    dias.push({
-      dateObj: d,
-      ymd: formatarDataYMD(d),
-      diaSemana: DIAS_SEMANA_CURTO[d.getDay()],
-      diaMes: String(d.getDate()).padStart(2, '0'),
-      mes: MESES_CURTO[d.getMonth()]
-    });
-  }
-  return dias;
-}
-
-// ==========================================
-// CONFIGURAÇÕES DE ANIMAÇÃO
-// ==========================================
-const listContainer = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.04 } } };
-const listItem = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 380, damping: 34 } } };
-
-type BarbeariaRow = {
-  id?: string;
-  nome?: string | null;
-  cor_primaria?: string | null;
-  cor_secundaria?: string | null;
-  cor_destaque?: string | null;
-  url_fundo?: string | null;
-  url_logo?: string | null;
-  horario_abertura?: string | null;
-  horario_fechamento?: string | null;
-  dias_trabalho?: number[] | null;
-  inicio_almoco?: string | null;
-  fim_almoco?: string | null;
-  datas_fechadas?: string[] | null;
-  ativo?: boolean | null;
-  data_vencimento?: string | null;
-  meta_fidelidade?: number | null;
 };
 
-export default function AgendamentoPublico() {
-  const { slug } = useParams();
-  const [etapa, setEtapa] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [config, setConfig] = useState<BarbeariaRow | null>(null);
-  const [barbeiros, setBarbeiros] = useState<unknown[]>([]);
-  const [servicos, setServicos] = useState<unknown[]>([]);
-  const [ocupados, setOcupados] = useState<string[]>([]);
-  const [ticketCodigo, setTicketCodigo] = useState("");
+function mensagemDeErro(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const m = (err as { message?: string }).message;
+    if (typeof m === "string" && m.length > 0) return m;
+  }
+  return "Não foi possível carregar os dados. Verifique sua conexão e tente novamente.";
+}
 
-  const [selecao, setSelecao] = useState({
-    servico: null as { id: string; nome: string; preco: number; duracao_minutos: number; url_imagem?: string } | null,
-    barbeiro: null as { id: string; nome: string } | null,
-    data: "", horario: "", nome: "", whatsapp: "",
+export default function Index() {
+  const { signOut, userRole, user } = useAuth();
+
+  const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira" | "vendedor">("barbeiro");
+  const [tabSlideDir, setTabSlideDir] = useState(1);
+  const [dataFiltro, setDataFiltro] = useState<string>(getLocalDate());
+  const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
+  const [dadosCEO, setDadosCEO] = useState({ lojas: 0, faturamento: 0, vendedores: [] });
+
+  const barbeariaQueryEnabled = userRole !== "ceo" && userRole !== "vendedor";
+
+  const {
+    data: barbearia,
+    isLoading: loadingBarbearia,
+    isError: erroBarbearia,
+    error: erroDetalheBarbearia,
+    isFetching: fetchingBarbearia,
+    refetch: refetchBarbearia,
+  } = useBarbearia({
+    enabled: barbeariaQueryEnabled,
+  });
+  const slug = barbearia?.slug;
+  const isDono = barbearia?.isDono;
+
+  const barbeirosQuery = useBarbeiros(slug);
+  const servicosQuery = useServicos(slug);
+  const agendamentosQuery = useAgendamentos(slug);
+
+  const { data: barbeiros = [], refetch: refetchBarbeiros } = barbeirosQuery;
+  const { data: servicos = [], refetch: refetchServicos } = servicosQuery;
+  const { data: agendamentos = [], refetch: refetchAgendamentos } = agendamentosQuery;
+
+  const carregandoDependentes =
+    !!slug &&
+    (barbeirosQuery.isLoading || servicosQuery.isLoading || agendamentosQuery.isLoading);
+
+  const buscandoDependentes =
+    !!slug &&
+    (barbeirosQuery.isFetching || servicosQuery.isFetching || agendamentosQuery.isFetching);
+
+  const erroDependentes =
+    !!slug &&
+    (barbeirosQuery.isError || servicosQuery.isError || agendamentosQuery.isError);
+
+  const temErroDados = barbeariaQueryEnabled && (erroBarbearia || erroDependentes);
+
+  const buscandoAlgumaQuery =
+    barbeariaQueryEnabled && (fetchingBarbearia || buscandoDependentes);
+
+  const exibirSkeleton =
+    barbeariaQueryEnabled &&
+    ((!temErroDados && (loadingBarbearia || carregandoDependentes)) ||
+      (temErroDados && buscandoAlgumaQuery));
+
+  const refetchDadosPrincipais = useCallback(async () => {
+    await refetchBarbearia();
+    if (slug) {
+      await Promise.all([refetchBarbeiros(), refetchServicos(), refetchAgendamentos()]);
+    }
+  }, [
+    slug,
+    refetchBarbearia,
+    refetchBarbeiros,
+    refetchServicos,
+    refetchAgendamentos,
+  ]);
+
+  const tituloErroCarregamento = useMemo(() => {
+    const msg = erroBarbearia
+      ? mensagemDeErro(erroDetalheBarbearia)
+      : mensagemDeErro(
+          barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error,
+        );
+    return msg.includes("Nenhuma barbearia") ? "Nenhuma barbearia vinculada" : "Erro de conexão";
+  }, [
+    erroBarbearia,
+    erroDetalheBarbearia,
+    barbeirosQuery.error,
+    servicosQuery.error,
+    agendamentosQuery.error,
+  ]);
+
+  const mensagemErroCarregamento = useMemo(() => {
+    if (erroBarbearia) return mensagemDeErro(erroDetalheBarbearia);
+    return mensagemDeErro(
+      barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error,
+    );
+  }, [
+    erroBarbearia,
+    erroDetalheBarbearia,
+    barbeirosQuery.error,
+    servicosQuery.error,
+    agendamentosQuery.error,
+  ]);
+
+  const mutacoesBarbeiro = useMutacoesBarbeiro();
+  const mutacoesServico = useMutacoesServico();
+  const mutacoesAgendamento = useMutacoesAgendamento();
+
+  useEffect(() => {
+    if (userRole !== "ceo") return;
+
+    async function buscarDadosHQ() {
+      const { data: vends } = await supabase.from("perfis_vendedores").select("*").eq("ativo", true);
+      const { data: lojas } = await supabase.from("barbearias").select("*");
+
+      const totalLojasReal = lojas?.length || 0;
+
+      const listaVendedores =
+        vends?.map((v: any) => ({
+          id: v.id,
+          nome: v.nome,
+          total_lojas: 0,
+        })) || [];
+
+      setDadosCEO({
+        lojas: totalLojasReal,
+        faturamento: totalLojasReal * 50,
+        vendedores: listaVendedores,
+      });
+    }
+
+    buscarDadosHQ();
+  }, [userRole]);
+
+  useEffect(() => {
+    if (!barbeariaQueryEnabled) return;
+    if (!isDono && user?.id) {
+      setBarbeiroSelecionadoId(user.id);
+    } else if (isDono && barbeiros.length > 0 && !barbeiroSelecionadoId) {
+      setBarbeiroSelecionadoId("");
+    }
+  }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros, barbeiroSelecionadoId]);
+
+  const stats = useMemo(() => {
+    const hoje = getLocalDate();
+    const prefixoMes = hoje.substring(0, 7);
+    const noDia = agendamentos.filter((ag: any) => ag.data === dataFiltro);
+    const idParaFiltrar = isDono ? barbeiroSelecionadoId : user?.id;
+    
+    const agParaExibir = idParaFiltrar 
+      ? noDia.filter((ag: any) => ag.barbeiro_id === idParaFiltrar)
+      : noDia;
+
+    const fatHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
+      .reduce((sum: number, ag: any) => {
+        const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
+        return sum + Number(preco);
+      }, 0);
+    
+    const fatMensal = agendamentos.filter((ag: any) => 
+      ag.data.startsWith(prefixoMes) && ag.status === "Finalizado"
+    ).reduce((sum: number, ag: any) => {
+      const preco = servicos.find((s: any) => s.id === ag.servico_id)?.preco || 0;
+      return sum + Number(preco);
+    }, 0);
+
+    const comissoesHoje = noDia.filter((ag: any) => ag.status === "Finalizado")
+      .reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0);
+    
+    const agMesMeuBarbeiro = agendamentos.filter((ag: any) => 
+      ag.barbeiro_id === user?.id && 
+      ag.data.startsWith(prefixoMes) && 
+      ag.status === "Finalizado"
+    );
+
+    return { 
+      faturamentoHoje: fatHoje, 
+      faturamentoMensal: fatMensal,
+      comissoesAPagarHoje: comissoesHoje, 
+      agendamentosParaExibir: agParaExibir, 
+      agMesBarbeiro: agMesMeuBarbeiro 
+    };
+  }, [agendamentos, servicos, dataFiltro, isDono, user?.id, barbeiroSelecionadoId]);
+
+  const comissaoPorBarbeiroHoje = barbeiros.map((b: any) => {
+    const cortes = agendamentos.filter((ag: any) => ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado");
+    return {
+      barbeiro: b,
+      total: cortes.reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0),
+      cortes: cortes.length
+    };
   });
 
-  const brand = config?.cor_primaria?.trim() || "#D4AF37";
-  const bg = config?.cor_secundaria?.trim() || "#18181B"; 
-  const textHighlight = config?.cor_destaque?.trim() || "#FFFFFF";
-  const ctaFg = contrastTextOnBrand(brand);
+  const horariosOcupados = (data: string, bId: string) => 
+    agendamentos.filter((ag: any) => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado").map((ag: any) => ag.horario);
 
-  const dataMinimaHoje = formatarDataYMD(new Date());
+  const servicos_find = (id: string) => servicos.find((s: any) => s.id === id);
 
-  useEffect(() => {
-    async function carregarDados() {
-      const { data: bInfo } = await supabase.from("barbearias").select("*").eq("slug", slug).single();
-      if (bInfo) setConfig(bInfo as BarbeariaRow);
+  // ==========================================================================
+  // RENDERIZAÇÃO: VISÃO CEO
+  // ==========================================================================
+  if (userRole === "ceo") {
+    return (
+      <div className="dark min-h-screen bg-black text-white flex flex-col">
+        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => signOut()} className="text-white/80 hover:text-white">
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </header>
+        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+          <VisaoCEO
+            totalLojas={dadosCEO.lojas}
+            faturamentoTotal={dadosCEO.faturamento}
+            vendedores={dadosCEO.vendedores}
+          />
+        </main>
+        <div className="p-8 text-center bg-black mt-auto">
+          <p className="text-zinc-800 text-[8px] font-black uppercase tracking-[0.5em]">Sistema Criptografado</p>
+        </div>
+      </div>
+    );
+  }
 
-      const { data: barbs } = await supabase.from("barbeiros").select("*").eq("barbearia_slug", slug).eq("ativo", true);
-      const { data: servs } = await supabase.from("servicos").select("*").eq("barbearia_slug", slug);
+  // ==========================================================================
+  // RENDERIZAÇÃO: VISÃO VENDEDOR
+  // ==========================================================================
+  if (userRole === "vendedor") {
+    return (
+      <div className="dark min-h-screen bg-black text-white flex flex-col">
+        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => signOut()} className="text-white/80 hover:text-white">
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </header>
+        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+          {/* 🚀 CORREÇÃO DO ERRO DO TYPE: O componente VisaoVendedor busca seus próprios dados */}
+          <VisaoVendedor />
+        </main>
+        <TermosDeUso />
+      </div>
+    );
+  }
 
-      setBarbeiros(barbs || []);
-      setServicos(servs || []);
-      setLoading(false);
-    }
-    carregarDados();
-  }, [slug]);
+  if (barbeariaQueryEnabled && exibirSkeleton) {
+    const skeletonTab = tab === "dono" || tab === "carteira" || tab === "barbeiro" ? tab : "barbeiro";
+    return <IndexPageSkeleton tab={skeletonTab} />;
+  }
 
-  useEffect(() => {
-    if (selecao.data && selecao.barbeiro) {
-      supabase.from("agendamentos").select("horario, servico_id").eq("barbeiro_id", selecao.barbeiro.id).eq("data", selecao.data).neq("status", "Cancelado")
-        .then(({ data }) => {
-          if(!data) return;
-          const slotsOcupados: string[] = [];
-          data.forEach(ag => {
-            const serv = servicos.find((s:any) => s.id === ag.servico_id) as any;
-            const duracao = serv ? serv.duracao_minutos : 30;
-            const qtdeBlocos = Math.ceil(duracao / 30);
-            
-            let [h, m] = ag.horario.split(':').map(Number);
-            for(let i=0; i < qtdeBlocos; i++) {
-               slotsOcupados.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-               m += 30;
-               if(m >= 60) { m -= 60; h += 1; }
-            }
-          });
-          setOcupados(slotsOcupados);
-        });
-    }
-  }, [selecao.data, selecao.barbeiro, servicos]);
+  if (barbeariaQueryEnabled && temErroDados) {
+    return (
+      <DataLoadError
+        title={tituloErroCarregamento}
+        message={mensagemErroCarregamento}
+        onRetry={() => void refetchDadosPrincipais()}
+        onSignOut={() => void signOut()}
+      />
+    );
+  }
 
-  const handleFinalizar = async () => {
-    if (!selecao.nome.trim() || selecao.nome.length < 2) {
-      return toast.error("Por favor, preencha o seu nome completo.");
-    }
-    
-    const numeroLimpo = selecao.whatsapp.replace(/\D/g, '');
-    if (numeroLimpo.length < 10) {
-      return toast.error("Por favor, informe um número de WhatsApp válido com DDD.");
-    }
+  const visibleTabs =
+    userRole === "barbeiro"
+      ? [
+          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
+          { id: "carteira" as const, label: "Carteira", icon: Wallet },
+        ]
+      : [
+          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
+          { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard },
+        ];
 
-    const toastId = toast.loading("Reservando seu horário…");
-    const { error } = await supabase.from("agendamentos").insert({
-      nome_cliente: selecao.nome.trim(), 
-      telefone_cliente: numeroLimpo, 
-      servico_id: selecao.servico!.id, 
-      barbeiro_id: selecao.barbeiro!.id,
-      data: selecao.data, 
-      horario: selecao.horario, 
-      barbearia_slug: slug, 
-      status: "Pendente",
-    });
+  const heroImageUrl =
+    (barbearia?.url_fundo && String(barbearia.url_fundo).trim()) || APP_HERO_FALLBACK_BG;
+  const marca = barbearia?.cor_primaria?.trim() || "#D4AF37";
 
-    toast.dismiss(toastId);
-    
-    if (error) {
-      if (error.code === "23505") return toast.error("Ops! Outra pessoa acabou de reservar esse horário. Escolha outro.");
-      return toast.error("Ocorreu um erro no servidor. Tente novamente.");
-    }
-
-    setTicketCodigo(typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`);
-    setEtapa(5);
-    toast.success("Agendamento confirmado com sucesso!");
+  const goTab = (next: "barbeiro" | "dono" | "carteira") => {
+    const order: string[] =
+      userRole === "barbeiro" ? ["barbeiro", "carteira"] : ["barbeiro", "dono"];
+    const oi = order.indexOf(tab);
+    const ni = order.indexOf(next);
+    if (oi !== -1 && ni !== -1 && oi !== ni) setTabSlideDir(ni > oi ? 1 : -1);
+    setTab(next);
   };
 
-  const salvarTicketComoImagem = useCallback(async () => {
-    const el = document.getElementById(WALLET_TICKET_CAPTURE_ID);
-    if (!el) return toast.error("Não foi possível localizar o ticket.");
-    const wait = toast.loading("Gerando imagem…");
-    try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: bg, logging: false });
-      const link = document.createElement("a");
-      link.download = `agendamento-${slug ?? "caj"}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-      toast.dismiss(wait);
-      toast.success("Imagem salva.");
-    } catch {
-      toast.dismiss(wait);
-      toast.error("Falha ao exportar.");
-    }
-  }, [slug, bg]);
+  const tabPanelVariants = {
+    enter: (dir: number) => ({ x: dir * 52, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir * -52, opacity: 0 }),
+  };
 
-  if (loading) {
-    return (
-      <div className="min-h-[100dvh] relative isolate overflow-x-hidden flex flex-col text-white" style={{ backgroundColor: "#18181B" }}>
-        <div className="relative z-10 flex flex-col flex-1">
-          <div className="p-6 pt-12 max-w-lg mx-auto w-full space-y-8">
-            <Skeleton className="h-14 w-full rounded-3xl bg-white/10" />
-            <Skeleton className="h-40 w-full rounded-3xl bg-white/10" />
-            <div className="space-y-4">
-              <Skeleton className="h-24 w-full rounded-3xl bg-white/10" />
-              <Skeleton className="h-24 w-full rounded-3xl bg-white/10" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  let bloqueadoPorInadimplencia = false;
-  if (config?.data_vencimento) {
-    const hoje = new Date();
-    const vencimento = new Date(config.data_vencimento);
-    const diffTime = vencimento.getTime() - hoje.getTime();
-    const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDias < -3) bloqueadoPorInadimplencia = true;
-  }
-
-  if (config?.ativo === false || bloqueadoPorInadimplencia) {
-    return (
-      <div className="min-h-[100dvh] relative isolate flex flex-col items-center justify-center text-white p-6 text-center" style={{ backgroundColor: "#18181B" }}>
-        <div className="bg-red-500/10 p-6 rounded-[2rem] mb-6 border border-red-500/20 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
-          <Lock className="h-12 w-12 text-red-500" />
-        </div>
-        <h1 className="text-2xl font-black mb-2 uppercase italic tracking-tighter">Sistema Indisponível</h1>
-        <p className="text-zinc-400 text-sm max-w-sm">
-          Os agendamentos online para esta barbearia estão temporariamente suspensos. Por favor, tente novamente mais tarde ou entre em contato diretamente com o estabelecimento.
-        </p>
-      </div>
-    );
-  }
-
-  const heroImageUrl = config?.url_fundo?.trim() || APP_HERO_FALLBACK_BG;
-  const horariosDoDia = gerarHorarios(config?.horario_abertura || "09:00", config?.horario_fechamento || "18:00", config?.inicio_almoco || "12:00", config?.fim_almoco || "13:00");
-  
-  const diasTrabalho = config?.dias_trabalho || [1, 2, 3, 4, 5, 6];
-  const datasFechadas = Array.isArray(config?.datas_fechadas) ? config.datas_fechadas : [];
-  
-  const isHoje = selecao.data === dataMinimaHoje;
-  const horaAtualReal = new Date().getHours();
-  const minutoAtualReal = new Date().getMinutes();
-
-  const proximosDias = gerarProximosDias(30);
-
+  // ==========================================================================
+  // RENDERIZAÇÃO: VISÃO DONO / BARBEIRO
+  // ==========================================================================
   return (
-    <div className="min-h-[100dvh] relative isolate font-sans antialiased overflow-x-hidden transition-colors duration-500" style={{ backgroundColor: bg }}>
+    <div className="dark min-h-screen relative isolate text-foreground flex flex-col overflow-x-hidden">
       <AppHeroBackdrop imageUrl={heroImageUrl} />
-      
-      {/* 🚀 CSS PREMIUM: Barra de rolagem estilo pílula e scroll suave nativo */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .premium-scrollbar::-webkit-scrollbar { height: 4px; }
-        .premium-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.03); border-radius: 10px; margin-inline: 4px; }
-        .premium-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
-        .premium-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
-        .premium-scrollbar { scroll-behavior: smooth; }
-      `}} />
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/35 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
+          </div>
+          <motion.div whileTap={{ scale: 0.95 }} className="inline-flex">
+            <Button variant="ghost" size="icon" className="text-white/80 hover:text-white" onClick={() => signOut()}>
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </motion.div>
+        </header>
 
-      <div className="relative z-10 flex min-h-[100dvh] flex-col">
-        <motion.header
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="mx-4 mt-4 mb-2 rounded-[22px] px-6 py-5 shadow-[0_8px_40px_rgba(0,0,0,0.25)] border"
-          style={{ backgroundColor: hexToRgba(bg, 0.5), borderColor: hexToRgba(textHighlight, 0.1), backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.25em]" style={{ color: hexToRgba(textHighlight, 0.5) }}>Agendar</p>
-          <h1 className="mt-1 text-3xl sm:text-4xl font-bold tracking-tight" style={{ color: textHighlight, textShadow: `0 0 40px ${hexToRgba(brand, 0.45)}` }}>
-            {config?.nome || "Barbearia"}
-          </h1>
-          <p className="mt-3 text-[15px] leading-relaxed max-w-md" style={{ color: hexToRgba(textHighlight, 0.7) }}>
-            Escolha o serviço, o profissional e o melhor horário — em poucos toques.
-          </p>
-        </motion.header>
+        {tab !== "carteira" && (
+          <div className="border-b border-white/[0.08] p-3 flex items-center justify-center gap-3 sticky top-0 z-10 w-full shrink-0 bg-black/30 backdrop-blur-xl">
+            <Calendar className="h-4 w-4 text-white/50" />
+            <input
+              type="date"
+              value={dataFiltro}
+              onChange={(e) => setDataFiltro(e.target.value)}
+              className="rounded-full border border-white/[0.12] bg-black/35 px-4 py-1 text-sm outline-none focus:ring-1 focus:ring-white/30 color-scheme-dark text-white backdrop-blur-sm"
+            />
+            <motion.div whileTap={{ scale: 0.95 }} className="inline-flex">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-full px-4 h-8 text-[10px] font-bold uppercase border-white/[0.1] bg-white/[0.08] text-white hover:bg-white/[0.12]"
+                onClick={() => setDataFiltro(getLocalDate())}
+              >
+                Hoje
+              </Button>
+            </motion.div>
+          </div>
+        )}
 
-        <main className="flex-1 px-5 pb-36 pt-4 max-w-lg mx-auto w-full">
-          <AnimatePresence mode="wait">
-            {etapa < 5 ? (
-              <motion.div key={etapa} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ type: "spring", stiffness: 340, damping: 34 }} className="space-y-8">
-                {etapa > 1 && (
-                  <button type="button" onClick={() => setEtapa((e) => Math.max(1, e - 1))} className="inline-flex items-center gap-1.5 text-sm font-semibold transition-colors -ml-1" style={{ color: hexToRgba(textHighlight, 0.7) }}>
-                    <ChevronLeft className="h-4 w-4" /> Voltar
-                  </button>
-                )}
+        <main className="flex-1 p-4 pb-28 max-w-7xl mx-auto w-full md:px-8 flex flex-col min-h-0">
+          <AnimatePresence mode="wait" initial={false} custom={tabSlideDir}>
+            <motion.div
+              key={tab}
+              custom={tabSlideDir}
+              variants={tabPanelVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ type: "spring", stiffness: 400, damping: 36 }}
+              className="flex-1 w-full"
+            >
+              {tab === "barbeiro" && (
+                <VisaoBarbeiro
+                  barbeiros={barbeiros}
+                  servicos={servicos}
+                  agendamentos={stats.agendamentosParaExibir}
+                  barbeiroSelecionadoId={barbeiroSelecionadoId}
+                  setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
+                  horariosOcupados={horariosOcupados}
+                  servicos_find={servicos_find}
+                  isDono={isDono || false}
+                  userId={user?.id}
+                  corPrimaria={marca}
+                  onNovoAgendamento={(ag: any) =>
+                    mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug: slug! })
+                  }
+                  onStatusChange={(id: string, status: string) => {
+                    if (status === "Finalizado") {
+                      const agAtual = agendamentos.find((a: any) => a.id === id);
+                      const servico = servicos_find(agAtual?.servico_id);
+                      const barbeiro = barbeiros.find((b: any) => b.id === agAtual?.barbeiro_id);
+                      const valorComissao =
+                        (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
+                      return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({
+                        id,
+                        status: "Finalizado",
+                        comissaoGanha: valorComissao,
+                        slug: slug!,
+                      });
+                    }
+                    return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({
+                      id,
+                      status,
+                      slug: slug!,
+                    });
+                  }}
+                />
+              )}
 
-                {etapa === 1 && (
-                  <section className="space-y-6">
-                    <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Serviços</h2>
-                    <motion.ul className="space-y-4" variants={listContainer} initial="hidden" animate="show">
-                      {(servicos as { id: string; nome: string; preco: number; duracao_minutos: number; url_imagem?: string }[]).map((s) => (
-                        <motion.li key={s.id} variants={listItem}>
-                          <motion.button type="button" onClick={() => { setSelecao({ ...selecao, servico: s }); setEtapa(2); }} className="w-full rounded-[22px] border px-5 py-4 text-left shadow-[0_4px_24px_rgba(0,0,0,0.2)] transition-all"
-                            style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.05) }}
-                            whileHover={{ scale: 1.02, borderColor: brand, boxShadow: `0 20px 50px ${hexToRgba(brand, 0.15)}` }}
-                            whileTap={{ scale: 0.99 }}
-                          >
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-3">
-                                {s.url_imagem && (
-                                  <img src={s.url_imagem} alt={s.nome} className="w-14 h-14 rounded-xl object-cover border border-white/10 shrink-0" />
-                                )}
-                                <div>
-                                  <span className="text-[17px] font-semibold tracking-tight leading-none block mb-1" style={{ color: textHighlight }}>{s.nome}</span>
-                                  <p className="text-[11px] font-bold" style={{ color: brand }}>⏱ {s.duracao_minutos} min</p>
-                                </div>
-                              </div>
-                              <span className="text-lg font-black tabular-nums shrink-0" style={{ color: textHighlight }}>R$ {s.preco}</span>
-                            </div>
-                          </motion.button>
-                        </motion.li>
-                      ))}
-                    </motion.ul>
-                  </section>
-                )}
+              {tab === "carteira" && (
+                <CarteiraBarbeiro
+                  comissaoTotalMes={stats.agMesBarbeiro.reduce(
+                    (sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0),
+                    0,
+                  )}
+                  totalCortesMes={stats.agMesBarbeiro.length}
+                  nomeBarbeiro={
+                    barbeiros.find((b: any) => b.id === user?.id)?.nome || "Barbeiro"
+                  }
+                  comissaoHoje={stats.agendamentosParaExibir
+                    .filter((ag: any) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id)
+                    .reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0)}
+                  cortesHoje={stats.agendamentosParaExibir
+                    .filter((ag: any) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id).length}
+                  
+                  metaDiaria={barbeiros.find((b: any) => b.id === user?.id)?.meta_diaria || 150}
+                  onUpdateMeta={(novaMeta: number) => {
+                    if (user?.id && slug) {
+                      mutacoesBarbeiro.atualizarMetaBarbeiro.mutate({ id: user.id, meta: novaMeta, slug });
+                    }
+                  }}
+                />
+              )}
 
-                {etapa === 2 && (
-                  <section className="space-y-6">
-                    <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Profissional</h2>
-                    <motion.ul className="space-y-3" variants={listContainer} initial="hidden" animate="show">
-                      {(barbeiros as { id: string; nome: string }[]).map((b) => (
-                        <motion.li key={b.id} variants={listItem}>
-                          <motion.button type="button" onClick={() => { setSelecao({ ...selecao, barbeiro: b }); setEtapa(3); }} className="flex w-full items-center gap-4 rounded-[22px] border px-5 py-4 text-left shadow-[0_4px_24px_rgba(0,0,0,0.15)] transition-all"
-                            style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.05) }}
-                            whileHover={{ scale: 1.02, borderColor: brand }} whileTap={{ scale: 0.99 }}
-                          >
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-base font-bold" style={{ backgroundColor: hexToRgba(brand, 0.2), color: brand }}>
-                              {b.nome[0]?.toUpperCase()}
-                            </div>
-                            <span className="text-[17px] font-semibold tracking-tight" style={{ color: textHighlight }}>{b.nome}</span>
-                          </motion.button>
-                        </motion.li>
-                      ))}
-                    </motion.ul>
-                  </section>
-                )}
-
-                {etapa === 3 && (
-                  <motion.section className="space-y-8">
-                    
-                    {/* 🚀 O CARROSSEL DE DATAS PREMIUM */}
-                    <div className="space-y-3 relative">
-                      <div className="flex items-center justify-between mb-1">
-                        <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Escolha a data</h2>
-                        
-                        {/* 🚀 AVISO VISUAL DE DESLIZE (A ABINHA) */}
-                        <div className="flex items-center gap-1 opacity-60 animate-pulse" style={{ color: textHighlight }}>
-                          <span className="text-[9px] font-black uppercase tracking-widest">Deslize</span>
-                          <ChevronRight className="h-3 w-3" />
-                        </div>
-                      </div>
-
-                      <div className="relative">
-                        {/* Máscara de Desvanecimento na Direita para induzir o arrasto */}
-                        <div className="absolute top-0 right-0 bottom-6 w-12 pointer-events-none z-10" style={{ background: `linear-gradient(to right, transparent, ${bg})` }} />
-                        
-                        {/* Container do Carrossel com Scrollbar Premium */}
-                        <div className="flex overflow-x-auto gap-3 pb-4 snap-x premium-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
-                          {proximosDias.map((dia) => {
-                             const isSelected = selecao.data === dia.ymd;
-                             const isTrabalho = diasTrabalho.includes(dia.dateObj.getDay());
-                             const isFechado = datasFechadas.includes(dia.ymd);
-                             const isDisponivel = isTrabalho && !isFechado;
-
-                             return (
-                               <motion.button
-                                 key={dia.ymd}
-                                 type="button"
-                                 disabled={!isDisponivel}
-                                 onClick={() => { setSelecao({ ...selecao, data: dia.ymd, horario: "" }); }}
-                                 className={cn(
-                                   "min-w-[76px] flex flex-col items-center justify-center p-4 rounded-[24px] transition-all snap-center border shrink-0 relative",
-                                   !isDisponivel ? "opacity-20 cursor-not-allowed" : "hover:bg-white/5"
-                                 )}
-                                 style={{
-                                   backgroundColor: isSelected ? brand : hexToRgba(bg, 0.8),
-                                   borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.08),
-                                   color: isSelected ? ctaFg : textHighlight,
-                                   boxShadow: isSelected ? `0 10px 30px ${hexToRgba(brand, 0.3)}` : 'none'
-                                 }}
-                                 whileHover={isDisponivel && !isSelected ? { scale: 1.05, borderColor: brand } : undefined}
-                                 whileTap={isDisponivel ? { scale: 0.95 } : undefined}
-                               >
-                                 <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">{dia.diaSemana}</span>
-                                 <span className="text-2xl font-black tabular-nums leading-none mb-1">{dia.diaMes}</span>
-                                 <span className="text-[10px] font-bold uppercase opacity-70">{dia.mes}</span>
-                               </motion.button>
-                             );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-
-                    <motion.div className="space-y-4">
-                      <h2 className="text-xl font-bold tracking-tight" style={{ color: textHighlight }}>Horários disponíveis</h2>
-                      
-                      {!selecao.data ? (
-                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-8 rounded-[28px] text-center border border-dashed" style={{ borderColor: hexToRgba(textHighlight, 0.15), backgroundColor: hexToRgba(bg, 0.4) }}>
-                          <CalendarX2 className="h-10 w-10 mx-auto mb-4 opacity-40" style={{ color: textHighlight }} />
-                          <p className="text-sm font-medium opacity-60 max-w-[200px] mx-auto leading-relaxed" style={{ color: textHighlight }}>
-                            Selecione um dia no calendário acima para ver os horários.
-                          </p>
-                        </motion.div>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-3 max-h-[min(52vh,22rem)] overflow-y-auto pr-2 pb-4 premium-scrollbar">
-                          {horariosDoDia.map((h) => {
-                            const qtdeBlocosNecessarios = Math.ceil((selecao.servico?.duracao_minutos || 30) / 30);
-                            let espacoInsuficiente = false;
-                            let horarioJaPassou = false;
-                            
-                            let [horaAvaliada, minAvaliado] = h.split(':').map(Number);
-
-                            if (isHoje) {
-                               if (horaAvaliada < horaAtualReal || (horaAvaliada === horaAtualReal && minAvaliado <= minutoAtualReal)) {
-                                  horarioJaPassou = true;
-                               }
-                            }
-                            
-                            for (let i = 0; i < qtdeBlocosNecessarios; i++) {
-                              const horaChecadaStr = `${String(horaAvaliada).padStart(2,'0')}:${String(minAvaliado).padStart(2,'0')}`;
-                              if(ocupados.includes(horaChecadaStr) || !horariosDoDia.includes(horaChecadaStr)) {
-                                espacoInsuficiente = true; break;
-                              }
-                              minAvaliado += 30;
-                              if (minAvaliado >= 60) { minAvaliado -= 60; horaAvaliada += 1; }
-                            }
-
-                            const isOcupado = ocupados.includes(h) || espacoInsuficiente || horarioJaPassou;
-
-                            return (
-                              <motion.button key={h} type="button" disabled={isOcupado || !selecao.data} onClick={() => { setSelecao({ ...selecao, horario: h }); setEtapa(4); }}
-                                className={cn("rounded-2xl py-3 text-sm font-bold tracking-wide transition-all border", isOcupado || !selecao.data ? "opacity-20 cursor-not-allowed line-through" : "hover:bg-white/5")}
-                                style={{ backgroundColor: isOcupado || !selecao.data ? hexToRgba(bg, 0.3) : hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }}
-                                whileHover={!isOcupado && selecao.data ? { scale: 1.04, borderColor: brand } : undefined} whileTap={!isOcupado && selecao.data ? { scale: 0.96 } : undefined}>
-                                {h}
-                              </motion.button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </motion.div>
-                  </motion.section>
-                )}
-
-                {etapa === 4 && (
-                  <section className="space-y-8 pt-2">
-                    <h2 className="text-xl font-bold tracking-tight text-center" style={{ color: textHighlight }}>Seus dados</h2>
-                    <div className="space-y-5">
-                      <Input placeholder="Nome completo" className="h-14 rounded-2xl text-center text-[17px] font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.nome} onChange={(e) => setSelecao({ ...selecao, nome: e.target.value })} />
-                      <Input placeholder="WhatsApp com DDD" type="tel" className="h-14 rounded-2xl text-center text-[17px] font-medium" style={{ backgroundColor: hexToRgba(bg, 0.8), borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }} value={selecao.whatsapp} onChange={(e) => setSelecao({ ...selecao, whatsapp: e.target.value })} />
-                      <Button className="w-full h-14 rounded-2xl text-[17px] font-bold shadow-lg border-0" style={{ backgroundColor: brand, color: ctaFg }} onClick={handleFinalizar}>
-                        Confirmar Agendamento
-                      </Button>
-                    </div>
-                  </section>
-                )}
-              </motion.div>
-            ) : (
-              <motion.div key="ticket" className="flex flex-col items-center gap-8 pt-4">
-                <p className="text-center text-sm font-medium max-w-xs" style={{ color: hexToRgba(textHighlight, 0.6) }}>Seu ingresso digital. Apresente na chegada ou salve no rolo da câmera.</p>
-                <WalletTicket config={config} selecao={selecao} slug={slug} ticketCodigo={ticketCodigo} />
-                <div className="flex w-full max-w-[340px] flex-col gap-3">
-                  <Button type="button" className="h-12 rounded-2xl font-semibold w-full shadow-lg" style={{ backgroundColor: brand, color: ctaFg }} onClick={() => void salvarTicketComoImagem()}>Salvar no dispositivo</Button>
-                  <Button type="button" variant="ghost" className="hover:bg-white/10 rounded-2xl" style={{ color: hexToRgba(textHighlight, 0.7) }} onClick={() => window.location.reload()}>Novo agendamento</Button>
-                </div>
-              </motion.div>
-            )}
+              {tab === "dono" && (
+                <VisaoDono
+                  faturamentoHoje={stats.faturamentoHoje}
+                  faturamentoMensal={stats.faturamentoMensal}
+                  comissoesAPagarHoje={stats.comissoesAPagarHoje}
+                  lucroRealHoje={stats.faturamentoHoje - stats.comissoesAPagarHoje}
+                  despesasNoDia={0} 
+                  comissaoPorBarbeiroHoje={comissaoPorBarbeiroHoje}
+                  barbeiros={barbeiros}
+                  servicos={servicos}
+                  corPrimaria={marca}
+                  onAddBarbeiro={(
+                    nome: string,
+                    comissao_pct: number,
+                    email: string,
+                    senha: string,
+                  ) =>
+                    mutacoesBarbeiro.adicionarBarbeiro.mutate({
+                      nome,
+                      comissao_pct,
+                      email,
+                      senha,
+                      slug: slug!,
+                    })
+                  }
+                  onRemoveBarbeiro={(id: string) => {
+                    const b = barbeiros.find((x: any) => x.id === id);
+                    mutacoesBarbeiro.removerBarbeiro.mutate({
+                      id,
+                      estaAtivo: b?.ativo,
+                      slug: slug!,
+                    });
+                  }}
+                  onToggleBarbeiroStatus={(id: string, novoStatus: boolean) =>
+                    mutacoesBarbeiro.alternarStatusBarbeiro.mutate({
+                      id,
+                      novoStatus,
+                      slug: slug!,
+                    })
+                  }
+                  onAddServico={(nome: string, preco: number, duracao_minutos: number, url_imagem: string) =>
+                    mutacoesServico.adicionarServico.mutate({ nome, preco, duracao_minutos, url_imagem, slug: slug! })
+                  }
+                  onRemoveServico={(id: string) =>
+                    mutacoesServico.removerServico.mutate({ id, slug: slug! })
+                  }
+                  onAddDespesa={(despesa: any) => {
+                    console.log("Despesa a salvar:", despesa);
+                    toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
+                  }}
+                />
+              )}
+            </motion.div>
           </AnimatePresence>
         </main>
+
+        <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/40 backdrop-blur-xl flex justify-around p-2 shadow-2xl z-20 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {visibleTabs.map((t) => (
+            <motion.button
+              key={t.id}
+              type="button"
+              whileTap={{ scale: 0.95 }}
+              onClick={() => goTab(t.id)}
+              className={cn(
+                "flex flex-col items-center p-2 transition-colors duration-300 outline-none rounded-xl",
+                tab === t.id ? "font-bold scale-110" : "text-white/45",
+              )}
+              style={tab === t.id ? { color: marca } : undefined}
+            >
+              <t.icon className="h-6 w-6" />
+              <span className="text-[10px] mt-1 uppercase tracking-tighter">{t.label}</span>
+            </motion.button>
+          ))}
+        </nav>
+        <TermosDeUso />
       </div>
     </div>
   );

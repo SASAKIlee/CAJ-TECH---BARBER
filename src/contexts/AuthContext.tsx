@@ -2,12 +2,14 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
-// 👑 ADICIONADO "ceo" NA INTERFACE
+// 🚀 CLEAN CODE: Definimos os cargos em um lugar só. Se criar um novo, muda só aqui!
+export type AppRole = "dono" | "barbeiro" | "vendedor" | "ceo";
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  userRole: "dono" | "barbeiro" | "vendedor" | "ceo" | null;
+  userRole: AppRole | null;
   signOut: () => Promise<void>;
 }
 
@@ -25,9 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // 👑 ADICIONADO "ceo" NO ESTADO INICIAL
-  const [userRole, setUserRole] = useState<"dono" | "barbeiro" | "vendedor" | "ceo" | null>(null);
+  const [userRole, setUserRole] = useState<AppRole | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -48,23 +48,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Busca o cargo no banco sempre que o usuário mudar
+  // 🚀 BLINDAGEM: Busca o cargo com async/await e Try/Catch (Evita o loading infinito)
   useEffect(() => {
     if (!user) return;
-    
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          // 👑 ADICIONADO "ceo" NO CASTING DE DADOS PARA O TS NÃO RECLAMAR
-          setUserRole(data[0].role as "dono" | "barbeiro" | "vendedor" | "ceo");
-        } else {
-          setUserRole(null);
+
+    let isMounted = true; // Previne vazamento de memória se o componente desmontar
+
+    async function fetchRole() {
+      try {
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user!.id)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (isMounted) {
+          if (data) {
+            setUserRole(data.role as AppRole);
+          } else {
+            setUserRole(null);
+          }
         }
-        setLoading(false);
-      });
+      } catch (err) {
+        console.error("Erro ao buscar papel do usuário:", err);
+        if (isMounted) setUserRole(null);
+      } finally {
+        if (isMounted) setLoading(false); // 🛡️ GARANTE que o loading vai parar, mesmo se der erro
+      }
+    }
+
+    fetchRole();
+
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   const signOut = async () => {

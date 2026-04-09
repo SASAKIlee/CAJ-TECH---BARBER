@@ -8,7 +8,6 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Arquivos que devem ser guardados em cache para funcionar offline
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
         name: 'CAJ Tech - Barber',
@@ -19,7 +18,6 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         icons: [
-          // 🚀 Agora sim, os arquivos físicos existem!
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
@@ -31,7 +29,7 @@ export default defineConfig({
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png', // Usamos o mesmo de 512 para a opção 'maskable'
+            src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
@@ -40,7 +38,13 @@ export default defineConfig({
       },
       workbox: {
         // Cache de arquivos estáticos
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        
+        // Limite de cache para 4MB para evitar erros de build na Vercel
+        maximumFileSizeToCacheInBytes: 4000000, 
+        
+        // Garante que o app não mostre a tela de erro offline em sub-rotas
+        navigateFallback: '/index.html'
       }
     })
   ],

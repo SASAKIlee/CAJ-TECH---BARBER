@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check, X, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 interface Props {
   comissaoTotalMes: number;
@@ -13,6 +15,35 @@ interface Props {
   onUpdateMeta?: (novaMeta: number) => void;
 }
 
+// 🚀 Hook de animação para os números (Count-up)
+function useCountUp(target: number, duration = 1000) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = 0;
+    const end = target;
+    if (start === end) return;
+
+    let totalMiliseconds = duration;
+    let incrementTime = (totalMiliseconds / end) * 2;
+    let timer = setInterval(() => {
+      start += (end / 50); // Incremento suave
+      if (start >= end) {
+        setDisplay(end);
+        clearInterval(timer);
+      } else {
+        setDisplay(start);
+      }
+    }, 20);
+
+    return () => clearInterval(timer);
+  }, [target]);
+  return display;
+}
+
+const formatarMoedaBR = (valor: number) => {
+  return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
+};
+
 export function CarteiraBarbeiro({ 
   comissaoTotalMes, totalCortesMes, nomeBarbeiro, 
   comissaoHoje = 0, cortesHoje = 0, metaDiaria = 150, onUpdateMeta 
@@ -21,6 +52,11 @@ export function CarteiraBarbeiro({
   const [novaMetaValor, setNovaMetaValor] = useState(metaDiaria.toString());
 
   const progressoMeta = Math.min((comissaoHoje / metaDiaria) * 100, 100);
+  const metaBatida = progressoMeta >= 100;
+
+  // Valores animados
+  const comissaoAnimada = useCountUp(comissaoHoje);
+  const totalMesAnimado = useCountUp(comissaoTotalMes);
 
   const handleSalvarMeta = () => {
     const valorNum = Number(novaMetaValor);
@@ -31,82 +67,133 @@ export function CarteiraBarbeiro({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-32">
-      <div className="bg-primary/10 p-6 rounded-3xl border border-primary/20 backdrop-blur-md">
-        <p className="text-[10px] font-black tracking-widest text-primary uppercase mb-1">Painel Financeiro</p>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32">
+      
+      {/* HEADER PREMIUM */}
+      <div className="bg-gradient-to-br from-zinc-900 to-black p-6 rounded-[28px] border border-white/[0.08] shadow-2xl relative overflow-hidden">
+        <div className="absolute -right-4 -bottom-4 opacity-5">
+           <Wallet className="h-32 w-32 rotate-12" />
+        </div>
+        <p className="text-[10px] font-black tracking-[0.2em] text-emerald-500 uppercase mb-1 flex items-center gap-2">
+           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+           Meu Desempenho
+        </p>
         <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
-          {nomeBarbeiro} 💸
+          {nomeBarbeiro.split(' ')[0]} 💸
         </h2>
       </div>
 
-      <div className="grid gap-3">
-        <div className="flex justify-between items-end px-1 mt-2">
-          <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest flex items-center gap-1">
-            <Clock className="h-3 w-3" /> Feito Hoje
+      {/* SEÇÃO DA META (GAMIFICAÇÃO) */}
+      <div className="space-y-3 px-1">
+        <div className="flex justify-between items-center">
+          <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5" /> Progresso Diário
           </p>
           
-          {/* 🚀 O CONTROLE DA META DO BARBEIRO */}
           <div className="flex items-center gap-2">
-            <Target className="h-3 w-3 text-primary" />
             {editandoMeta ? (
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-zinc-500 font-bold">R$</span>
+              <div className="flex items-center gap-1 animate-in zoom-in-95">
                 <input 
                   type="number" 
+                  inputMode="decimal"
                   value={novaMetaValor} 
                   onChange={e => setNovaMetaValor(e.target.value)}
-                  className="w-16 bg-black border border-primary/50 text-white text-xs px-2 py-1 rounded-md outline-none"
+                  className="w-20 bg-zinc-800 border border-emerald-500/50 text-white text-xs font-bold px-3 py-1.5 rounded-xl outline-none"
                   autoFocus
                 />
-                <button onClick={handleSalvarMeta} className="bg-primary text-black p-1 rounded-md"><Check className="h-3 w-3"/></button>
+                <button onClick={handleSalvarMeta} className="bg-emerald-500 text-black p-1.5 rounded-lg active:scale-90 transition-transform"><Check className="h-4 w-4 stroke-[3px]"/></button>
+                <button onClick={() => setEditandoMeta(false)} className="bg-zinc-800 text-zinc-400 p-1.5 rounded-lg"><X className="h-4 w-4"/></button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setEditandoMeta(true)}>
-                <span className="text-[10px] text-primary font-bold uppercase tracking-widest">Meta: R$ {metaDiaria}</span>
-                <Edit2 className="h-3 w-3 text-zinc-500 group-hover:text-primary transition-colors" />
+              <div className="flex items-center gap-2 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full border border-white/5 transition-all" onClick={() => setEditandoMeta(true)}>
+                <Target className={cn("h-3.5 w-3.5", metaBatida ? "text-yellow-500" : "text-emerald-500")} />
+                <span className="text-[10px] text-zinc-300 font-black uppercase tracking-widest">Meta: R$ {metaDiaria}</span>
+                <Edit2 className="h-3 w-3 text-zinc-600 group-hover:text-white transition-colors" />
               </div>
             )}
           </div>
         </div>
         
-        {/* A BARRA DE PROGRESSO GAMIFICADA */}
-        <div className="w-full bg-zinc-900 rounded-full h-2.5 mb-2 border border-zinc-800">
-          <div className="bg-primary h-2.5 rounded-full transition-all duration-1000 ease-out relative" style={{ width: `${progressoMeta}%` }}>
-            {progressoMeta >= 100 && (
-              <div className="absolute right-0 -top-1 w-4 h-4 bg-white rounded-full shadow-[0_0_10px_#fff] animate-pulse" />
-            )}
+        {/* BARRA DE PROGRESSO COM GLOW */}
+        <div className="relative">
+          <div className="w-full bg-zinc-900 rounded-full h-4 border border-zinc-800 p-0.5 overflow-hidden">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${progressoMeta}%` }}
+              transition={{ duration: 1.5, ease: "easeOut" }}
+              className={cn(
+                "h-full rounded-full transition-all relative",
+                metaBatida ? "bg-gradient-to-r from-yellow-600 to-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.4)]" : "bg-emerald-500"
+              )}
+            >
+               {/* Efeito de brilho passando pela barra */}
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-20 animate-[shimmer_2s_infinite]" />
+            </motion.div>
           </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="p-5 flex flex-col gap-2 bg-zinc-900/50 border border-zinc-800 rounded-[22px] backdrop-blur-md">
-            <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center"><Wallet className="h-4 w-4 text-green-500" /></div>
-            <div>
-              <p className="text-[9px] text-zinc-400 uppercase font-black tracking-widest">Sua Comissão</p>
-              <p className="text-2xl font-black text-white italic">R$ {comissaoHoje.toFixed(2)}</p>
-            </div>
-          </Card>
-          <Card className="p-5 flex flex-col gap-2 bg-zinc-900/50 border border-zinc-800 rounded-[22px] backdrop-blur-md">
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center"><Scissors className="h-4 w-4 text-primary" /></div>
-            <div>
-              <p className="text-[9px] text-zinc-400 uppercase font-black tracking-widest">Atendimentos</p>
-              <p className="text-2xl font-black text-white italic">{cortesHoje}</p>
-            </div>
-          </Card>
+          {metaBatida && (
+             <div className="absolute -right-1 -top-6 animate-bounce">
+                <div className="bg-yellow-500 text-black text-[8px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg">
+                   <Trophy className="h-2.5 w-2.5" /> META BATIDA!
+                </div>
+             </div>
+          )}
         </div>
       </div>
 
-      <div className="grid gap-3 pt-4">
-        <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest px-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> Resumo do Mês</p>
-        <Card className="p-4 flex items-center gap-4 bg-black/40 border border-zinc-800 rounded-[22px]">
-          <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center"><TrendingUp className="h-5 w-5 text-zinc-400" /></div>
+      {/* CARDS PRINCIPAIS */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="p-5 flex flex-col gap-3 bg-zinc-900/40 border border-zinc-800/50 rounded-[24px] backdrop-blur-md relative overflow-hidden group">
+          <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/10 group-hover:scale-110 transition-transform">
+            <Wallet className="h-5 w-5 text-emerald-500" />
+          </div>
           <div>
-            <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">Total Acumulado</p>
-            <p className="text-xl font-bold text-white">R$ {comissaoTotalMes.toFixed(2)}</p>
-            <p className="text-[10px] text-zinc-600 font-bold uppercase mt-0.5">{totalCortesMes} cortes finalizados</p>
+            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Ganhos Hoje</p>
+            <p className="text-2xl font-black text-white italic tabular-nums">
+              R$ <span className="text-emerald-400">{formatarMoedaBR(comissaoAnimada)}</span>
+            </p>
+          </div>
+        </Card>
+
+        <Card className="p-5 flex flex-col gap-3 bg-zinc-900/40 border border-zinc-800/50 rounded-[24px] backdrop-blur-md relative overflow-hidden group">
+          <div className="h-10 w-10 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/10 group-hover:scale-110 transition-transform">
+            <Scissors className="h-5 w-5 text-blue-500" />
+          </div>
+          <div>
+            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Atendimentos</p>
+            <p className="text-3xl font-black text-white italic tabular-nums">{cortesHoje}</p>
           </div>
         </Card>
       </div>
+
+      {/* RESUMO MENSAL (CRM) */}
+      <div className="space-y-3 pt-2">
+        <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] px-1 flex items-center gap-2">
+           <Calendar className="h-4 w-4 text-zinc-600" /> Acumulado do Mês
+        </p>
+        <Card className="p-5 flex items-center justify-between gap-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/30 border border-zinc-800 rounded-[28px] shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center shadow-inner">
+               <TrendingUp className="h-7 w-7 text-zinc-400" />
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-0.5">Saldo Disponível</p>
+              <p className="text-2xl font-black text-white tabular-nums tracking-tighter">
+                R$ {formatarMoedaBR(totalMesAnimado)}
+              </p>
+              <div className="flex items-center gap-1.5 mt-1">
+                 <div className="h-1 w-1 rounded-full bg-emerald-500" />
+                 <p className="text-[9px] text-zinc-400 font-bold uppercase">{totalCortesMes} cortes finalizados</p>
+              </div>
+            </div>
+          </div>
+          <div className="h-12 w-px bg-zinc-800 mx-2" />
+          <div className="text-center">
+             <p className="text-[10px] text-zinc-600 font-black uppercase">Média/Dia</p>
+             <p className="text-sm font-black text-zinc-300">R$ {formatarMoedaBR(comissaoTotalMes / 30)}</p>
+          </div>
+        </Card>
+      </div>
+
     </div>
   );
 }

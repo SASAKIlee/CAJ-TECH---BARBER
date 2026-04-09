@@ -1,162 +1,131 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { LockKeyhole, Loader2, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, UserCircle2, Clock, Calendar, Scissors, AlertTriangle } from "lucide-react";
 
-export default function Checkin() {
-  const { slug, ticket } = useParams();
-  const [loading, setLoading] = useState(true);
-  const [confirmando, setConfirmando] = useState(false);
-  const [agendamento, setAgendamento] = useState<any>(null);
-  const [erro, setErro] = useState<string | null>(null);
+export default function Auth() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    async function buscarAgendamento() {
-      try {
-        // Busca a barbearia
-        const { data: barbearia } = await supabase
-          .from("barbearias")
-          .select("id, nome, cor_primaria")
-          .eq("slug", slug)
-          .single();
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-        if (!barbearia) throw new Error("Barbearia não encontrada.");
-
-        // Como o ticket gerado na página pública é aleatório, na vida real 
-        // precisaríamos salvar ele no banco. Para o teste agora, vamos buscar
-        // o último agendamento Pendente dessa barbearia (simulando a leitura).
-        const { data: agendamentoEncontrado, error: erroAgendamento } = await supabase
-          .from("agendamentos")
-          .select(`*, servicos (nome, preco), barbeiros (nome)`)
-          .eq("barbearia_slug", slug)
-          .eq("status", "Pendente")
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (erroAgendamento || !agendamentoEncontrado) {
-          throw new Error("Agendamento não encontrado ou já baixado.");
-        }
-
-        setAgendamento({ ...agendamentoEncontrado, barbearia });
-      } catch (err: any) {
-        setErro(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    buscarAgendamento();
-  }, [slug, ticket]);
-
-  const handleConfirmarCheckin = async () => {
-    setConfirmando(true);
     try {
-      // Muda o status para Concluído no banco de dados
-      const { error } = await supabase
-        .from("agendamentos")
-        .update({ status: "Concluído" })
-        .eq("id", agendamento.id);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-      if (error) throw error;
+      if (error) {
+        // Se for erro de rede/conexão
+        if (error.message.includes("fetch")) {
+          throw new Error("Falha na conexão. Verifique sua internet.");
+        }
+        // Mensagem genérica para segurança em produção
+        throw new Error("Credenciais inválidas ou acesso não autorizado.");
+      }
 
-      toast.success("✅ Check-in realizado com sucesso!");
-      
-      // Atualiza a tela para mostrar o sucesso
-      setAgendamento((prev: any) => ({ ...prev, status: "Concluído" }));
-    } catch (error) {
-      toast.error("Erro ao confirmar check-in.");
+      toast.success("Acesso autorizado! Bem-vindo.");
+    } catch (err: any) {
+      toast.error(err.message);
     } finally {
-      setConfirmando(false);
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#18181B] flex flex-col items-center justify-center p-6">
-        <Loader2 className="h-10 w-10 text-emerald-500 animate-spin mb-4" />
-        <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Buscando ticket...</p>
-      </div>
-    );
-  }
-
-  if (erro) {
-    return (
-      <div className="min-h-screen bg-[#18181B] flex flex-col items-center justify-center p-6 text-center">
-        <div className="h-20 w-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-          <AlertTriangle className="h-10 w-10 text-red-500" />
-        </div>
-        <h2 className="text-2xl font-black text-white uppercase italic mb-2">Ticket Inválido</h2>
-        <p className="text-zinc-400 text-sm mb-8">{erro}</p>
-      </div>
-    );
-  }
-
-  const brand = agendamento.barbearia?.cor_primaria || "#D4AF37";
-
   return (
-    <div className="min-h-screen bg-[#18181B] flex flex-col items-center justify-center p-4">
-      <Card className="w-full max-w-sm bg-zinc-900 border-zinc-800 rounded-[2rem] overflow-hidden shadow-2xl relative">
-        {/* Barra superior de cor da barbearia */}
-        <div className="h-2 w-full" style={{ backgroundColor: brand }} />
+    <div className="dark min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden font-sans">
+      
+      {/* Detalhes visuais de fundo (Efeito Aura) */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/10 blur-[120px] rounded-full animate-pulse" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-emerald-600/5 blur-[120px] rounded-full" />
 
-        <div className="p-6 text-center border-b border-zinc-800/50">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-1">Painel do Profissional</p>
-          <h1 className="text-2xl font-black text-white italic tracking-tighter uppercase">{agendamento.barbearia?.nome}</h1>
+      <Card className="w-full max-w-sm p-8 space-y-8 bg-zinc-900/40 border-zinc-800 backdrop-blur-2xl rounded-[2.5rem] shadow-2xl relative z-10">
+        
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-16 w-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+            <LockKeyhole className="h-8 w-8 text-emerald-500" />
+          </div>
+          <div className="text-center space-y-1">
+            <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">CAJ TECH</h1>
+            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] ml-1">Acesso Restrito</p>
+          </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Ficha do Cliente */}
-          <div className="flex items-center gap-4 bg-black/40 p-4 rounded-2xl border border-zinc-800/50">
-            <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center">
-              <UserCircle2 className="h-8 w-8 text-zinc-500" />
-            </div>
-            <div className="text-left">
-              <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Cliente</p>
-              <p className="text-lg font-black text-white uppercase tracking-tight">{agendamento.nome_cliente}</p>
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest">E-mail Corporativo</Label>
+            <Input 
+              type="email" 
+              autoComplete="email"
+              placeholder="seu@email.com" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              required 
+              className="bg-black border-zinc-800 h-14 rounded-2xl text-white focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-base px-4"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest">Sua Senha</Label>
+            <div className="relative">
+              <Input 
+                type={showPassword ? "text" : "password"} 
+                autoComplete="current-password"
+                placeholder="••••••••" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                required 
+                className="bg-black border-zinc-800 h-14 rounded-2xl text-white focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-base px-4 pr-12"
+              />
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
             </div>
           </div>
 
-          {/* Dados do Corte */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-black/20 p-3 rounded-2xl border border-zinc-800/50">
-              <Calendar className="h-4 w-4 text-zinc-500 mb-2" />
-              <p className="text-white font-bold text-sm">{agendamento.data.split('-').reverse().join('/')}</p>
-            </div>
-            <div className="bg-black/20 p-3 rounded-2xl border border-zinc-800/50">
-              <Clock className="h-4 w-4 text-zinc-500 mb-2" />
-              <p className="text-white font-bold text-sm">{agendamento.horario}</p>
-            </div>
-          </div>
+          <Button 
+            type="submit" 
+            className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase italic rounded-[20px] shadow-lg shadow-emerald-600/10 transition-all active:scale-95 group mt-2"
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <span className="flex items-center gap-2 tracking-widest">
+                Entrar no Sistema <ShieldCheck className="h-5 w-5 opacity-40 group-hover:opacity-100 transition-opacity" />
+              </span>
+            )}
+          </Button>
+        </form>
 
-          <div className="bg-black/20 p-4 rounded-2xl border border-zinc-800/50 flex items-center gap-3">
-             <Scissors className="h-5 w-5 text-zinc-500" />
-             <div>
-               <p className="text-sm font-bold text-white uppercase">{agendamento.servicos?.nome || "Serviço"}</p>
-               <p className="text-xs text-zinc-400">com {agendamento.barbeiros?.nome || "Profissional"}</p>
-             </div>
-          </div>
-
-          {/* AÇÃO */}
-          {agendamento.status === "Concluído" ? (
-            <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-center flex flex-col items-center gap-2">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-              <p className="text-emerald-500 font-black uppercase tracking-widest text-sm">Check-in Confirmado!</p>
-            </div>
-          ) : (
-            <Button 
-              onClick={handleConfirmarCheckin} 
-              disabled={confirmando}
-              className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wide text-lg rounded-2xl shadow-xl shadow-emerald-600/20"
-            >
-              {confirmando ? <Loader2 className="animate-spin h-6 w-6" /> : "Dar Baixa no Sistema"}
-            </Button>
-          )}
+        <div className="pt-6 border-t border-zinc-800/50 text-center">
+          <p className="text-[10px] text-zinc-600 font-bold uppercase mb-4 tracking-widest">Problemas com o acesso?</p>
+          <button 
+            type="button"
+            onClick={() => window.open('https://wa.me/5517992051576?text=Olá, sou parceiro da CAJ TECH e estou com dificuldades no meu login.', '_blank')}
+            className="text-zinc-400 text-[11px] font-black uppercase hover:text-emerald-500 transition-all border border-zinc-800 hover:border-emerald-500/30 px-6 py-3 rounded-full bg-zinc-900/20"
+          >
+            Suporte Técnico
+          </button>
         </div>
+
       </Card>
+      
+      <div className="absolute bottom-8 text-center w-full">
+        <p className="text-[9px] text-zinc-700 font-black uppercase tracking-[0.5em]">© 2026 CAJ TECH - Inteligência em Barbearias</p>
+      </div>
     </div>
   );
 }

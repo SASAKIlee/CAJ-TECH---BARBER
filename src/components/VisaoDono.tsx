@@ -30,6 +30,11 @@ const DIAS_SEMANA = [
 type DonoSubTab = "resumo" | "dashboard" | "automacoes" | "config";
 type PlanoType = "starter" | "pro" | "elite";
 
+// 🚀 MELHORIA: Formatação de Moeda Padrão Brasil (Com ponto de milhar)
+const formatarMoedaBR = (valor: number) => {
+  return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
+};
+
 function useCountUp(target: number, duration = 900) {
   const [display, setDisplay] = useState(target);
   const displayRef = useRef(display);
@@ -55,10 +60,12 @@ function StatCard({ label, value, brand, highlight, delay = 0 }: any) {
   const ctaFg = contrastTextOnBrand(brand);
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 32, delay }} className="w-full">
-      <Card className="relative overflow-hidden rounded-[22px] border border-white/[0.08] p-5 shadow-2xl h-full"
+      <Card className="relative overflow-hidden rounded-[22px] border border-white/[0.08] p-5 shadow-2xl h-full flex flex-col justify-center"
         style={{ backgroundColor: highlight ? brand : hexToRgba(brand, 0.1), backdropFilter: "blur(14px)" }}>
         <p className={cn("text-[10px] font-bold uppercase tracking-[0.2em] mb-2", highlight ? "text-black/55" : "text-white/50")}>{label}</p>
-        <p className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: highlight ? ctaFg : "#fff" }}>R$ {animated.toFixed(2)}</p>
+        <p className="text-2xl sm:text-3xl font-black tabular-nums tracking-tight" style={{ color: highlight ? ctaFg : "#fff" }}>
+          R$ {formatarMoedaBR(animated)}
+        </p>
       </Card>
     </motion.div>
   );
@@ -80,10 +87,13 @@ export function VisaoDono({
   const [imagemServico, setImagemServico] = useState<File | null>(null);
   const [isUploadingServico, setIsUploadingServico] = useState(false);
 
-  // 🚀 NOVOS ESTADOS: Identidade Visual
   const [imagemLogo, setImagemLogo] = useState<File | null>(null);
   const [imagemFundo, setImagemFundo] = useState<File | null>(null);
   const [isUploadingBranding, setIsUploadingBranding] = useState(false);
+
+  // Preview URLs em tempo real
+  const previewLogo = imagemLogo ? URL.createObjectURL(imagemLogo) : null;
+  const previewFundo = imagemFundo ? URL.createObjectURL(imagemFundo) : null;
 
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
@@ -111,7 +121,6 @@ export function VisaoDono({
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
   const glass = { backgroundColor: hexToRgba(brand, 0.1), backdropFilter: "blur(14px)" } as const;
-  const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
 
   const tabVariants = {
     enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
@@ -311,7 +320,6 @@ export function VisaoDono({
     }
   };
 
-  // 🚀 NOVA FUNÇÃO: Salvar Identidade Visual
   const handleSaveBranding = async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return toast.error("Sessão expirada.");
@@ -321,7 +329,6 @@ export function VisaoDono({
     setIsUploadingBranding(true);
     try {
       const updates: any = {};
-      // Usando um bucket chamado 'barbearias' (Lembre-se de criar este bucket no painel do Supabase!)
       if (imagemLogo) {
         const urlLogo = await handleUploadImagem(imagemLogo, 'barbearias');
         if (urlLogo) updates.url_logo = urlLogo;
@@ -345,9 +352,14 @@ export function VisaoDono({
     }
   };
 
+  // 🚀 MELHORIA: Trava anti-bug na seleção de dias
   const toggleDiaSemana = (idDia: number) => {
     setHorariosLoja(prev => {
       const isSelected = prev.dias_trabalho.includes(idDia);
+      if (isSelected && prev.dias_trabalho.length === 1) {
+        toast.error("A barbearia precisa abrir pelo menos um dia na semana!");
+        return prev;
+      }
       const novosDias = isSelected ? prev.dias_trabalho.filter(d => d !== idDia) : [...prev.dias_trabalho, idDia].sort();
       return { ...prev, dias_trabalho: novosDias };
     });
@@ -492,7 +504,7 @@ export function VisaoDono({
     const margem = faturamento > 0 ? Math.round((lucro / faturamento) * 100) : 0;
     const topBarbeiro = hasDataEquipe ? dataEquipe[0] : null;
     const barbeirosAtivosHoje = dataEquipe.filter((d: any) => d.Total > 0).length;
-    const mediaPorBarbeiro = barbeirosAtivosHoje > 0 ? (faturamento / barbeirosAtivosHoje).toFixed(2) : "0.00";
+    const mediaPorBarbeiro = barbeirosAtivosHoje > 0 ? formatarMoedaBR(faturamento / barbeirosAtivosHoje) : "0,00";
 
     const dataFinanceiro = [
       { name: 'Lucro Líquido', value: lucro },
@@ -546,7 +558,7 @@ export function VisaoDono({
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                   <XAxis dataKey="name" stroke="#777" fontSize={10} axisLine={false} tickLine={false} dy={10} />
                   <YAxis stroke="#777" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R$${v}`} />
-                  <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '16px', fontSize: '12px' }} itemStyle={{ color: brand }} formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Produção']} />
+                  <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '16px', fontSize: '12px' }} itemStyle={{ color: brand }} formatter={(value: number) => [`R$ ${formatarMoedaBR(value)}`, 'Produção']} />
                   <Bar dataKey="Total" radius={[6, 6, 6, 6]} maxBarSize={45}>
                     {dataEquipe.map((_, i) => <Cell key={i} fill={i === 0 ? brand : hexToRgba(brand, 0.4)} />)}
                   </Bar>
@@ -573,7 +585,7 @@ export function VisaoDono({
                   <Pie data={dataFinanceiro} cx="50%" cy="45%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
                     {dataFinanceiro.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '16px', fontSize: '12px' }} itemStyle={{ color: '#fff' }} formatter={(value: number) => [`R$ ${value.toFixed(2)}`, '']} />
+                  <Tooltip contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '16px', fontSize: '12px' }} itemStyle={{ color: '#fff' }} formatter={(value: number) => [`R$ ${formatarMoedaBR(value)}`, '']} />
                   <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={(value) => <span className="text-xs font-bold text-zinc-300 uppercase tracking-widest">{value}</span>} />
                 </PieChart>
               </ResponsiveContainer>
@@ -697,12 +709,12 @@ export function VisaoDono({
                  </Button>
               </div>
               {horariosLoja.datas_fechadas.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-2 mt-3">
                   {horariosLoja.datas_fechadas.map(data => (
-                    <div key={data} className="flex items-center gap-2 bg-black/40 border border-white/[0.08] pl-3 pr-1 py-1 rounded-full">
-                      <span className="text-[11px] font-bold">{formatarDataBR(data)}</span>
-                      <button onClick={() => handleRemoveDataFechada(data)} className="h-6 w-6 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center">
-                        <X className="h-3 w-3" />
+                    <div key={data} className="flex items-center gap-2 bg-black/40 border border-white/[0.08] pl-4 pr-1 py-1 rounded-full">
+                      <span className="text-xs font-bold">{formatarDataBR(data)}</span>
+                      <button onClick={() => handleRemoveDataFechada(data)} className="h-8 w-8 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
                   ))}
@@ -763,11 +775,11 @@ export function VisaoDono({
                     </div>
                  </div>
                  <div className="flex gap-2">
-                    <Button size="icon" variant="ghost" className="h-10 w-10 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl" onClick={() => onToggleBarbeiroStatus(b.id, !b.ativo)}>
-                      {b.ativo ? <PowerOff className="h-5 w-5" /> : <Power className="h-5 w-5" />}
+                    <Button size="icon" variant="ghost" className="h-12 w-12 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl" onClick={() => onToggleBarbeiroStatus(b.id, !b.ativo)}>
+                      {b.ativo ? <PowerOff className="h-6 w-6" /> : <Power className="h-6 w-6" />}
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-10 w-10 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl" disabled={b.ativo} onClick={() => onRemoveBarbeiro(b.id)}>
-                      <Trash2 className="h-5 w-5" />
+                    <Button size="icon" variant="ghost" className="h-12 w-12 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl" disabled={b.ativo} onClick={() => onRemoveBarbeiro(b.id)}>
+                      <Trash2 className="h-6 w-6" />
                     </Button>
                  </div>
                </div>
@@ -816,12 +828,12 @@ export function VisaoDono({
                    <div>
                      <p className="text-sm font-black uppercase italic tracking-tight">{s.nome}</p>
                      <p className="text-[11px] font-black mt-0.5 tracking-widest uppercase" style={{ color: brand }}>
-                       R$ {formatarMoeda(s.preco)} <span className="text-zinc-500 font-bold ml-1 opacity-70">• {s.duracao_minutos} min</span>
+                       R$ {formatarMoedaBR(s.preco)} <span className="text-zinc-500 font-bold ml-1 opacity-70">• {s.duracao_minutos} min</span>
                      </p>
                    </div>
                  </div>
-                 <Button size="icon" variant="ghost" className="h-10 w-10 text-zinc-600 hover:text-red-500 rounded-xl" onClick={() => onRemoveServico(s.id)}>
-                    <Trash2 className="h-5 w-5" />
+                 <Button size="icon" variant="ghost" className="h-12 w-12 text-zinc-600 hover:text-red-500 rounded-xl" onClick={() => onRemoveServico(s.id)}>
+                    <Trash2 className="h-6 w-6" />
                  </Button>
                </div>
              ))}
@@ -836,20 +848,39 @@ export function VisaoDono({
           </div>
           <Card className="p-5 sm:p-6 rounded-[22px] border border-white/[0.08] shadow-xl space-y-5" style={glass}>
             
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Logo da Barbearia</p>
+              
+              {/* Preview Dinâmico da Logo */}
+              {previewLogo && (
+                <div className="h-20 w-20 rounded-2xl border border-white/20 overflow-hidden mb-2 shadow-lg">
+                  <img src={previewLogo} alt="Preview Logo" className="h-full w-full object-cover" />
+                </div>
+              )}
+              
               <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-[10px] uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
                 {imagemLogo ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <ImagePlus className="h-4 w-4 opacity-50" />} 
-                <span className="opacity-80">{imagemLogo ? "Logo Selecionada" : "Anexar Nova Logo"}</span>
+                <span className="opacity-80">{imagemLogo ? "Logo Selecionada (Clique para trocar)" : "Anexar Nova Logo"}</span>
                 <input type="file" accept="image/*" className="hidden" onChange={e => setImagemLogo(e.target.files?.[0] || null)} />
               </label>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Imagem de Fundo (Capa do App)</p>
+              
+              {/* Preview Dinâmico do Fundo */}
+              {previewFundo && (
+                <div className="h-32 w-full rounded-2xl border border-white/20 overflow-hidden mb-2 shadow-lg relative">
+                  <img src={previewFundo} alt="Preview Fundo" className="h-full w-full object-cover opacity-60" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white shadow-black drop-shadow-md">Preview do Fundo</span>
+                  </div>
+                </div>
+              )}
+
               <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-[10px] uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
                 {imagemFundo ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <ImagePlus className="h-4 w-4 opacity-50" />} 
-                <span className="opacity-80">{imagemFundo ? "Fundo Selecionado" : "Anexar Imagem de Fundo"}</span>
+                <span className="opacity-80">{imagemFundo ? "Fundo Selecionado (Clique para trocar)" : "Anexar Imagem de Fundo"}</span>
                 <input type="file" accept="image/*" className="hidden" onChange={e => setImagemFundo(e.target.files?.[0] || null)} />
               </label>
             </div>
@@ -890,7 +921,7 @@ export function VisaoDono({
            </div>
            <div className="bg-black/50 border border-zinc-800 p-5 rounded-3xl relative z-10">
              <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Plano Atual: {planoAtual}</p>
-             <p className="text-4xl font-black text-white italic">R$ {getValorPlano(planoAtual).toFixed(2)}</p>
+             <p className="text-4xl font-black text-white italic">R$ {formatarMoedaBR(getValorPlano(planoAtual))}</p>
            </div>
            {!pixGerado ? (
              <Button onClick={() => handleAbrirCheckout('renovacao')} disabled={isGerandoPix} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-16 rounded-2xl shadow-xl uppercase italic tracking-widest text-base relative z-10">
@@ -987,7 +1018,7 @@ export function VisaoDono({
           
           <div className="text-center space-y-2">
             <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Pagamento Seguro</h2>
-            <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Plano {planoPagamento} • R$ {getValorPlano(planoPagamento).toFixed(2)}</p>
+            <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">Plano {planoPagamento} • R$ {formatarMoedaBR(getValorPlano(planoPagamento))}</p>
           </div>
 
           {!pixGerado ? (

@@ -1,226 +1,183 @@
-import { useState } from "react";
-import { DollarSign, TrendingDown, Wallet, Plus, Trash2, Users, Scissors, Briefcase } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-
-import { barbeiroSchema, servicoSchema, despesaSchema } from "@/lib/schemas";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { agendamentoSchema } from "@/lib/schemas";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
-export function VisaoDono({ 
-  faturamentoHoje = 0, 
-  comissoesAPagarHoje = 0, 
-  despesasNoDia = 0, 
-  lucroRealHoje = 0, 
-  despesas = [], 
-  onAddDespesa, 
-  onRemoveDespesa, 
-  comissaoPorBarbeiroHoje = [], 
-  dataFiltro, // mantido, mas não usado na adição de despesa
-  barbeiros = [], 
-  servicos = [], 
-  onAddBarbeiro, 
-  onRemoveBarbeiro, 
-  onAddServico, 
-  onRemoveServico,
-  faturamentoMensal = 0 // adicionado como prop com valor padrão
+const MotionButton = motion.create(Button);
+
+function getHojeLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const aplicarMascaraTelefone = (valor: string) => {
+  return valor
+    .replace(/\D/g, '')
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d{4})\d?$/, '$1-$2');
+};
+
+export function NovoAgendamentoModal({ 
+  open, 
+  setOpen, 
+  barbeiros, 
+  servicos, 
+  onNovoAgendamento, 
+  barbeiroSelecionadoId, 
+  horariosOcupados, 
+  horarios, 
+  hojeLocal, 
+  horaAtual, 
+  minAtual, 
+  brand, 
+  ctaFg 
 }: any) {
-  
-  // States para os formulários
-  const [novaDesc, setNovaDesc] = useState("");
-  const [novoValor, setNovoValor] = useState("");
-  const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
-  const [nServico, setNServico] = useState({ nome: "", preco: "" });
+  const [novo, setNovo] = useState({
+    nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal(), horario: "",
+  });
 
-  const formatarMoeda = (v: any) => Number(v || 0).toFixed(2);
+  useEffect(() => {
+    if (open) setNovo({ nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal(), horario: "" });
+  }, [open, barbeiroSelecionadoId]);
 
-  // --- FUNÇÕES DE VALIDAÇÃO COM ZOD ---
+  const slotsOcupados = useMemo(() => {
+    if (!novo.data || !novo.barbeiroId) return [];
+    return horariosOcupados(novo.data, novo.barbeiroId) || [];
+  }, [novo.data, novo.barbeiroId, horariosOcupados]);
 
-  const handleAddBarbeiro = () => {
-    const validacao = barbeiroSchema.safeParse({
-      nome: nBarbeiro.nome,
-      email: nBarbeiro.email,
-      senha: nBarbeiro.senha,
-      comissao: nBarbeiro.comissao
-    });
-
-    if (!validacao.success) {
-      return toast.error(validacao.error.errors[0].message);
-    }
-
-    onAddBarbeiro(validacao.data.nome, validacao.data.comissao, validacao.data.email, validacao.data.senha);
-    toast.success("Barbeiro cadastrado com sucesso! ✂️");
-    setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
-  };
-
-  const handleAddServico = () => {
-    const validacao = servicoSchema.safeParse({
-      nome: nServico.nome,
-      preco: nServico.preco
-    });
-
-    if (!validacao.success) {
-      return toast.error(validacao.error.errors[0].message);
-    }
-
-    onAddServico(validacao.data.nome, validacao.data.preco);
-    toast.success("Serviço adicionado com sucesso!");
-    setNServico({ nome: "", preco: "" });
-  };
-
-  const handleAddDespesa = () => {
-    // Usar a data atual (hoje) em vez do dataFiltro
-    const dataAtual = new Date();
+  const handleAgendar = async () => {
+    const toastId = toast.loading("Processando...");
+    const telefoneLimpo = novo.telefone.replace(/\D/g, "");
+    const payload = { ...novo, telefone: telefoneLimpo };
     
-    const validacao = despesaSchema.safeParse({
-      descricao: novaDesc,
-      valor: novoValor,
-      data: dataAtual // passa um objeto Date
-    });
+    const validacao = agendamentoSchema.safeParse(payload);
 
     if (!validacao.success) {
+      toast.dismiss(toastId);
       return toast.error(validacao.error.errors[0].message);
     }
 
-    onAddDespesa({
-      descricao: validacao.data.descricao,
-      valor: validacao.data.valor,
-      data: validacao.data.data // data é um Date
-    });
-    toast.success("Despesa registrada no caixa! 💸");
-    setNovaDesc(""); 
-    setNovoValor("");
-  };
+    try {
+      const res = await onNovoAgendamento({
+        nome_cliente: validacao.data.nome, telefone_cliente: validacao.data.telefone,
+        servico_id: validacao.data.servicoId, barbeiro_id: validacao.data.barbeiroId,
+        data: validacao.data.data, horario: validacao.data.horario,
+      });
 
-  // Função auxiliar para formatar a data de exibição
-  const dataExibicao = dataFiltro ? new Date(dataFiltro) : new Date();
-  const dataFormatada = dataExibicao.toLocaleDateString('pt-BR');
+      toast.dismiss(toastId);
+      if (!res?.error) {
+        setOpen(false);
+        toast.success("Agendado com sucesso! ✂️");
+      } else {
+        toast.error(res.error);
+      }
+    } catch {
+      toast.dismiss(toastId);
+      toast.error("Erro crítico de comunicação.");
+    }
+  };
 
   return (
-    <div className="space-y-8 pb-20">
-      
-      {/* Indicador de data */}
-      <div className="flex justify-between items-center px-1">
-        <p className="text-xs text-zinc-500 uppercase font-bold">Dashboard do Dono</p>
-        <p className="text-xs text-zinc-500">Data referência: {dataFormatada}</p>
-      </div>
-
-      {/* 1. DASHBOARD FINANCEIRO */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4 bg-[#161616] border-zinc-800">
-          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Entradas Hoje</p>
-          <p className="text-2xl font-black text-white">R$ {formatarMoeda(faturamentoHoje)}</p>
-        </Card>
-        <Card className="p-4 bg-primary border-none">
-          <p className="text-[10px] uppercase font-black text-black/60 tracking-widest mb-1">Lucro Real Hoje</p>
-          <p className="text-2xl font-black text-black">R$ {formatarMoeda(lucroRealHoje)}</p>
-        </Card>
-        <Card className="p-4 bg-[#1A1A1A] border-zinc-800">
-          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Faturamento Mensal</p>
-          <p className="text-xl font-black text-white">R$ {formatarMoeda(faturamentoMensal)}</p>
-        </Card>
-        <Card className="p-4 bg-[#1A1A1A] border-zinc-800">
-          <p className="text-[10px] uppercase font-black text-zinc-500 tracking-widest mb-1">Comissões Hoje</p>
-          <p className="text-xl font-black text-white">R$ {formatarMoeda(comissoesAPagarHoje)}</p>
-        </Card>
-      </div>
-
-      {/* 2. GESTÃO DE EQUIPE (BARBEIROS) */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <Users className="h-4 w-4 text-primary" />
-          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Gestão de Barbeiros</h3>
-        </div>
-        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 space-y-3">
-          <input placeholder="Nome do Barbeiro" className="w-full bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-            value={nBarbeiro.nome} onChange={e => setNBarbeiro({...nBarbeiro, nome: e.target.value})} />
-          <div className="flex gap-2">
-            <input placeholder="Email" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-              value={nBarbeiro.email} onChange={e => setNBarbeiro({...nBarbeiro, email: e.target.value})} />
-            <input placeholder="Comissão %" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-              value={nBarbeiro.comissao} onChange={e => setNBarbeiro({...nBarbeiro, comissao: e.target.value})} />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <MotionButton className="rounded-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] gap-2 h-14 px-8 font-black uppercase text-xs border-0" style={{ backgroundColor: brand, color: ctaFg }} whileTap={{ scale: 0.95 }}>
+          <Plus className="h-5 w-5 stroke-[3px]" /> Novo Agendamento
+        </MotionButton>
+      </DialogTrigger>
+      <DialogContent className="dark border-white/[0.08] text-white w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar bg-zinc-950/95 backdrop-blur-xl">
+        <DialogHeader>
+          <DialogTitle className="text-white font-black uppercase italic text-2xl flex items-center gap-2">
+            <Clock style={{ color: brand }} /> Novo Horário
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-5 pt-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
+            <Input placeholder="Nome Completo" className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm" value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} />
           </div>
-          <div className="flex gap-2">
-            <input placeholder="Senha de Acesso" type="password" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-              value={nBarbeiro.senha} onChange={e => setNBarbeiro({...nBarbeiro, senha: e.target.value})} />
-            <Button className="bg-primary text-black font-black" onClick={handleAddBarbeiro}>Adicionar</Button>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
+            <Input 
+              type="tel" 
+              placeholder="(11) 99999-9999" 
+              maxLength={15}
+              className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm" 
+              value={novo.telefone} 
+              onChange={(e) => setNovo({ ...novo, telefone: aplicarMascaraTelefone(e.target.value) })} 
+            />
           </div>
-        </Card>
-        
-        <div className="grid gap-2">
-          {barbeiros.map((b: any) => (
-            <div key={b.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
-              <span className="text-sm font-bold text-white uppercase">{b.nome} ({b.comissao_pct}%)</span>
-              <Button variant="ghost" size="sm" onClick={() => onRemoveBarbeiro(b.id)} className="text-zinc-600 hover:text-red-500">
-                <Trash2 className="h-4 w-4"/>
-              </Button>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Barbeiro</label>
+              <Select value={novo.barbeiroId} onValueChange={(v) => setNovo({ ...novo, barbeiroId: v, horario: "" })}>
+                <SelectTrigger className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
+                  {barbeiros.filter((b: any) => b.ativo).map((b: any) => (<SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>))}
+                </SelectContent>
+              </Select>
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* 3. GESTÃO DE SERVIÇOS */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <Briefcase className="h-4 w-4 text-primary" />
-          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Serviços e Preços</h3>
-        </div>
-        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
-          <input placeholder="Nome do Serviço" className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-            value={nServico.nome} onChange={e => setNServico({...nServico, nome: e.target.value})} />
-          <input placeholder="Preço" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-            value={nServico.preco} onChange={e => setNServico({...nServico, preco: e.target.value})} />
-          <Button className="bg-primary text-black font-black" onClick={handleAddServico}> <Plus className="h-5 w-5"/> </Button>
-        </Card>
-
-        <div className="grid grid-cols-2 gap-2">
-          {servicos.map((s: any) => (
-            <div key={s.id} className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
-              <div className="text-xs">
-                <p className="font-bold text-white uppercase">{s.nome}</p>
-                <p className="text-primary font-black">R$ {formatarMoeda(s.preco)}</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => onRemoveServico(s.id)} className="text-zinc-600 hover:text-red-500 h-8 w-8">
-                <Trash2 className="h-4 w-4"/>
-              </Button>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Serviço</label>
+              <Select value={novo.servicoId} onValueChange={(v) => setNovo({ ...novo, servicoId: v })}>
+                <SelectTrigger className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm"><SelectValue placeholder="Serviço" /></SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
+                  {servicos.map((s: any) => (<SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>))}
+                </SelectContent>
+              </Select>
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
 
-      {/* 4. LANÇAR DESPESA EXTRA */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <TrendingDown className="h-4 w-4 text-red-500" />
-          <h3 className="font-black text-white uppercase text-sm tracking-tighter">Despesas do Dia</h3>
-        </div>
-        <Card className="p-4 bg-[#1A1A1A] border-zinc-800 flex gap-2">
-          <input placeholder="Ex: Aluguel, Luz..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-            value={novaDesc} onChange={e => setNovaDesc(e.target.value)} />
-          <input placeholder="Valor" type="number" className="w-24 bg-zinc-900 border border-zinc-800 rounded-md p-2 text-sm text-white" 
-            value={novoValor} onChange={e => setNovoValor(e.target.value)} />
-          <Button className="bg-red-500 text-white font-black" onClick={handleAddDespesa}> <Plus className="h-5 w-5"/> </Button>
-        </Card>
-      </section>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
+            <Input 
+              type="date" 
+              min={hojeLocal}
+              className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base color-scheme-dark backdrop-blur-sm" 
+              value={novo.data} 
+              onChange={(e) => setNovo({ ...novo, data: e.target.value, horario: "" })} 
+            />
+          </div>
 
-      {/* 5. PERFORMANCE DA EQUIPE */}
-      <section className="space-y-4">
-        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] ml-1">Produção de Hoje</h3>
-        <div className="grid gap-2">
-          {comissaoPorBarbeiroHoje.map((item: any) => (
-            <Card key={item.barbeiro?.id} className="p-4 bg-[#161616] border-zinc-800 flex justify-between items-center">
-              <div>
-                <p className="font-bold text-white uppercase text-sm">{item.barbeiro?.nome}</p>
-                <p className="text-[10px] text-zinc-500 font-bold">{item.cortes} cortes realizados</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] text-zinc-500 font-black uppercase">Comissão</p>
-                <p className="text-lg font-black text-primary">R$ {formatarMoeda(item.total)}</p>
-              </div>
-            </Card>
-          ))}
+          <div className="space-y-2 border-t border-white/[0.08] pt-4 mt-2">
+            <label className="text-[10px] font-black text-zinc-500 tracking-widest ml-1 uppercase">Horários Disponíveis</label>
+            <div className="grid grid-cols-4 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+              {horarios.map((h: string) => {
+                const [hH, mH] = h.split(":").map(Number);
+                const isHoje = novo.data === hojeLocal;
+                const busy = slotsOcupados.includes(h);
+                const disable = !novo.barbeiroId || busy || (isHoje && (hH < horaAtual || (hH === horaAtual && mH <= minAtual)));
+
+                return (
+                  <MotionButton key={h} type="button" variant={novo.horario === h ? "default" : "outline"} disabled={disable} whileTap={!disable ? { scale: 0.95 } : undefined} onClick={() => setNovo({ ...novo, horario: h })}
+                    className={cn("text-[12px] font-bold h-12 rounded-xl transition-colors", novo.horario === h ? "border-0 shadow-lg" : "text-white bg-black/30 border-white/[0.08]", disable && "opacity-20")}
+                    style={novo.horario === h ? { backgroundColor: brand, color: ctaFg } : undefined}>
+                    {h}
+                  </MotionButton>
+                );
+              })}
+            </div>
+          </div>
+
+          <MotionButton 
+            className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl" 
+            style={{ backgroundColor: brand, color: ctaFg }} 
+            whileTap={{ scale: 0.95 }} 
+            onClick={() => void handleAgendar()}
+            disabled={!novo.nome || !novo.barbeiroId || !novo.servicoId || !novo.data || !novo.horario}
+          >
+            Confirmar Agendamento
+          </MotionButton>
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -14,6 +14,7 @@ import { DataLoadError } from "@/components/DataLoadError";
 import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 import { 
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
@@ -226,53 +227,53 @@ export default function Index() {
 
   const servicos_find = (id: string) => servicos.find((s: any) => s.id === id);
 
+  // ==========================================================================
+  // RENDERIZAÇÃO: VISÃO CEO
+  // ==========================================================================
   if (userRole === "ceo") {
     return (
-      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
-        <header className="p-4 border-b flex justify-between items-center bg-card">
+      <div className="dark min-h-screen bg-black text-white flex flex-col">
+        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
           <div className="flex items-center gap-3">
             <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH HQ</h1>
+            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => signOut()}>
+          <Button variant="ghost" size="icon" onClick={() => signOut()} className="text-white/80 hover:text-white">
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
-
-        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
           <VisaoCEO
             totalLojas={dadosCEO.lojas}
             faturamentoTotal={dadosCEO.faturamento}
             vendedores={dadosCEO.vendedores}
           />
         </main>
-
         <div className="p-8 text-center bg-black mt-auto">
-          <p className="text-zinc-800 text-[8px] font-black uppercase mb-4 tracking-[0.5em]">Sistema Criptografado</p>
+          <p className="text-zinc-800 text-[8px] font-black uppercase tracking-[0.5em]">Sistema Criptografado</p>
         </div>
       </div>
     );
   }
 
+  // ==========================================================================
+  // RENDERIZAÇÃO: VISÃO VENDEDOR
+  // ==========================================================================
   if (userRole === "vendedor") {
     return (
-      <div className="dark min-h-screen bg-background text-foreground flex flex-col">
-        <header className="p-4 border-b flex justify-between items-center bg-card">
+      <div className="dark min-h-screen bg-black text-white flex flex-col">
+        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
           <div className="flex items-center gap-3">
             <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic">CAJ TECH</h1>
+            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => signOut()}>
+          <Button variant="ghost" size="icon" onClick={() => signOut()} className="text-white/80 hover:text-white">
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
-
-        <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8">
-          <VisaoVendedor
-            vendedorId={user?.id}
-            vendedorNome={user?.email?.split("@")[0] || "Consultor"}
-            clientesAtivos={[]}
-          />
+        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+          {/* 🚀 CORREÇÃO DO ERRO DO TYPE: O componente VisaoVendedor busca seus próprios dados */}
+          <VisaoVendedor />
         </main>
         <TermosDeUso />
       </div>
@@ -280,8 +281,7 @@ export default function Index() {
   }
 
   if (barbeariaQueryEnabled && exibirSkeleton) {
-    const skeletonTab =
-      tab === "dono" || tab === "carteira" || tab === "barbeiro" ? tab : "barbeiro";
+    const skeletonTab = tab === "dono" || tab === "carteira" || tab === "barbeiro" ? tab : "barbeiro";
     return <IndexPageSkeleton tab={skeletonTab} />;
   }
 
@@ -326,26 +326,20 @@ export default function Index() {
     exit: (dir: number) => ({ x: dir * -52, opacity: 0 }),
   };
 
+  // ==========================================================================
+  // RENDERIZAÇÃO: VISÃO DONO / BARBEIRO
+  // ==========================================================================
   return (
     <div className="dark min-h-screen relative isolate text-foreground flex flex-col overflow-x-hidden">
       <AppHeroBackdrop imageUrl={heroImageUrl} />
       <div className="relative z-10 flex flex-col min-h-screen">
         <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/35 backdrop-blur-xl shrink-0">
           <div className="flex items-center gap-3">
-            <img
-              src="/safeimagekit-resized-logoempresaCAJsemfundo.png"
-              alt="Logo"
-              className="h-9 w-auto"
-            />
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
             <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
           </div>
           <motion.div whileTap={{ scale: 0.95 }} className="inline-flex">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-white/80 hover:text-white"
-              onClick={() => signOut()}
-            >
+            <Button variant="ghost" size="icon" className="text-white/80 hover:text-white" onClick={() => signOut()}>
               <LogOut className="h-5 w-5" />
             </Button>
           </motion.div>
@@ -398,7 +392,7 @@ export default function Index() {
                   userId={user?.id}
                   corPrimaria={marca}
                   onNovoAgendamento={(ag: any) =>
-                    mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug })
+                    mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug: slug! })
                   }
                   onStatusChange={(id: string, status: string) => {
                     if (status === "Finalizado") {
@@ -411,19 +405,18 @@ export default function Index() {
                         id,
                         status: "Finalizado",
                         comissaoGanha: valorComissao,
-                        slug,
+                        slug: slug!,
                       });
                     }
                     return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({
                       id,
                       status,
-                      slug,
+                      slug: slug!,
                     });
                   }}
                 />
               )}
 
-              {/* 🚀 A MÁGICA DOS CÁLCULOS DO "FEITO HOJE" ACONTECE AQUI NA CARTEIRA */}
               {tab === "carteira" && (
                 <CarteiraBarbeiro
                   comissaoTotalMes={stats.agMesBarbeiro.reduce(
@@ -439,6 +432,13 @@ export default function Index() {
                     .reduce((sum: number, ag: any) => sum + Number(ag.comissao_ganha || 0), 0)}
                   cortesHoje={stats.agendamentosParaExibir
                     .filter((ag: any) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id).length}
+                  
+                  metaDiaria={barbeiros.find((b: any) => b.id === user?.id)?.meta_diaria || 150}
+                  onUpdateMeta={(novaMeta: number) => {
+                    if (user?.id && slug) {
+                      mutacoesBarbeiro.atualizarMetaBarbeiro.mutate({ id: user.id, meta: novaMeta, slug });
+                    }
+                  }}
                 />
               )}
 
@@ -448,6 +448,7 @@ export default function Index() {
                   faturamentoMensal={stats.faturamentoMensal}
                   comissoesAPagarHoje={stats.comissoesAPagarHoje}
                   lucroRealHoje={stats.faturamentoHoje - stats.comissoesAPagarHoje}
+                  despesasNoDia={0} 
                   comissaoPorBarbeiroHoje={comissaoPorBarbeiroHoje}
                   barbeiros={barbeiros}
                   servicos={servicos}
@@ -463,7 +464,7 @@ export default function Index() {
                       comissao_pct,
                       email,
                       senha,
-                      slug,
+                      slug: slug!,
                     })
                   }
                   onRemoveBarbeiro={(id: string) => {
@@ -471,22 +472,26 @@ export default function Index() {
                     mutacoesBarbeiro.removerBarbeiro.mutate({
                       id,
                       estaAtivo: b?.ativo,
-                      slug,
+                      slug: slug!,
                     });
                   }}
                   onToggleBarbeiroStatus={(id: string, novoStatus: boolean) =>
                     mutacoesBarbeiro.alternarStatusBarbeiro.mutate({
                       id,
                       novoStatus,
-                      slug,
+                      slug: slug!,
                     })
                   }
                   onAddServico={(nome: string, preco: number, duracao_minutos: number, url_imagem: string) =>
-                    mutacoesServico.adicionarServico.mutate({ nome, preco, duracao_minutos, url_imagem, slug })
+                    mutacoesServico.adicionarServico.mutate({ nome, preco, duracao_minutos, url_imagem, slug: slug! })
                   }
                   onRemoveServico={(id: string) =>
-                    mutacoesServico.removerServico.mutate({ id, slug })
+                    mutacoesServico.removerServico.mutate({ id, slug: slug! })
                   }
+                  onAddDespesa={(despesa: any) => {
+                    console.log("Despesa a salvar:", despesa);
+                    toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
+                  }}
                 />
               )}
             </motion.div>

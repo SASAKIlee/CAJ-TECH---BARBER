@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { 
   TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
   BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
@@ -15,8 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { cn } from "@/lib/utils";
 
-const MotionButton = motion.create(Button);
-
+// Variáveis de ambiente
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -137,7 +136,9 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
       });
       
       setRanking(rankingCalculado.sort((a, b) => b.mrr_gerado - a.mrr_gerado)); 
-    } catch (err) {}
+    } catch (err) {
+      console.error("Erro ao carregar dados do CEO:", err); 
+    }
   };
 
   useEffect(() => { carregarDados(); }, [vendedores]);
@@ -415,7 +416,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   ];
 
   return (
-    <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden p-4 bg-black min-h-screen text-white">
+    <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden p-4 bg-black min-h-screen text-white font-sans">
       <header className="flex flex-col gap-1 pt-6 pb-2">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-emerald-500" />
@@ -555,7 +556,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             <div className="space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
-                <Input placeholder="Buscar contrato pendente..." value={buscaAprovacoes} onChange={(e) => setBuscaAprovacoes(e.target.value)} className="bg-zinc-900 border-zinc-800 pl-10 text-white rounded-xl h-10" />
+                <Input placeholder="Buscar contrato pendente..." value={buscaAprovacoes} onChange={(e) => setBuscaAprovacoes(e.target.value)} className="bg-zinc-900 border-zinc-800 pl-10 text-white rounded-xl h-12" />
               </div>
 
               <div className="grid gap-3">
@@ -598,7 +599,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                             <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Plano Vendido</label>
                             <Select value={planos[lead.id] || lead.dados_adicionais?.plano_escolhido || "pro"} onValueChange={(v) => setPlanos({...planos, [lead.id]: v})}>
                               <SelectTrigger className="bg-zinc-900 border-zinc-700 h-12 rounded-xl text-xs font-bold text-white"><SelectValue /></SelectTrigger>
-                              <SelectContent className="bg-zinc-900 border-zinc-700 text-white">
+                              <SelectContent className="bg-zinc-900 border-zinc-700 text-white rounded-xl">
                                 <SelectItem value="starter">Starter (R$ 50)</SelectItem>
                                 <SelectItem value="pro">Pro (R$ 99,90)</SelectItem>
                                 <SelectItem value="elite">Elite (R$ 497)</SelectItem>
@@ -632,11 +633,10 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             </div>
           )}
 
-          {/* ================= ABA 3: LOJAS ATIVAS (PILAR 3 - CRM E RETENÇÃO) ================= */}
+          {/* ================= ABA 3: LOJAS ATIVAS ================= */}
           {tabAtiva === "lojas" && (
             <div className="space-y-4">
               
-              {/* BUSCA E FILTROS RÁPIDOS */}
               <div className="space-y-2">
                 <div className="relative">
                   <Search className="absolute left-4 top-3.5 h-5 w-5 text-zinc-500" />
@@ -658,7 +658,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                 {lojasFiltradas.map(loja => (
                   <Card key={loja.id} className={cn("p-0 border overflow-hidden transition-all", loja.ativo === false ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800")}>
                     
-                    {/* CABEÇALHO DO CARD (Sempre Visível) */}
                     <div className="p-4 cursor-pointer" onClick={() => setLojaExpandida(lojaExpandida === loja.id ? null : loja.id)}>
                       <div className="flex justify-between items-start">
                         <div>
@@ -675,7 +674,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                         </div>
                       </div>
 
-                      {/* BADGES DE STATUS / RADAR DE CHURN */}
                       <div className="flex gap-2 mt-3">
                         {loja.isTrial && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[8px] font-black uppercase px-2 py-0.5 rounded-md">Trial 7 Dias</span>}
                         {loja.diffDias > 0 && loja.diffDias <= 3 && loja.ativo && <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 text-[8px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1"><AlertTriangle className="h-2 w-2"/> Vence em {loja.diffDias} dias</span>}
@@ -683,7 +681,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                       </div>
                     </div>
 
-                    {/* DETALHES EXPANDIDOS (AÇÕES DA LOJA) */}
                     {lojaExpandida === loja.id && (
                       <div className="p-4 bg-black/40 border-t border-zinc-800/50 space-y-4">
                         
@@ -719,7 +716,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             </div>
           )}
 
-          {/* ================= ABA 4: EQUIPE COMERCIAL (PILAR 4 - MINI CRM) ================= */}
+          {/* ================= ABA 4: EQUIPE COMERCIAL ================= */}
           {tabAtiva === "equipe" && (
             <div className="space-y-4">
               
@@ -843,5 +840,3 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     </div>
   );
 }
-
-export default VisaoCEO;

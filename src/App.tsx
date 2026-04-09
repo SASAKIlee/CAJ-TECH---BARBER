@@ -5,16 +5,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
-// ✅ MONITORAMENTO PROFISSIONAL MANTIDO
+// ✅ MONITORAMENTO PROFISSIONAL
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 
+// ✅ PÁGINAS DO SISTEMA
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
-import SelecionarPapel from "./pages/SelecionarPapel.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AgendamentoPublico from "./pages/AgendamentoPublico.tsx";
-import Checkin from "./pages/Checkin.tsx"; // ✅ IMPORTAÇÃO DA NOVA PÁGINA DE CHECKIN
+import Checkin from "./pages/Checkin.tsx"; 
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,45 +26,43 @@ const queryClient = new QueryClient({
 });
 
 function AppRoutes() {
-  const { user, loading, userRole } = useAuth();
+  const { user, loading } = useAuth();
 
+  // 🚀 LOADING PREMIUM (Enquanto o Firebase/Supabase checa se o cara tá logado)
   if (loading) {
     return (
-      <div className="dark min-h-screen bg-background flex items-center justify-center">
-        <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      <div className="dark min-h-screen bg-black flex flex-col items-center justify-center space-y-4 font-sans">
+        <div className="h-12 w-12 border-4 border-zinc-900 border-t-emerald-500 rounded-full animate-spin shadow-[0_0_15px_rgba(16,185,129,0.2)]" />
+        <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
+          Iniciando CAJ TECH...
+        </p>
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* 🌐 ROTAS PÚBLICAS (Acesso sem Login) */}
+      {/* 🌐 ROTAS PÚBLICAS (Clientes finais) */}
       <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
-      <Route path="/checkin/:slug/:ticket" element={<Checkin />} /> {/* 🚀 NOVA ROTA DO QR CODE AQUI */}
+      <Route path="/checkin/:slug/:ticket" element={<Checkin />} />
 
-      {/* 🔒 ÁREA ADMINISTRATIVA / VENDAS (Acesso com Login) */}
+      {/* 🔒 CONTROLE DE ACESSO */}
       {!user ? (
         <>
           <Route path="/auth" element={<Auth />} />
+          {/* Se não tá logado e tentou qualquer outra coisa, joga pro Login */}
           <Route path="*" element={<Navigate to="/auth" replace />} />
         </>
       ) : (
         <>
-          {/* 🚀 LÓGICA DE REDIRECIONAMENTO POR PAPEL:
-            Se o cara tem QUALQUER role (dono, barbeiro ou VENDEDOR), ele vai para a Index.
-            A Index vai ser o nosso "porteiro" que decide qual Dashboard mostrar.
-          */}
-          <Route 
-            path="/" 
-            element={userRole ? <Index /> : <Navigate to="/selecionar-papel" replace />} 
-          />
+          {/* 🚀 Se tá logado, a Index assume o controle baseada no userRole internamente */}
+          <Route path="/" element={<Index />} />
           
-          <Route 
-            path="/selecionar-papel" 
-            element={!userRole ? <SelecionarPapel /> : <Navigate to="/" replace />} 
-          />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Se tentar voltar pro Login já estando logado, joga pro Index */}
+          <Route path="/auth" element={<Navigate to="/" replace />} />
+          
+          {/* 🚀 AGORA SIM A TELA 404 ESTÁ FUNCIONANDO! */}
+          <Route path="*" element={<NotFound />} />
         </>
       )}
     </Routes>
@@ -77,6 +75,7 @@ const App = () => (
       <Toaster />
       <Sonner />
 
+      {/* Analytics do Vercel mantidos para rastrear os acessos */}
       <Analytics />
       <SpeedInsights />
 

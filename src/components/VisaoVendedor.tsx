@@ -58,7 +58,10 @@ export function VisaoVendedor({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const idReal = session?.user?.id || vendedorId;
-      if (!idReal) return;
+      if (!idReal) {
+        setLoadingLeads(false);
+        return;
+      }
 
       // 1. BUSCA TODOS OS LEADS DO VENDEDOR
       const { data: leads, error: leadsError } = await supabase.from("leads").select("*").eq("vendedor_id", idReal);
@@ -99,6 +102,7 @@ export function VisaoVendedor({
 
     } catch (error) {
       console.error("Erro na performance:", error);
+      toast.error("Falha de conexão ao carregar seu funil."); // 🚀 AVISO SEGURO
     } finally {
       setLoadingLeads(false);
     }
@@ -546,7 +550,8 @@ function LeadCard({ lead, onFollowUp, onMover, isFinal = false, nextLabel }: { l
   // INTELIGÊNCIA: Verifica se é um lead ativo, mas num plano baixo (UPSELL)
   const isUpsell = lead.status === 'convertido' && !isChurn && planoAtual === 'starter';
 
-  const zapLink = telefone ? `https://wa.me/55${telefone}?text=${encodeURIComponent(`Fala mestre, tudo bem? Aqui é da CAJ TECH...`)}` : '#';
+  // 🚀 CORREÇÃO DO BUG SILENCIOSO: Protege a renderização do link se não houver telefone
+  const zapLink = telefone ? `https://wa.me/55${telefone}?text=${encodeURIComponent(`Fala mestre, tudo bem? Aqui é da CAJ TECH...`)}` : null;
 
   return (
     <Card className={cn(
@@ -567,7 +572,8 @@ function LeadCard({ lead, onFollowUp, onMover, isFinal = false, nextLabel }: { l
 
       <div className="flex justify-between items-center pt-3 border-t border-zinc-800/50 mt-1">
         <div className="flex gap-2">
-          {telefone && (
+          {/* 🚀 O BOTÃO SÓ APARECE SE TIVER NÚMERO */}
+          {zapLink && (
             <Button onClick={() => window.open(zapLink, '_blank')} size="icon" variant="ghost" className="h-11 w-11 text-green-500 bg-green-500/10 hover:bg-green-500/20 rounded-xl" title="Chamar no WhatsApp">
               <MessageCircle className="h-5 w-5" />
             </Button>
