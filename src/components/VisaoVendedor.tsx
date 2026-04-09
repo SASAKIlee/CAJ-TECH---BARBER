@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { 
   Search, Plus, X, Loader2, Clock, CheckCircle, MapPin, Zap, Crown, Target, 
-  AlertCircle, MessageCircle, Wallet, Share2, TrendingUp, BookOpen, ArrowRight, Activity, Calendar
+  AlertCircle, MessageCircle, Wallet, Share2, TrendingUp, BookOpen, ArrowRight, Activity, Calendar,
+  Copy, FileText // Ícones adicionados aqui!
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner"; 
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion"; // Import da animação adicionado!
 
 // CONFIGURAÇÃO INICIAL DO FORMULÁRIO
 const FORM_NOVO_LEAD_INICIAL = { 
@@ -343,7 +345,7 @@ export function VisaoVendedor({
           MODAIS DO SISTEMA
       ======================================================== */}
 
-      {/* MODAL CADASTRO / CONTRATO (MANTIDO E MELHORADO) */}
+      {/* MODAL CADASTRO / CONTRATO */}
       {modalCadastroAberto && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
           <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-[2rem] p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto hide-scrollbar">
@@ -527,7 +529,7 @@ export function VisaoVendedor({
 /** * COMPONENTE ISOLADO DO CARD DO LEAD (KABAN) 
  * Traz a inteligência de Churn, Upsell e Ações 1-Click
  */
-function LeadCard({ lead, onFollowUp, onMover, isFinal = false }: { lead: any, onFollowUp: () => void, onMover?: () => void, isFinal?: boolean }) {
+function LeadCard({ lead, onFollowUp, onMover, isFinal = false, nextLabel }: { lead: any, onFollowUp: () => void, onMover?: () => void, isFinal?: boolean, nextLabel?: string }) {
   const telefone = lead.dados_adicionais?.telefone;
   const planoAtual = lead.dados_adicionais?.plano_escolhido || 'pro';
   
@@ -569,7 +571,7 @@ function LeadCard({ lead, onFollowUp, onMover, isFinal = false }: { lead: any, o
 
         {!isFinal && onMover && (
           <Button onClick={onMover} className="h-8 bg-zinc-800 hover:bg-zinc-700 text-white text-[9px] font-black uppercase tracking-widest rounded-lg px-3">
-            Avançar <ArrowRight className="h-3 w-3 ml-1" />
+            {nextLabel || "Avançar"} <ArrowRight className="h-3 w-3 ml-1" />
           </Button>
         )}
       </div>
