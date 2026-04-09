@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
   BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
-  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone, Calendar, CreditCard, Filter
+  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone, Calendar, CreditCard, Filter, ArrowRight, Activity, Bot
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createClient } from "@supabase/supabase-js";
 import { toast } from "sonner"; 
 import { motion, AnimatePresence } from "framer-motion";
-import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { cn } from "@/lib/utils";
 
 const MotionButton = motion.create(Button);
@@ -30,7 +30,8 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [ranking, setRanking] = useState<any[]>([]);
   
   const [expandido, setExpandido] = useState<string | null>(null);
-  const [lojaExpandida, setLojaExpandida] = useState<string | null>(null); // 🚀 Expansão de Lojas
+  const [lojaExpandida, setLojaExpandida] = useState<string | null>(null); 
+  const [vendedorExpandido, setVendedorExpandido] = useState<string | null>(null); 
   
   const [slugs, setSlugs] = useState<Record<string, string>>({});
   const [planos, setPlanos] = useState<Record<string, string>>({});
@@ -38,13 +39,14 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [novoAviso, setNovoAviso] = useState("");
   
   const [buscaLojas, setBuscaLojas] = useState(""); 
-  const [filtroLojas, setFiltroLojas] = useState<FiltroLoja>("todas"); // 🚀 Filtro Rápido
+  const [filtroLojas, setFiltroLojas] = useState<FiltroLoja>("todas"); 
 
   const [buscaAprovacoes, setBuscaAprovacoes] = useState(""); 
 
   const [modalConsultorAberto, setModalConsultorAberto] = useState(false);
   const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
   const [isSavingConsultor, setIsSavingConsultor] = useState(false);
+  const [isPagarComissao, setIsPagarComissao] = useState(false);
 
   const [historicoMrr, setHistoricoMrr] = useState<any[]>([]);
   const [mrrTotal, setMrrTotal] = useState(0);
@@ -66,18 +68,17 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const carregarDados = async () => {
     try {
       const { data: leads } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
-      setLeadsRecentes(leads || []);
+      const leadsData = leads || [];
+      setLeadsRecentes(leadsData);
 
       const { data: lojas } = await supabase.from('barbearias').select('*').order('created_at', { ascending: false });
       const lojasData = lojas || [];
       
-      // Enriquecendo dados da loja com dias restantes
       const hoje = new Date();
       const lojasEnriquecidas = lojasData.map(loja => {
         const vencimento = loja.data_vencimento ? new Date(loja.data_vencimento) : null;
         const diffDias = vencimento ? Math.ceil((vencimento.getTime() - hoje.getTime()) / (1000 * 3600 * 24)) : 0;
         
-        // Regra de Trial (criada há menos de 7 dias e ainda ativada como teste)
         const criacao = new Date(loja.created_at);
         const diasDesdeCriacao = Math.ceil((hoje.getTime() - criacao.getTime()) / (1000 * 3600 * 24));
         const isTrial = diasDesdeCriacao <= 7;
@@ -102,30 +103,88 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
         { mes: 'M-1', mrr: totalReceita * 0.9 }, { mes: 'Atual', mrr: totalReceita },
       ]);
 
-      const vendasConvertidas = leads?.filter(l => l.status === 'convertido') || [];
       const rankingCalculado = listaVendedores.map((v: any) => {
-        const vendasDoCara = vendasConvertidas.filter(lead => lead.vendedor_id === v.id);
-        let comissaoTotal = 0;
-        vendasDoCara.forEach(venda => {
-          comissaoTotal += getComissaoPlano(venda.dados_adicionais?.plano_escolhido || 'pro');
+        const leadsDoVendedor = leadsData.filter(lead => lead.vendedor_id === v.id);
+        
+        let comissaoPendente = 0;
+        let mrrGerado = 0;
+        let qtdVisita = 0;
+        let qtdPendente = 0;
+        let qtdConvertido = 0;
+
+        leadsDoVendedor.forEach(lead => {
+          if (lead.status === 'visita') qtdVisita++;
+          if (lead.status === 'pendente') qtdPendente++;
+          if (lead.status === 'convertido') {
+            qtdConvertido++;
+            const plano = lead.dados_adicionais?.plano_escolhido || 'pro';
+            mrrGerado += getValorPlano(plano);
+            if (!lead.dados_adicionais?.comissao_paga) {
+              comissaoPendente += getComissaoPlano(plano);
+            }
+          }
         });
 
         return {
           ...v, 
           ativo: v.ativo !== false, 
-          total_lojas: vendasDoCara.length,
-          comissao_pendente: comissaoTotal
+          leads_visita: qtdVisita,
+          leads_pendente: qtdPendente,
+          leads_convertido: qtdConvertido,
+          mrr_gerado: mrrGerado,
+          comissao_pendente: comissaoPendente
         };
       });
-      setRanking(rankingCalculado.sort((a, b) => b.comissao_pendente - a.comissao_pendente)); 
+      
+      setRanking(rankingCalculado.sort((a, b) => b.mrr_gerado - a.mrr_gerado)); 
     } catch (err) {}
   };
 
   useEffect(() => { carregarDados(); }, [vendedores]);
 
+  // KPIs
+  const statVisitas = leadsRecentes.filter(l => l.status === 'visita').length;
   const statPendentes = leadsRecentes.filter(l => l.status === 'pendente').length;
   const statConvertidos = leadsRecentes.filter(l => l.status === 'convertido').length;
   const taxaConversao = leadsRecentes.length > 0 ? ((statConvertidos / leadsRecentes.length) * 100).toFixed(0) : 0;
+  
+  const countStarter = lojasAtivas.filter(l => l.plano === 'starter' && l.ativo !== false).length;
+  const countPro = lojasAtivas.filter(l => (l.plano === 'pro' || !l.plano) && l.ativo !== false).length;
+  const countElite = lojasAtivas.filter(l => l.plano === 'elite' && l.ativo !== false).length;
+
+  const totalLojasNaBase = lojasAtivas.length;
+  const lojasInativas = lojasAtivas.filter(l => l.ativo === false).length;
+  const taxaChurn = totalLojasNaBase > 0 ? (lojasInativas / totalLojasNaBase) * 100 : 0;
+
+  // 🤖 MOTOR DA I.A DE DIAGNÓSTICO
+  const getDiagnosticoIA = () => {
+    if (totalLojasNaBase === 0 && leadsRecentes.length === 0) {
+      return { titulo: "SISTEMA ZERADO", cor: "text-zinc-400", bg: "bg-zinc-900/50", border: "border-zinc-800", texto: "Sua base está limpa. Cadastre vendedores e comece a prospectar." };
+    }
+    if (Number(taxaConversao) >= 25 && taxaChurn <= 10) {
+      return { titulo: "OPERAÇÃO DE ELITE", cor: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20", texto: `Sua máquina está voando! Conversão alta (${taxaConversao}%) e pouquíssimos cancelamentos. Pise no acelerador do marketing!` };
+    } else if (Number(taxaConversao) < 15 && leadsRecentes.length > 5) {
+      return { titulo: "ALERTA DE VENDAS", cor: "text-yellow-500", bg: "bg-yellow-500/10", border: "border-yellow-500/20", texto: `A equipe visita, mas converte pouco (${taxaConversao}%). Revise o script de vendas com seus consultores urgentemente.` };
+    } else if (taxaChurn > 20) {
+      return { titulo: "RISCO DE CHURN", cor: "text-red-500", bg: "bg-red-500/10", border: "border-red-500/20", texto: `Atenção! Você está perdendo muitos clientes (${taxaChurn.toFixed(0)}% bloqueados). Revise o atendimento pós-venda e retenção.` };
+    } else {
+      return { titulo: "CRESCIMENTO SAUDÁVEL", cor: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20", texto: "A empresa está caminhando bem. Foque em converter os leads pendentes e treinar os vendedores para fechar planos Elite." };
+    }
+  };
+
+  const diagnostico = getDiagnosticoIA();
+
+  const dataPlanos = [
+    { name: 'Starter', value: countStarter, color: '#a1a1aa' },
+    { name: 'Pro', value: countPro, color: '#10b981' },
+    { name: 'Elite', value: countElite, color: '#eab308' },
+  ].filter(d => d.value > 0);
+
+  const dataFunil = [
+    { name: 'Visitas', value: statVisitas, fill: '#3f3f46' },
+    { name: 'Negociação', value: statPendentes, fill: '#3b82f6' },
+    { name: 'Fechados', value: statConvertidos, fill: '#10b981' },
+  ];
 
   const handleAprovarContrato = async (lead: any) => {
     const slugDesejado = slugs[lead.id];
@@ -243,7 +302,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     } catch { toast.error("Falha ao alterar status."); }
   };
 
-  // 🚀 NOVO: Renovar Loja Manualmente (+30 dias)
   const renovarLojaManual = async (lojaId: string, dataAtual: string) => {
     toast.loading("Renovando assinatura...", { id: "renovacao" });
     try {
@@ -297,9 +355,28 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     }
   };
 
-  const pagarComissao = (vendedorId: string) => {
-    toast.success("Pix registrado! Comissão zerada na tela.");
-    setRanking(prev => prev.map(v => v.id === vendedorId ? { ...v, comissao_pendente: 0 } : v));
+  const pagarComissao = async (vendedorId: string) => {
+    setIsPagarComissao(true);
+    toast.loading("Registrando pagamento de comissões...", { id: "pagamento" });
+    try {
+      const leadsParaPagar = leadsRecentes.filter(l => l.vendedor_id === vendedorId && l.status === 'convertido' && !l.dados_adicionais?.comissao_paga);
+      
+      for (const lead of leadsParaPagar) {
+        const novosDadosAdicionais = { 
+          ...lead.dados_adicionais, 
+          comissao_paga: true, 
+          data_pagamento_comissao: new Date().toISOString() 
+        };
+        await supabase.from("leads").update({ dados_adicionais: novosDadosAdicionais }).eq("id", lead.id);
+      }
+      
+      toast.success("Comissões liquidadas e registradas no sistema!", { id: "pagamento" });
+      carregarDados(); 
+    } catch (err) {
+      toast.error("Erro ao registrar pagamento.", { id: "pagamento" });
+    } finally {
+      setIsPagarComissao(false);
+    }
   };
 
   const dispararAviso = () => {
@@ -323,7 +400,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const formatarMoeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatarData = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '---';
 
-  // 🚀 LÓGICA DE FILTRO DE LOJAS
   let lojasFiltradas = lojasAtivas.filter(l => l.nome.toLowerCase().includes(buscaLojas.toLowerCase()));
   if (filtroLojas === 'ativas') lojasFiltradas = lojasFiltradas.filter(l => l.ativo);
   if (filtroLojas === 'bloqueadas') lojasFiltradas = lojasFiltradas.filter(l => !l.ativo);
@@ -367,37 +443,49 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
 
           {/* ================= ABA 1: DASHBOARD ================= */}
           {tabAtiva === "dashboard" && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-3">
-                <Card className="p-5 bg-gradient-to-br from-zinc-900 to-black border-emerald-500/20 col-span-2 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-10"><TrendingUp className="h-24 w-24 text-emerald-500" /></div>
-                  <div className="relative z-10 flex justify-between items-start">
-                    <div>
-                      <p className="text-[10px] uppercase font-black text-zinc-400 mb-1 tracking-widest">Receita Recorrente (MRR)</p>
-                      <div className="flex items-end gap-2">
-                        <p className="text-4xl font-black text-white italic">{formatarMoeda(mrrTotal)}</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="icon" onClick={exportarCaixa} className="bg-transparent border-zinc-700 text-zinc-400 hover:text-white"><Download className="h-4 w-4"/></Button>
-                  </div>
-                  <div className="h-32 mt-6 -mx-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={historicoMrr}>
-                        <defs>
-                          <linearGradient id="colorMrr" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="mes" hide />
-                        <YAxis hide />
-                        <RechartsTooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }} formatter={(val: number) => `R$${val.toFixed(2)}`} labelStyle={{ display: 'none' }} />
-                        <Area type="monotone" dataKey="mrr" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorMrr)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
+            <div className="space-y-4">
+              
+              {/* 🤖 PAINEL DA IA - DIAGNÓSTICO */}
+              <div className={cn("p-4 rounded-2xl border", diagnostico.bg, diagnostico.border)}>
+                 <div className="flex items-center gap-2 mb-2">
+                    <Bot className={cn("h-5 w-5", diagnostico.cor)} />
+                    <h3 className={cn("text-[11px] font-black uppercase tracking-widest", diagnostico.cor)}>{diagnostico.titulo}</h3>
+                 </div>
+                 <p className="text-sm font-medium text-white/90 leading-relaxed">{diagnostico.texto}</p>
+              </div>
 
+              {/* GRÁFICO MRR */}
+              <Card className="p-5 bg-gradient-to-br from-zinc-900 to-black border-emerald-500/20 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10"><TrendingUp className="h-24 w-24 text-emerald-500" /></div>
+                <div className="relative z-10 flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] uppercase font-black text-zinc-400 mb-1 tracking-widest">Receita Recorrente (MRR)</p>
+                    <div className="flex items-end gap-2">
+                      <p className="text-4xl font-black text-white italic">{formatarMoeda(mrrTotal)}</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="icon" onClick={exportarCaixa} className="bg-transparent border-zinc-700 text-zinc-400 hover:text-white"><Download className="h-4 w-4"/></Button>
+                </div>
+                <div className="h-40 mt-6 -mx-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={historicoMrr}>
+                      <defs>
+                        <linearGradient id="colorMrr" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="mes" hide />
+                      <YAxis hide />
+                      <RechartsTooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }} formatter={(val: number) => `R$${val.toFixed(2)}`} labelStyle={{ display: 'none' }} />
+                      <Area type="monotone" dataKey="mrr" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorMrr)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* KPIS */}
+              <div className="grid grid-cols-2 gap-3">
                 <Card className="p-4 bg-zinc-900/40 border-zinc-800">
                   <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Taxa de Conversão</p>
                   <p className="text-2xl font-black text-white italic">{taxaConversao}%</p>
@@ -406,7 +494,47 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                 <Card className="p-4 bg-zinc-900/40 border-zinc-800">
                   <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Lojas Pagantes</p>
                   <p className="text-2xl font-black text-white italic">{lojasAtivas.filter(l => l.ativo !== false).length}</p>
+                  <p className="text-[9px] text-red-500 font-bold mt-1">{lojasInativas} Bloqueadas</p>
                 </Card>
+              </div>
+
+              {/* NOVOS GRÁFICOS: ROSCA E BARRAS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                 {/* GRÁFICO DE PLANOS */}
+                 <Card className="p-5 bg-zinc-900/40 border-zinc-800">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-4 text-center">Distribuição de Planos</p>
+                    {dataPlanos.length === 0 ? (
+                      <p className="text-xs text-center text-zinc-600 italic py-10">Sem assinaturas ativas</p>
+                    ) : (
+                      <div className="h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={dataPlanos} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">
+                              {dataPlanos.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                            </Pie>
+                            <RechartsTooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                 </Card>
+
+                 {/* GRÁFICO DO FUNIL GERAL */}
+                 <Card className="p-5 bg-zinc-900/40 border-zinc-800">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-4 text-center">Saúde do Funil (Todas as Vendas)</p>
+                    <div className="h-48 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={dataFunil} margin={{ left: -20, bottom: 0 }}>
+                          <XAxis dataKey="name" stroke="#777" fontSize={10} axisLine={false} tickLine={false} dy={5} />
+                          <YAxis hide />
+                          <RechartsTooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px' }} />
+                          <Bar dataKey="value" radius={[6, 6, 6, 6]} maxBarSize={40}>
+                            {dataFunil.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                 </Card>
               </div>
 
               <Card className="p-4 bg-blue-500/10 border-blue-500/20 space-y-3">
@@ -422,7 +550,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             </div>
           )}
 
-          {/* ================= ABA 2: APROVAÇÕES ================= */}
+          {/* ================= ABA 2: APROVAÇÕES (ONBOARDING VIP) ================= */}
           {tabAtiva === "aprovacoes" && (
             <div className="space-y-4">
               <div className="relative">
@@ -452,7 +580,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                           <div>Bairro: <span className="text-white block mt-0.5">{lead.bairro || '---'}</span></div>
                         </div>
 
-                        {/* PREVIEW DO APP */}
+                        {/* 🚀 PREVIEW DO APP - COMPONENTE VISUAL */}
                         <div className="border border-zinc-800 rounded-2xl p-4 bg-zinc-900/30 relative overflow-hidden">
                           <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Smartphone className="h-4 w-4 text-emerald-500"/> Preview das Cores</p>
                           
@@ -591,7 +719,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             </div>
           )}
 
-          {/* ================= ABA 4: EQUIPE COMERCIAL ================= */}
+          {/* ================= ABA 4: EQUIPE COMERCIAL (PILAR 4 - MINI CRM) ================= */}
           {tabAtiva === "equipe" && (
             <div className="space-y-4">
               
@@ -604,38 +732,70 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
               
               <div className="grid gap-3">
                 {ranking.map((v: any, index: number) => (
-                  <Card key={v.id} className={cn("p-4 border transition-colors", v.ativo ? "bg-zinc-900/40 border-zinc-800" : "bg-red-900/10 border-red-900/30 opacity-70")}>
-                    <div className="flex justify-between items-start mb-3">
+                  <Card key={v.id} className={cn("p-0 border transition-all overflow-hidden", v.ativo ? "bg-zinc-900/40 border-zinc-800" : "bg-red-900/5 border-red-900/30 opacity-80")}>
+                    
+                    <div className="p-4 flex justify-between items-start cursor-pointer hover:bg-zinc-800/30" onClick={() => setVendedorExpandido(vendedorExpandido === v.id ? null : v.id)}>
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-sm text-zinc-500">#{index + 1}</div>
+                        <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-sm text-emerald-500 shadow-inner">#{index + 1}</div>
                         <div>
                           <p className="font-bold text-white text-sm uppercase italic flex items-center gap-2">
                             {v.nome}
                             {!v.ativo && <span className="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full not-italic">INATIVO</span>}
                           </p>
-                          <p className="text-[9px] text-emerald-500 uppercase font-bold">{v.total_lojas} Lojas Vendidas</p>
+                          <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1">MRR Gerado: <span className="text-white">{formatarMoeda(v.mrr_gerado)}</span></p>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => toggleStatusVendedor(v.id, v.ativo)} className={cn("h-8 w-8 rounded-lg", v.ativo ? "text-zinc-500 hover:text-red-500 hover:bg-red-500/10" : "text-emerald-500 hover:bg-emerald-500/10")} title={v.ativo ? "Bloquear Acesso" : "Restaurar Acesso"}>
-                           {v.ativo ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => excluirVendedor(v.id)} className="h-8 w-8 rounded-lg text-zinc-600 hover:text-red-500 hover:bg-red-500/10" title="Apagar Vendedor">
-                           <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {vendedorExpandido === v.id ? <ChevronUp className="text-zinc-500 mt-2" /> : <ChevronDown className="text-zinc-500 mt-2" />}
                     </div>
                     
-                    <div className="flex justify-between items-center bg-black/50 rounded-xl p-3 border border-zinc-800/50">
-                      <div>
-                        <p className="text-[9px] text-zinc-500 font-bold uppercase">Comissão a Pagar</p>
-                        <p className={cn("text-lg font-black italic", v.comissao_pendente > 0 ? "text-emerald-500" : "text-zinc-600")}>{formatarMoeda(v.comissao_pendente)}</p>
+                    {vendedorExpandido === v.id && (
+                      <div className="p-4 bg-black/40 border-t border-zinc-800/50 space-y-4">
+                        
+                        {/* MINI-FUNIL DO VENDEDOR */}
+                        <div>
+                          <p className="text-[9px] uppercase font-black text-zinc-500 tracking-widest mb-2 flex items-center gap-1"><Activity className="h-3 w-3" /> Funil do Consultor</p>
+                          <div className="flex bg-zinc-900 rounded-xl border border-zinc-800 p-1">
+                            <div className="flex-1 text-center py-2">
+                              <p className="text-lg font-black text-white">{v.leads_visita}</p>
+                              <p className="text-[8px] font-bold text-zinc-500 uppercase">Visitas</p>
+                            </div>
+                            <div className="w-px bg-zinc-800" />
+                            <div className="flex-1 text-center py-2">
+                              <p className="text-lg font-black text-blue-500">{v.leads_pendente}</p>
+                              <p className="text-[8px] font-bold text-blue-500/70 uppercase">Negociação</p>
+                            </div>
+                            <div className="w-px bg-zinc-800" />
+                            <div className="flex-1 text-center py-2">
+                              <p className="text-lg font-black text-emerald-500">{v.leads_convertido}</p>
+                              <p className="text-[8px] font-bold text-emerald-500/70 uppercase">Fechados</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* FECHAMENTO DE COMISSÃO */}
+                        <div className="flex justify-between items-center bg-emerald-500/5 rounded-xl p-4 border border-emerald-500/20">
+                          <div>
+                            <p className="text-[9px] text-emerald-500/70 font-black uppercase">Comissão a Pagar</p>
+                            <p className={cn("text-2xl font-black italic", v.comissao_pendente > 0 ? "text-emerald-500" : "text-zinc-600")}>{formatarMoeda(v.comissao_pendente)}</p>
+                          </div>
+                          <Button size="sm" onClick={() => pagarComissao(v.id)} disabled={v.comissao_pendente === 0 || isPagarComissao} className="h-12 px-4 text-[10px] uppercase font-black bg-emerald-600 text-black hover:bg-emerald-500 border-0 disabled:opacity-30 transition-colors shadow-lg">
+                            {isPagarComissao ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Wallet className="h-4 w-4 mr-2" /> Liquidar</>}
+                          </Button>
+                        </div>
+
+                        {/* BOTÕES DE PERIGO */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/50">
+                          <Button variant="outline" onClick={() => toggleStatusVendedor(v.id, v.ativo)} className={cn("flex-1 h-10 text-[9px] font-black uppercase tracking-widest rounded-xl", v.ativo ? "text-zinc-400 border-zinc-700 bg-zinc-900 hover:text-red-500" : "text-emerald-500 border-emerald-500/20 bg-emerald-500/5")}>
+                            {v.ativo ? <Lock className="h-3 w-3 mr-2" /> : <Unlock className="h-3 w-3 mr-2" />}
+                            {v.ativo ? "Bloquear Acesso" : "Restaurar Acesso"}
+                          </Button>
+                          <Button variant="outline" onClick={() => excluirVendedor(v.id)} className="h-10 px-4 text-red-500 border-red-500/20 bg-red-500/5 hover:bg-red-500 hover:text-white rounded-xl" title="Apagar Vendedor">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+
                       </div>
-                      <Button size="sm" onClick={() => pagarComissao(v.id)} disabled={v.comissao_pendente === 0} className="h-8 text-[10px] uppercase font-bold bg-zinc-800 text-white hover:bg-emerald-600 border border-zinc-700 disabled:opacity-30 transition-colors">
-                        <Wallet className="h-3 w-3 mr-1.5" /> Zerar Saldo
-                      </Button>
-                    </div>
+                    )}
                   </Card>
                 ))}
               </div>
