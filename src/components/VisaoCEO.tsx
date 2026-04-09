@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { 
   TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
   BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
-  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle
+  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
       const lojasData = lojas || [];
       setLojasAtivas(lojasData);
 
-      // 🚨 CORREÇÃO: Buscar os vendedores DIRETO DO BANCO para ter o status "ativo" real
       const { data: vendedoresDB } = await supabase.from('perfis_vendedores').select('*');
       const listaVendedores = vendedoresDB || vendedores;
 
@@ -217,21 +216,45 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     } catch { toast.error("Falha ao alterar status."); }
   };
 
-  // 🚀 MUDANÇA AQUI: Atualização Otimista pro botão de Demissão não travar visualmente
   const toggleStatusVendedor = async (vendedorId: string, statusAtual: boolean) => {
-    // 1. Muda a cor na tela imediatamente (Otimista)
     setRanking(prev => prev.map(v => v.id === vendedorId ? { ...v, ativo: !statusAtual } : v));
-    
     try {
-      // 2. Salva no banco
       const { error } = await supabase.from("perfis_vendedores").update({ ativo: !statusAtual }).eq('id', vendedorId);
       if (error) throw error;
-      
       toast.success(!statusAtual ? "Acesso do vendedor restaurado." : "Acesso do vendedor cortado!");
-      carregarDados(); // Recarrega silenciosamente
+      carregarDados(); 
     } catch { 
       toast.error("Erro ao alterar status do vendedor."); 
-      carregarDados(); // Se der erro, desfaz a alteração na tela
+      carregarDados(); 
+    }
+  };
+
+  // 🚀 NOVA LÓGICA: Excluir Vendedor (A Lixeira Inteligente)
+  const excluirVendedor = async (vendedorId: string) => {
+    if (!window.confirm("Deseja realmente EXCLUIR este consultor do sistema? Isso é permanente.")) return;
+
+    toast.loading("Analisando exclusão...", { id: "excluir_vendedor" });
+    try {
+      // Trava de Segurança: Olha se o vendedor já registrou algum lead na vida
+      const { count, error: countError } = await supabase
+        .from('leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('vendedor_id', vendedorId);
+      
+      if (countError) throw countError;
+
+      if (count && count > 0) {
+        throw new Error("Este consultor já registrou clientes no funil. Inative a conta no cadeado para não perder o histórico.");
+      }
+
+      // Se ele é fantasma (nunca vendeu), apaga de verdade.
+      const { error } = await supabase.from("perfis_vendedores").delete().eq('id', vendedorId);
+      if (error) throw error;
+
+      toast.success("Consultor apagado definitivamente!", { id: "excluir_vendedor" });
+      carregarDados(); 
+    } catch (err: any) {
+      toast.error(err.message, { id: "excluir_vendedor" });
     }
   };
 
@@ -473,9 +496,17 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                           <p className="text-[9px] text-emerald-500 uppercase font-bold">{v.total_lojas} Lojas Vendidas</p>
                         </div>
                       </div>
-                      <Button size="icon" variant="ghost" onClick={() => toggleStatusVendedor(v.id, v.ativo)} className={cn("h-8 w-8 rounded-lg", v.ativo ? "text-red-500 hover:bg-red-500/10" : "text-emerald-500 hover:bg-emerald-500/10")} title={v.ativo ? "Bloquear Acesso" : "Restaurar Acesso"}>
-                         {v.ativo ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                      </Button>
+                      
+                      {/* BOTÕES DE CONTROLE: Cadeado e Lixeira */}
+                      <div className="flex items-center gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => toggleStatusVendedor(v.id, v.ativo)} className={cn("h-8 w-8 rounded-lg", v.ativo ? "text-zinc-500 hover:text-red-500 hover:bg-red-500/10" : "text-emerald-500 hover:bg-emerald-500/10")} title={v.ativo ? "Bloquear Acesso" : "Restaurar Acesso"}>
+                           {v.ativo ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => excluirVendedor(v.id)} className="h-8 w-8 rounded-lg text-zinc-600 hover:text-red-500 hover:bg-red-500/10" title="Apagar Vendedor">
+                           <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
                     </div>
                     
                     <div className="flex justify-between items-center bg-black/50 rounded-xl p-3 border border-zinc-800/50">
