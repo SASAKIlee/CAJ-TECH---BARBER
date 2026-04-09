@@ -33,13 +33,12 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [planos, setPlanos] = useState<Record<string, string>>({});
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [novoAviso, setNovoAviso] = useState("");
-  const [buscaLojas, setBuscaLojas] = useState(""); // Novo filtro
+  const [buscaLojas, setBuscaLojas] = useState(""); 
 
   const [modalConsultorAberto, setModalConsultorAberto] = useState(false);
   const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
   const [isSavingConsultor, setIsSavingConsultor] = useState(false);
 
-  // Estados de Gráfico Real
   const [historicoMrr, setHistoricoMrr] = useState<any[]>([]);
   const [mrrTotal, setMrrTotal] = useState(0);
 
@@ -47,7 +46,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     if (plano === 'starter') return 50.00;
     if (plano === 'pro') return 99.90;
     if (plano === 'elite') return 497.00;
-    return 99.90; // Padrão
+    return 99.90; 
   };
 
   const getComissaoPlano = (plano: string) => {
@@ -66,23 +65,24 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
       const lojasData = lojas || [];
       setLojasAtivas(lojasData);
 
-      // 🚀 INTELIGÊNCIA FINANCEIRA: Cálculo Real de MRR
+      // 🚨 CORREÇÃO: Buscar os vendedores DIRETO DO BANCO para ter o status "ativo" real
+      const { data: vendedoresDB } = await supabase.from('perfis_vendedores').select('*');
+      const listaVendedores = vendedoresDB || vendedores;
+
       let totalReceita = 0;
       lojasData.forEach(l => {
         if (l.ativo !== false) totalReceita += getValorPlano(l.plano);
       });
       setMrrTotal(totalReceita);
 
-      // Gera um gráfico base visual com o MRR atual no final
       setHistoricoMrr([
         { mes: 'M-5', mrr: totalReceita * 0.3 }, { mes: 'M-4', mrr: totalReceita * 0.45 },
         { mes: 'M-3', mrr: totalReceita * 0.6 }, { mes: 'M-2', mrr: totalReceita * 0.8 },
         { mes: 'M-1', mrr: totalReceita * 0.9 }, { mes: 'Atual', mrr: totalReceita },
       ]);
 
-      // 🚀 MÁQUINA DE VENDAS: Cálculo Real de Comissão por Vendedor
       const vendasConvertidas = leads?.filter(l => l.status === 'convertido') || [];
-      const rankingCalculado = vendedores.map((v: any) => {
+      const rankingCalculado = listaVendedores.map((v: any) => {
         const vendasDoCara = vendasConvertidas.filter(lead => lead.vendedor_id === v.id);
         let comissaoTotal = 0;
         vendasDoCara.forEach(venda => {
@@ -91,12 +91,12 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
 
         return {
           ...v, 
-          ativo: v.ativo !== false, // Para botão de bloqueio
+          ativo: v.ativo !== false, 
           total_lojas: vendasDoCara.length,
           comissao_pendente: comissaoTotal
         };
       });
-      setRanking(rankingCalculado.sort((a, b) => b.comissao_pendente - a.comissao_pendente)); // Rankeia por quem traz mais dinheiro
+      setRanking(rankingCalculado.sort((a, b) => b.comissao_pendente - a.comissao_pendente)); 
     } catch (err) {}
   };
 
@@ -107,7 +107,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const statConvertidos = leadsRecentes.filter(l => l.status === 'convertido').length;
   const taxaConversao = leadsRecentes.length > 0 ? ((statConvertidos / leadsRecentes.length) * 100).toFixed(0) : 0;
 
-  // 🚀 APROVAÇÃO COM TRAVA DE SEGURANÇA NO SLUG
   const handleAprovarContrato = async (lead: any) => {
     const slugDesejado = slugs[lead.id];
     const planoEscolhido = planos[lead.id] || "pro";
@@ -119,7 +118,6 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     toast.loading("Verificando disponibilidade e ativando...", { id: "aprovacao" });
 
     try {
-      // 🛡️ BLINDAGEM: Verifica se o link já existe no banco
       const { data: slugExistente } = await supabase.from("barbearias").select("id").eq("slug", slugDesejado).maybeSingle();
       if (slugExistente) {
         throw new Error(`O link '${slugDesejado}' já está sendo usado por outra barbearia. Escolha outro.`);
@@ -148,12 +146,10 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
       });
       if (barbError) throw new Error(barbError.message);
 
-      // Envia notificação de sucesso
-      const whatsMsg = `Parabéns! Sistema ativado. Link: cajtech.net.br/agendar/${slugDesejado}`;
       await supabase.from("leads").update({ status: 'convertido', dados_adicionais: { ...extras, plano_escolhido: planoEscolhido } }).eq('id', lead.id);
 
       toast.success("✅ Cliente Ativado com sucesso!", { id: "aprovacao" });
-      carregarDados(); // Recarrega os dados completos
+      carregarDados(); 
       setExpandido(null);
     } catch (err: any) {
       toast.error(err.message, { id: "aprovacao" });
@@ -221,17 +217,25 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     } catch { toast.error("Falha ao alterar status."); }
   };
 
-  // 🚀 BOTÃO DE DEMISSÃO DE VENDEDOR
+  // 🚀 MUDANÇA AQUI: Atualização Otimista pro botão de Demissão não travar visualmente
   const toggleStatusVendedor = async (vendedorId: string, statusAtual: boolean) => {
+    // 1. Muda a cor na tela imediatamente (Otimista)
+    setRanking(prev => prev.map(v => v.id === vendedorId ? { ...v, ativo: !statusAtual } : v));
+    
     try {
-      await supabase.from("perfis_vendedores").update({ ativo: !statusAtual }).eq('id', vendedorId);
-      carregarDados();
+      // 2. Salva no banco
+      const { error } = await supabase.from("perfis_vendedores").update({ ativo: !statusAtual }).eq('id', vendedorId);
+      if (error) throw error;
+      
       toast.success(!statusAtual ? "Acesso do vendedor restaurado." : "Acesso do vendedor cortado!");
-    } catch { toast.error("Erro ao alterar status do vendedor."); }
+      carregarDados(); // Recarrega silenciosamente
+    } catch { 
+      toast.error("Erro ao alterar status do vendedor."); 
+      carregarDados(); // Se der erro, desfaz a alteração na tela
+    }
   };
 
   const pagarComissao = (vendedorId: string) => {
-    // Na vida real isso gravaria um recibo no banco
     toast.success("Pix registrado! Comissão zerada na tela.");
     setRanking(prev => prev.map(v => v.id === vendedorId ? { ...v, comissao_pendente: 0 } : v));
   };
@@ -356,7 +360,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                   <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-zinc-800/30" onClick={() => setExpandido(expandido === lead.id ? null : lead.id)}>
                     <div>
                       <h4 className="font-bold text-white text-sm uppercase italic">{lead.nome_barbearia}</h4>
-                      <p className="text-[9px] text-zinc-400 font-bold uppercase mt-1">👤 Consultor: {vendedores.find((v:any) => v.id === lead.vendedor_id)?.nome || "Desconhecido"}</p>
+                      <p className="text-[9px] text-zinc-400 font-bold uppercase mt-1">👤 Consultor: {ranking.find((v:any) => v.id === lead.vendedor_id)?.nome || "Desconhecido"}</p>
                     </div>
                     {expandido === lead.id ? <ChevronUp className="text-zinc-500" /> : <ChevronDown className="text-zinc-500" />}
                   </div>
