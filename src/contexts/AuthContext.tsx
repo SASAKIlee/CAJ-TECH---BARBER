@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", user!.id)
+          .eq("user_id", user?.id)
           .maybeSingle();
 
         if (error) throw error;
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Erro ao buscar papel do usuário:", err);
         if (isMounted) setUserRole(null);
       } finally {
-        if (isMounted) setLoading(false); // 🛡️ GARANTE que o loading vai parar, mesmo se der erro
+        if (isMounted) setLoading(false);
       }
     }
 

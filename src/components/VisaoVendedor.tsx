@@ -7,6 +7,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -222,6 +223,7 @@ export function VisaoVendedor({
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null);
   const [textoFollowUp, setTextoFollowUp] = useState("");
   const [errosForm, setErrosForm] = useState<{ email?: boolean; telefone?: boolean }>({});
+  const [aceiteLGPD, setAceiteLGPD] = useState(false);
 
   const progressoMeta = Math.min(100, (recorrenciaCalculada / META_MENSAL) * 100);
 
@@ -291,6 +293,7 @@ export function VisaoVendedor({
     setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
     setLeadSendoEditado(null);
     setErrosForm({});
+    setAceiteLGPD(false);
   }, []);
 
   const handleRegistrarLead = useCallback(async () => {
@@ -353,6 +356,7 @@ export function VisaoVendedor({
           bairro: formNovoLead.bairro,
           status: tabAtiva === "visita" ? "visita" : "pendente",
           vendedor_id: idReal,
+          lgpd_consent: aceiteLGPD,
           dados_adicionais: { ...payloadDadosAdicionais, historico: [] }
         };
         const { error } = await supabase.from("leads").insert([payloadInsert]);
@@ -671,6 +675,8 @@ export function VisaoVendedor({
           onSave={handleRegistrarLead}
           errosForm={errosForm}
           setErrosForm={setErrosForm}
+          aceiteLGPD={aceiteLGPD}
+          setAceiteLGPD={setAceiteLGPD}
         />
       )}
 
@@ -713,9 +719,11 @@ interface ModalCadastroProps {
   onSave: () => void;
   errosForm: { email?: boolean; telefone?: boolean };
   setErrosForm: (err: { email?: boolean; telefone?: boolean }) => void;
+  aceiteLGPD: boolean;
+  setAceiteLGPD: (value: boolean) => void;
 }
 
-function ModalCadastro({ formNovoLead, setFormNovoLead, tabAtiva, setTabAtiva, isSubmitting, onClose, onSave, errosForm, setErrosForm }: ModalCadastroProps) {
+function ModalCadastro({ formNovoLead, setFormNovoLead, tabAtiva, setTabAtiva, isSubmitting, onClose, onSave, errosForm, setErrosForm, aceiteLGPD, setAceiteLGPD }: ModalCadastroProps) {
   const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = aplicarMascaraTelefone(e.target.value);
     setFormNovoLead({ ...formNovoLead, telefone: valor });
@@ -799,7 +807,21 @@ function ModalCadastro({ formNovoLead, setFormNovoLead, tabAtiva, setTabAtiva, i
           )}
         </div>
 
-        <Button onClick={onSave} disabled={isSubmitting} className="w-full bg-emerald-600 text-black font-black h-16 rounded-2xl text-lg uppercase italic shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform sticky bottom-0">
+        <div className="flex items-start gap-3 p-4 rounded-2xl bg-black/20 border border-white/5">
+          <Checkbox 
+            id="lgpd_lead" 
+            checked={aceiteLGPD} 
+            onCheckedChange={(checked) => setAceiteLGPD(!!checked)} 
+          />
+          <label htmlFor="lgpd_lead" className="text-[11px] text-zinc-400 leading-relaxed cursor-pointer">
+            O cliente leu e concorda com a{" "}
+            <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline text-emerald-500">
+              Política de Privacidade
+            </a>.
+          </label>
+        </div>
+
+        <Button onClick={onSave} disabled={isSubmitting || !aceiteLGPD} className="w-full bg-emerald-600 text-black font-black h-16 rounded-2xl text-lg uppercase italic shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform sticky bottom-0">
           {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : tabAtiva === 'visita' ? "Salvar Visita" : "Enviar p/ Aprovação"}
         </Button>
       </div>

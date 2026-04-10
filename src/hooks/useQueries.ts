@@ -88,16 +88,32 @@ export function useMutacoesAgendamento() {
   const queryClient = useQueryClient();
   return {
     adicionarAgendamento: useMutation({
-      mutationFn: async ({ ag, slug }: any) => {
+      mutationFn: async ({ ag, slug, idempotencyKey }: any) => {
+        // Verifica se já existe um agendamento com esta chave
+        if (idempotencyKey) {
+          const { data: existing } = await supabase
+            .from("agendamentos")
+            .select("id")
+            .eq("idempotency_key", idempotencyKey)
+            .maybeSingle();
+            
+          if (existing) {
+            return { id: existing.id, alreadyExists: true };
+          }
+        }
+
         const { error } = await supabase.from("agendamentos").insert({
           nome_cliente: ag.nome_cliente,
-          telefone_cliente: ag.telefone_cliente || '0000000000', // Prevenção
+          telefone_cliente: ag.telefone_cliente || '0000000000',
           servico_id: ag.servico_id,
           barbeiro_id: ag.barbeiro_id,
           data: ag.data,
           horario: ag.horario,
           barbearia_slug: slug,
-          status: "Pendente"
+          status: "Pendente",
+          ticket_codigo: ag.ticket_codigo,
+          lgpd_consent: ag.lgpd_consent,
+          idempotency_key: idempotencyKey
         });
         if (error) throw error;
       },

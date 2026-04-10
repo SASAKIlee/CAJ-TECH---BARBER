@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
+import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -124,6 +126,7 @@ export default function AgendamentoPublico() {
 
   const [erroNome, setErroNome] = useState(false);
   const [erroWhatsapp, setErroWhatsapp] = useState(false);
+  const [aceiteLGPD, setAceiteLGPD] = useState(false);
 
   const etapaRef = useRef<HTMLDivElement>(null);
 
@@ -324,8 +327,11 @@ export default function AgendamentoPublico() {
       const codigo = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       setTicketCodigo(codigo);
 
+      const nomeSanitizado = DOMPurify.sanitize(selecao.nome.trim());
+      const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
       const agendamentosParaInserir = servicosSelecionados.map((servico) => ({
-        nome_cliente: selecao.nome.trim(),
+        nome_cliente: nomeSanitizado,
         telefone_cliente: selecao.whatsapp.replace(/\D/g, ""),
         servico_id: servico.id,
         barbeiro_id: selecao.barbeiro.id,
@@ -334,6 +340,8 @@ export default function AgendamentoPublico() {
         barbearia_slug: slug,
         status: "Pendente",
         ticket_codigo: codigo,
+        lgpd_consent: aceiteLGPD,
+        idempotency_key: idempotencyKey,
       }));
 
       const { error: erroInsercao } = await supabase.from("agendamentos").insert(agendamentosParaInserir);
@@ -633,11 +641,25 @@ export default function AgendamentoPublico() {
                         />
                         {erroWhatsapp && <p className="text-red-400 text-xs mt-1 ml-2">WhatsApp deve ter pelo menos 10 dígitos.</p>}
                       </div>
+                      <div className="flex items-start gap-3 p-4 rounded-2xl bg-black/20 border border-white/5">
+                        <Checkbox 
+                          id="lgpd" 
+                          checked={aceiteLGPD} 
+                          onCheckedChange={(checked) => setAceiteLGPD(!!checked)} 
+                        />
+                        <label htmlFor="lgpd" className="text-[11px] text-zinc-400 leading-relaxed cursor-pointer">
+                          Li e concordo com a{" "}
+                          <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: brand }}>
+                            Política de Privacidade
+                          </a>{" "}
+                          e autorizo o tratamento dos meus dados para este agendamento.
+                        </label>
+                      </div>
                       <Button
                         className="w-full h-16 rounded-[24px] font-black uppercase text-sm shadow-2xl mt-4"
                         style={{ backgroundColor: brand, color: ctaFg }}
                         onClick={handleFinalizar}
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || !aceiteLGPD}
                       >
                         {isSubmitting ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
                         Finalizar Agendamento

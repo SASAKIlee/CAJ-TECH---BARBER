@@ -230,8 +230,10 @@ export default function Index() {
   // ==========================================
   const handleNovoAgendamento = useCallback(
     async (ag: Partial<Agendamento>): Promise<{ error?: any }> => {
+      if (!slug) return { error: "Slug não definido" };
       try {
-        await mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug: slug! });
+        const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug, idempotencyKey });
         return {};
       } catch (error: any) {
         return { error };
@@ -242,6 +244,7 @@ export default function Index() {
 
   const handleStatusChange = useCallback(
     (id: string, status: string) => {
+      if (!slug) return Promise.reject("Slug não definido");
       if (status === "Finalizado") {
         const agAtual = agendamentos.find((a) => a.id === id);
         const servico = servicos_find(agAtual?.servico_id);
@@ -251,13 +254,13 @@ export default function Index() {
           id,
           status: "Finalizado",
           comissaoGanha: valorComissao,
-          slug: slug!,
+          slug,
         });
       }
       return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({
         id,
         status,
-        slug: slug!,
+        slug,
       });
     },
     [agendamentos, servicos_find, barbeiros, mutacoesAgendamento, slug]
@@ -303,8 +306,9 @@ export default function Index() {
 
   const handleAddBarbeiro = useCallback(
     (nome: string, comissao_pct: number, email: string, senha: string, url_foto?: string) => {
+      if (!slug) return Promise.reject("Slug não definido");
       return withLoadingToast(
-        mutacoesBarbeiro.adicionarBarbeiro.mutateAsync({ nome, comissao_pct, email, senha, url_foto, slug: slug! }),
+        mutacoesBarbeiro.adicionarBarbeiro.mutateAsync({ nome, comissao_pct, email, senha, url_foto, slug }),
         { loading: "Cadastrando barbeiro...", success: "Barbeiro cadastrado!", error: "Erro ao cadastrar." }
       );
     },
@@ -313,9 +317,10 @@ export default function Index() {
 
   const handleRemoveBarbeiro = useCallback(
     (id: string) => {
+      if (!slug) return Promise.reject("Slug não definido");
       const b = barbeiros.find((x) => x.id === id);
       return withLoadingToast(
-        mutacoesBarbeiro.removerBarbeiro.mutateAsync({ id, estaAtivo: b?.ativo, slug: slug! }),
+        mutacoesBarbeiro.removerBarbeiro.mutateAsync({ id, estaAtivo: b?.ativo, slug }),
         { loading: "Removendo barbeiro...", success: "Barbeiro removido!", error: "Erro ao remover." }
       );
     },
@@ -324,8 +329,9 @@ export default function Index() {
 
   const handleToggleBarbeiroStatus = useCallback(
     (id: string, novoStatus: boolean) => {
+      if (!slug) return Promise.reject("Slug não definido");
       return withLoadingToast(
-        mutacoesBarbeiro.alternarStatusBarbeiro.mutateAsync({ id, novoStatus, slug: slug! }),
+        mutacoesBarbeiro.alternarStatusBarbeiro.mutateAsync({ id, novoStatus, slug }),
         { loading: "Alterando status...", success: "Status atualizado!", error: "Erro ao alterar." }
       );
     },
@@ -334,8 +340,9 @@ export default function Index() {
 
   const handleAddServico = useCallback(
     (nome: string, preco: number, duracao_minutos: number, url_imagem?: string) => {
+      if (!slug) return Promise.reject("Slug não definido");
       return withLoadingToast(
-        mutacoesServico.adicionarServico.mutateAsync({ nome, preco, duracao_minutos, url_imagem, slug: slug! }),
+        mutacoesServico.adicionarServico.mutateAsync({ nome, preco, duracao_minutos, url_imagem, slug }),
         { loading: "Cadastrando serviço...", success: "Serviço cadastrado!", error: "Erro ao cadastrar." }
       );
     },
@@ -344,8 +351,9 @@ export default function Index() {
 
   const handleRemoveServico = useCallback(
     (id: string) => {
+      if (!slug) return Promise.reject("Slug não definido");
       return withLoadingToast(
-        mutacoesServico.removerServico.mutateAsync({ id, slug: slug! }),
+        mutacoesServico.removerServico.mutateAsync({ id, slug }),
         { loading: "Removendo serviço...", success: "Serviço removido!", error: "Erro ao remover." }
       );
     },
