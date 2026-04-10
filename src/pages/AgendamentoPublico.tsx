@@ -262,6 +262,10 @@ export default function AgendamentoPublico() {
     localStorage.setItem("cliente_nome", selecao.nome.trim());
     localStorage.setItem("cliente_whatsapp", selecao.whatsapp);
 
+    // 🚀 GERA CÓDIGO ÚNICO DO TICKET
+    const codigo = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setTicketCodigo(codigo);
+
     const agendamentosParaInserir = servicosSelecionados.map((servico) => ({
       nome_cliente: selecao.nome.trim(),
       telefone_cliente: selecao.whatsapp.replace(/\D/g, ""),
@@ -271,16 +275,18 @@ export default function AgendamentoPublico() {
       horario: selecao.horario,
       barbearia_slug: slug,
       status: "Pendente",
+      ticket_codigo: codigo,   // 🚀 NOVO CAMPO
     }));
 
     const { error } = await supabase.from("agendamentos").insert(agendamentosParaInserir);
 
     toast.dismiss(toastId);
     setIsSubmitting(false);
-    if (error) return toast.error("Este horário acabou de ser ocupado.");
+    if (error) {
+      console.error("Erro ao inserir agendamento:", error);
+      return toast.error("Este horário acabou de ser ocupado ou ocorreu um erro.");
+    }
 
-    const codigo = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
-    setTicketCodigo(codigo);
     setEtapa(5);
   };
 
@@ -290,7 +296,7 @@ export default function AgendamentoPublico() {
     const { error } = await supabase
       .from("agendamentos")
       .update({ status: "Cancelado" })
-      .eq("ticket_cancelamento", ticketCodigo);
+      .eq("ticket_codigo", ticketCodigo);
     if (error) {
       toast.error("Não foi possível cancelar. Entre em contato com a barbearia.");
     } else {
@@ -423,7 +429,7 @@ export default function AgendamentoPublico() {
                           <button key={b.id} onClick={() => { setSelecao({ ...selecao, barbeiro: b }); setEtapa(3); }}
                             className="flex items-center gap-4 rounded-[24px] border p-4 transition-all active:scale-[0.98]"
                             style={{ backgroundColor: hexToRgba(bg, 0.4), borderColor: hexToRgba(textHighlight, 0.05) }}>
-                            {/* Foto do barbeiro condicional (opcional, pode manter placeholder ou não) */}
+                            {/* Foto do barbeiro condicional */}
                             {b.url_foto ? (
                               <img src={b.url_foto} className="h-14 w-14 rounded-2xl object-cover shrink-0" alt={b.nome} />
                             ) : (
