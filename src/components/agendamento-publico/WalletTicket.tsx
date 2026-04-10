@@ -28,9 +28,10 @@ type WalletTicketProps = {
   selecao: SelecaoBase;
   slug: string | undefined;
   ticketCodigo: string;
-  servicos: ServicoItem[];          // Lista de serviços selecionados
+  servicos: ServicoItem[];
   precoTotal: number;
   duracaoTotal: number;
+  checkinHabilitado?: boolean; // 🆕 Prop opcional para controlar exibição do QR Code
 };
 
 export function WalletTicket({
@@ -41,6 +42,7 @@ export function WalletTicket({
   servicos,
   precoTotal,
   duracaoTotal,
+  checkinHabilitado = false, // padrão desabilitado
 }: WalletTicketProps) {
   const brand = config?.cor_primaria || "#D4AF37";
   const onBrand = contrastTextOnBrand(brand);
@@ -54,7 +56,6 @@ export function WalletTicket({
   const dominioBase = window.location.origin;
   const linkCheckin = `${dominioBase}/checkin/${slug}/${ticketCodigo}`;
 
-  // Preparar exibição dos serviços
   const servicosNomes = servicos.map(s => s.nome);
   const servicosDisplay = servicosNomes.length <= 2
     ? servicosNomes.join(" + ")
@@ -67,6 +68,7 @@ export function WalletTicket({
     >
       <div className="h-2 w-full" style={{ backgroundColor: brand }} aria-hidden />
 
+      {/* Cabeçalho */}
       <div className="bg-white px-8 pt-8 pb-6 text-center">
         {logoUrl ? (
           <img
@@ -93,8 +95,8 @@ export function WalletTicket({
 
       <div className="h-px bg-gradient-to-r from-transparent via-zinc-300 to-transparent mx-6" />
 
+      {/* Corpo - Detalhes do agendamento */}
       <div className="space-y-4 bg-white px-8 py-6">
-        {/* Serviços (múltiplos) */}
         <div>
           <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
             {servicos.length > 1 ? "Serviços" : "Serviço Escolhido"}
@@ -117,13 +119,11 @@ export function WalletTicket({
         <TicketRow label="Profissional" value={selecao.barbeiro?.nome ?? "—"} valueClassName="uppercase" />
         <TicketRow label="Cliente" value={selecao.nome || "—"} />
 
-        {/* Duração total (nova informação) */}
         <div className="flex items-center gap-1 text-[10px] text-zinc-500">
           <span className="font-bold uppercase tracking-widest">Duração total:</span>
           <span className="font-black">{duracaoTotal} min</span>
         </div>
 
-        {/* Valor total */}
         <div className="flex justify-between items-baseline pt-3 mt-2 border-t border-dashed border-zinc-200">
           <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Valor a Pagar</span>
           <span className="text-2xl font-black tabular-nums tracking-tighter" style={{ color: brand }}>
@@ -132,24 +132,36 @@ export function WalletTicket({
         </div>
       </div>
 
-      {/* Rodapé com QR Code */}
-      <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-8 relative">
-        <div className="absolute -top-3 -left-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
-        <div className="absolute -top-3 -right-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
+      {/* Rodapé condicional: QR Code (se habilitado) ou mensagem simples */}
+      {checkinHabilitado ? (
+        <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-8 relative">
+          <div className="absolute -top-3 -left-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
+          <div className="absolute -top-3 -right-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
 
-        <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">
-          Apresente na recepção
-        </p>
+          <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">
+            Apresente na recepção
+          </p>
 
-        <div className="mx-auto flex justify-center rounded-2xl bg-white p-4 shadow-md ring-1 ring-black/[0.05] w-fit relative group">
-          <QRCode value={linkCheckin} size={140} level="H" />
+          <div className="mx-auto flex justify-center rounded-2xl bg-white p-4 shadow-md ring-1 ring-black/[0.05] w-fit relative group">
+            <QRCode value={linkCheckin} size={140} level="H" />
+          </div>
+
+          <p className="mt-4 text-center font-mono text-[9px] text-zinc-400 tracking-[0.2em] font-bold">
+            ID: {ticketCodigo.split('-')[0].toUpperCase()}
+          </p>
         </div>
+      ) : (
+        <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-6 text-center">
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Apresente este comprovante na recepção
+          </p>
+          <p className="mt-4 font-mono text-[9px] text-zinc-400 tracking-[0.2em] font-bold">
+            ID: {ticketCodigo.split('-')[0].toUpperCase()}
+          </p>
+        </div>
+      )}
 
-        <p className="mt-4 text-center font-mono text-[9px] text-zinc-400 tracking-[0.2em] font-bold">
-          ID: {ticketCodigo.split('-')[0].toUpperCase()}
-        </p>
-      </div>
-
+      {/* Barra inferior */}
       <div
         className="py-4 text-center text-[11px] font-black uppercase tracking-widest"
         style={{ backgroundColor: hexToRgba(brand, 0.15), color: brand }}

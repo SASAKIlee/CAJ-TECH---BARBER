@@ -10,6 +10,7 @@ import {
   Scissors,
   User,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +97,7 @@ type BarbeariaRow = {
   horario_abertura?: string | null; horario_fechamento?: string | null;
   dias_trabalho?: number[] | null; inicio_almoco?: string | null; fim_almoco?: string | null;
   datas_fechadas?: string[] | null; ativo?: boolean | null; data_vencimento?: string | null;
+  checkin_habilitado?: boolean | null;
 };
 
 // ==========================================
@@ -113,6 +115,7 @@ export default function AgendamentoPublico() {
   const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [quantidadeDias, setQuantidadeDias] = useState(14);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkinHabilitado, setCheckinHabilitado] = useState(false);
 
   const [servicosSelecionadosIds, setServicosSelecionadosIds] = useState<string[]>([]);
   const [selecao, setSelecao] = useState({
@@ -167,8 +170,15 @@ export default function AgendamentoPublico() {
   useEffect(() => {
     async function carregarDados() {
       try {
-        const { data: bInfo } = await supabase.from("barbearias").select("*").eq("slug", slug).single();
-        if (bInfo) setConfig(bInfo as BarbeariaRow);
+        const { data: bInfo } = await supabase
+          .from("barbearias")
+          .select("*, checkin_habilitado")
+          .eq("slug", slug)
+          .single();
+        if (bInfo) {
+          setConfig(bInfo as BarbeariaRow);
+          setCheckinHabilitado(bInfo.checkin_habilitado ?? false);
+        }
         const { data: barbs } = await supabase.from("barbeiros").select("*").eq("barbearia_slug", slug).eq("ativo", true);
         const { data: servs } = await supabase.from("servicos").select("*").eq("barbearia_slug", slug);
         setBarbeiros(barbs || []);
@@ -258,7 +268,6 @@ export default function AgendamentoPublico() {
     const toastId = toast.loading("Verificando disponibilidade...");
 
     try {
-      // Verificação reativa de disponibilidade
       const { data: conflitantes, error: erroConsulta } = await supabase
         .from("agendamentos")
         .select("horario, servico_id")
@@ -518,15 +527,34 @@ export default function AgendamentoPublico() {
                           const isFechado = datasFechadas.includes(dia.ymd);
                           const isSelected = selecao.data === dia.ymd;
                           const labelEspecial = getDiaLabel(dia.ymd);
+                          const indisponivel = !isTrabalho || isFechado;
+
                           return (
                             <button
                               key={dia.ymd}
-                              disabled={!isTrabalho || isFechado}
+                              disabled={indisponivel}
                               onClick={() => setSelecao({ ...selecao, data: dia.ymd, horario: "" })}
-                              className={cn("min-w-[70px] flex flex-col items-center p-4 rounded-[22px] border transition-all snap-center", isSelected ? "shadow-xl" : "opacity-40", !isTrabalho || isFechado ? "cursor-not-allowed" : "")}
-                              style={{ backgroundColor: isSelected ? brand : "transparent", borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.1), color: isSelected ? ctaFg : textHighlight }}
+                              className={cn(
+                                "min-w-[70px] flex flex-col items-center p-4 rounded-[22px] border transition-all snap-center relative",
+                                isSelected ? "shadow-xl" : "opacity-40",
+                                indisponivel ? "cursor-not-allowed" : ""
+                              )}
+                              style={{
+                                backgroundColor: isSelected ? brand : "transparent",
+                                borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.1),
+                                color: isSelected ? ctaFg : textHighlight,
+                              }}
                             >
-                              {labelEspecial && <span className="text-[8px] font-black uppercase bg-white/20 px-1.5 py-0.5 rounded-full mb-1" style={{ color: isSelected ? ctaFg : brand }}>{labelEspecial}</span>}
+                              {indisponivel && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-[22px]">
+                                  <X className="h-6 w-6 text-white/40" strokeWidth={3} />
+                                </div>
+                              )}
+                              {labelEspecial && (
+                                <span className="text-[8px] font-black uppercase bg-white/20 px-1.5 py-0.5 rounded-full mb-1" style={{ color: isSelected ? ctaFg : brand }}>
+                                  {labelEspecial}
+                                </span>
+                              )}
                               <span className="text-[9px] font-black uppercase mb-1">{dia.diaSemana}</span>
                               <span className="text-xl font-black mb-1">{dia.diaMes}</span>
                               <span className="text-[9px] font-black uppercase">{dia.mes}</span>
@@ -632,6 +660,7 @@ export default function AgendamentoPublico() {
                   servicos={servicosSelecionados}
                   precoTotal={precoTotal}
                   duracaoTotal={duracaoTotal}
+                  checkinHabilitado={checkinHabilitado}
                 />
 
                 <div className="w-full space-y-3 pt-4">
