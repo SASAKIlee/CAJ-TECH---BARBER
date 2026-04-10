@@ -233,7 +233,7 @@ export default function Index() {
       if (!slug) return { error: "Slug não definido" };
       try {
         const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        await mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug, idempotencyKey });
+        await mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag: [ag], slug, idempotencyKey });
         return {};
       } catch (error: any) {
         return { error };

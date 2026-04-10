@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
+import { useMutacoesAgendamento } from "@/hooks/useQueries";
 import {
   ChevronLeft,
   Loader2,
@@ -129,6 +130,9 @@ export default function AgendamentoPublico() {
   const [aceiteLGPD, setAceiteLGPD] = useState(false);
 
   const etapaRef = useRef<HTMLDivElement>(null);
+  
+  // 🔥 Usar a mutation com idempotência
+  const { adicionarAgendamento } = useMutacoesAgendamento();
 
   const brand = config?.cor_primaria?.trim() || "#D4AF37";
   const bg = config?.cor_secundaria?.trim() || "#18181B";
@@ -266,6 +270,7 @@ export default function AgendamentoPublico() {
     if (!nomeOk) return toast.error("Digite seu nome completo (mínimo 3 caracteres).");
     if (!zapOk) return toast.error("WhatsApp inválido (mínimo 10 dígitos).");
     if (servicosSelecionados.length === 0) return toast.error("Selecione pelo menos um serviço.");
+    if (!aceiteLGPD) return toast.error("Você deve aceitar a Política de Privacidade.");
 
     setIsSubmitting(true);
     const toastId = toast.loading("Verificando disponibilidade...");
@@ -326,9 +331,9 @@ export default function AgendamentoPublico() {
 
       const codigo = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       setTicketCodigo(codigo);
+      const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       const nomeSanitizado = DOMPurify.sanitize(selecao.nome.trim());
-      const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       const agendamentosParaInserir = servicosSelecionados.map((servico) => ({
         nome_cliente: nomeSanitizado,
@@ -337,27 +342,23 @@ export default function AgendamentoPublico() {
         barbeiro_id: selecao.barbeiro.id,
         data: selecao.data,
         horario: selecao.horario,
-        barbearia_slug: slug,
         status: "Pendente",
         ticket_codigo: codigo,
         lgpd_consent: aceiteLGPD,
-        idempotency_key: idempotencyKey,
       }));
 
-      const { error: erroInsercao } = await supabase.from("agendamentos").insert(agendamentosParaInserir);
+      // 🔥 USA A MUTATION COM IDEMPOTÊNCIA
+      const resultado = await adicionarAgendamento.mutateAsync({
+        ag: agendamentosParaInserir,
+        slug: slug!,
+        idempotencyKey,
+      });
 
       toast.dismiss(toastId);
       setIsSubmitting(false);
 
-      if (erroInsercao) {
-        console.error("Erro detalhado do Supabase:", erroInsercao);
-        if (erroInsercao.code === "23505") {
-          return toast.error("Já existe um agendamento com este código de ticket. Tente novamente.");
-        }
-        if (erroInsercao.message?.includes("violates row-level security")) {
-          return toast.error("Erro de permissão no servidor. Contate o suporte.");
-        }
-        return toast.error("Não foi possível confirmar o agendamento. Tente novamente.");
+      if (resultado.alreadyExists) {
+        return toast.success("Agendamento já realizado! Verifique seu ticket.");
       }
 
       setEtapa(5);

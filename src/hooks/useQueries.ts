@@ -88,34 +88,32 @@ export function useMutacoesAgendamento() {
   const queryClient = useQueryClient();
   return {
     adicionarAgendamento: useMutation({
-      mutationFn: async ({ ag, slug, idempotencyKey }: any) => {
-        // Verifica se já existe um agendamento com esta chave
-        if (idempotencyKey) {
-          const { data: existing } = await supabase
-            .from("agendamentos")
-            .select("id")
-            .eq("idempotency_key", idempotencyKey)
-            .maybeSingle();
-            
-          if (existing) {
-            return { id: existing.id, alreadyExists: true };
-          }
+      mutationFn: async ({ ag, slug, idempotencyKey }: { 
+        ag: any[]; 
+        slug: string; 
+        idempotencyKey: string 
+      }) => {
+        // Verifica duplicidade usando a chave
+        const { data: existing } = await supabase
+          .from("agendamentos")
+          .select("id")
+          .eq("idempotency_key", idempotencyKey)
+          .maybeSingle();
+
+        if (existing) {
+          return { alreadyExists: true };
         }
 
-        const { error } = await supabase.from("agendamentos").insert({
-          nome_cliente: ag.nome_cliente,
-          telefone_cliente: ag.telefone_cliente || '0000000000',
-          servico_id: ag.servico_id,
-          barbeiro_id: ag.barbeiro_id,
-          data: ag.data,
-          horario: ag.horario,
+        // Adiciona a chave e slug a cada agendamento
+        const agendamentosComChave = ag.map(item => ({
+          ...item,
+          idempotency_key: idempotencyKey,
           barbearia_slug: slug,
-          status: "Pendente",
-          ticket_codigo: ag.ticket_codigo,
-          lgpd_consent: ag.lgpd_consent,
-          idempotency_key: idempotencyKey
-        });
+        }));
+
+        const { error } = await supabase.from("agendamentos").insert(agendamentosComChave);
         if (error) throw error;
+        return { success: true };
       },
       onSuccess: (_, vars) => {
         queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
