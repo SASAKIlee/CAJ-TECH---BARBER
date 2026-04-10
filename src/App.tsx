@@ -28,37 +28,29 @@ const queryClient = new QueryClient({
 function AppRoutes() {
   const { user, loading } = useAuth();
 
-  // 🚀 LOADING PREMIUM
   if (loading) {
     return (
       <div className="dark min-h-screen bg-black flex flex-col items-center justify-center space-y-4 font-sans">
         <div className="h-12 w-12 border-4 border-zinc-900 border-t-emerald-500 rounded-full animate-spin shadow-[0_0_15px_rgba(16,185,129,0.2)]" />
-        <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
-          Iniciando CAJ TECH...
-        </p>
+        <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Iniciando CAJ TECH...</p>
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* 🌐 ROTAS TOTALMENTE PÚBLICAS (Livres de qualquer redirecionamento) */}
+      {/* 🌐 ROTAS PÚBLICAS: Estão fora de qualquer condicional. 
+          Não importa se o cara é o dono ou o Papa, se ele entrar aqui, ele FICA aqui. */}
       <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
       <Route path="/checkin/:slug/:ticket" element={<Checkin />} />
 
-      {/* 🔒 LOGIN (Se tá logado e vai tentar abrir o auth, manda pra home) */}
-      <Route 
-        path="/auth" 
-        element={!user ? <Auth /> : <Navigate to="/" replace />} 
-      />
+      {/* 🔒 ROTA DE AUTH: Se já estiver logado, manda pra raiz (Index) */}
+      <Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" replace />} />
 
-      {/* 🔒 PAINEL DO USUÁRIO LOGADO (Com o exact /) */}
-      <Route 
-        path="/" 
-        element={user ? <Index /> : <Navigate to="/auth" replace />} 
-      />
+      {/* 🔒 ROTA RAIZ (PAINÉIS): Se não estiver logado, manda pro Auth */}
+      <Route path="/" element={user ? <Index /> : <Navigate to="/auth" replace />} />
 
-      {/* 🚀 TELA 404 (Apenas se a rota não existir em nenhum lugar) */}
+      {/* 🚀 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
