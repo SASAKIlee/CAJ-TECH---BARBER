@@ -22,6 +22,7 @@ interface DadosAdicionais {
   email_dono?: string;
   senha_temp?: string;
   telefone?: string;
+  vip?: boolean;
   cor_primaria?: string;
   cor_secundaria?: string;
   cor_destaque?: string;
@@ -53,6 +54,7 @@ interface FormNovoLead {
   senha: string;
   telefone: string;
   plano: string;
+  vip: boolean;
   cor_primaria: string;
   cor_secundaria: string;
   cor_destaque: string;
@@ -69,6 +71,7 @@ interface VisaoVendedorProps {
 const FORM_NOVO_LEAD_INICIAL: FormNovoLead = {
   nome: "", bairro: "", email: "", senha: "", telefone: "",
   plano: "pro",
+  vip: false,
   cor_primaria: "#D4AF37", cor_secundaria: "#18181B", cor_destaque: "#FFFFFF"
 };
 
@@ -149,11 +152,19 @@ const LeadCard = memo(({ lead, onFollowUp, onMover, onArquivar, isFinal = false,
       {isRecusado && <div className="absolute top-0 right-0 bg-red-600 text-white text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl flex items-center gap-1.5"><AlertCircle className="h-3 w-3" /> Recusado pelo CEO</div>}
 
       <div>
-        <h4 className={cn("font-black uppercase italic text-base tracking-tight pr-16", isChurn || isRecusado ? "text-red-400" : "text-white")}>{lead.nome_barbearia}</h4>
+        <div className="flex items-center gap-2 mb-2">
+          <h4 className={cn("font-black uppercase italic text-base tracking-tight pr-16", isChurn || isRecusado ? "text-red-400" : "text-white")}>{lead.nome_barbearia}</h4>
+          {lead.dados_adicionais?.vip && (
+            <span className="text-[9px] uppercase tracking-[0.3em] px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">VIP</span>
+          )}
+        </div>
         <div className="flex items-center gap-3 mt-2 opacity-70 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {lead.bairro || '---'}</span>
           <span className="flex items-center gap-1"><Crown className={cn("h-3.5 w-3.5", planoAtual === 'starter' ? 'text-zinc-400' : 'text-emerald-500')} /> {planoAtual}</span>
         </div>
+        {lead.dados_adicionais?.historico?.length ? (
+          <p className="text-[10px] text-zinc-500 mt-3 italic">Última nota: {lead.dados_adicionais.historico[0]?.texto.slice(0, 60)}{lead.dados_adicionais.historico[0]?.texto.length > 60 ? '…' : ''}</p>
+        ) : null}
 
         {isRecusado && motivoRecusa && (
           <div className="mt-3 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
@@ -330,6 +341,7 @@ export function VisaoVendedor({
         email_dono: formNovoLead.email,
         senha_temp: formNovoLead.senha,
         telefone: formNovoLead.telefone.replace(/\D/g, ''),
+        vip: formNovoLead.vip,
         cor_primaria: formNovoLead.cor_primaria,
         cor_secundaria: formNovoLead.cor_secundaria,
         cor_destaque: formNovoLead.cor_destaque,
@@ -393,6 +405,7 @@ export function VisaoVendedor({
       email: lead.dados_adicionais?.email_dono || "",
       senha: lead.dados_adicionais?.senha_temp || "",
       plano: lead.dados_adicionais?.plano_escolhido || "pro",
+      vip: lead.dados_adicionais?.vip || false,
       cor_primaria: lead.dados_adicionais?.cor_primaria || "#D4AF37",
       cor_secundaria: lead.dados_adicionais?.cor_secundaria || "#18181B",
       cor_destaque: lead.dados_adicionais?.cor_destaque || "#FFFFFF"
@@ -758,25 +771,20 @@ function ModalCadastro({ formNovoLead, setFormNovoLead, tabAtiva, setTabAtiva, i
               />
               {errosForm.telefone && <p className="text-red-400 text-[10px] mt-1 ml-2">Telefone inválido (mínimo 10 dígitos).</p>}
             </div>
+            <div className="flex items-center gap-3 mt-3">
+              <Checkbox
+                id="vip_lead"
+                checked={formNovoLead.vip}
+                onCheckedChange={(checked) => setFormNovoLead({ ...formNovoLead, vip: !!checked })}
+              />
+              <label htmlFor="vip_lead" className="text-[11px] text-zinc-400 cursor-pointer">
+                Marcar cliente como <strong className="text-emerald-400">VIP</strong>
+              </label>
+            </div>
           </div>
-          
+
           {tabAtiva === "contrato" && (
             <div className="space-y-6 pt-5 border-t border-zinc-800/50">
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-emerald-500 uppercase italic ml-1">Plano Escolhido</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['starter', 'pro', 'elite'].map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setFormNovoLead({...formNovoLead, plano: p})}
-                      className={cn("py-4 rounded-xl text-[11px] font-black uppercase border transition-all", formNovoLead.plano === p ? "bg-emerald-600 border-emerald-500 text-black shadow-lg shadow-emerald-500/20" : "bg-black border-zinc-800 text-zinc-500 hover:border-zinc-600")}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div className="space-y-2">
                 <label className="text-[10px] uppercase font-black text-zinc-500 ml-1">Acesso do Dono</label>
                 <div>

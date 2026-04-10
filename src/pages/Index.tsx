@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 import {
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
-  useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento
+  useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento, useClientesVIP
 } from "@/hooks/useQueries";
 
 // ==========================================
@@ -117,10 +117,12 @@ export default function Index() {
   const barbeirosQuery = useBarbeiros(slug);
   const servicosQuery = useServicos(slug);
   const agendamentosQuery = useAgendamentos(slug);
+  const clientesVIPQuery = useClientesVIP(user?.id);
 
   const { data: barbeiros = [], refetch: refetchBarbeiros } = barbeirosQuery;
   const { data: servicos = [], refetch: refetchServicos } = servicosQuery;
   const { data: agendamentos = [], refetch: refetchAgendamentos } = agendamentosQuery;
+  const { data: clientesVIP = [] } = clientesVIPQuery;
 
   const carregandoDependentes = !!slug && (barbeirosQuery.isLoading || servicosQuery.isLoading || agendamentosQuery.isLoading);
   const buscandoDependentes = !!slug && (barbeirosQuery.isFetching || servicosQuery.isFetching || agendamentosQuery.isFetching);
@@ -573,6 +575,7 @@ export default function Index() {
                     .reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
                   cortesHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id).length}
                   metaDiaria={barbeiros.find((b) => b.id === user?.id)?.meta_diaria || 150}
+                  clientesVIP={clientesVIP.length}
                   onUpdateMeta={(novaMeta: number) => {
                     if (user?.id && slug) {
                       withLoadingToast(

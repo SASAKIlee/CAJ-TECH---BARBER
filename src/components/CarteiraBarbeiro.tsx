@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check, X, Trophy } from "lucide-react";
+import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check, X, Trophy, Crown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ interface Props {
   comissaoHoje?: number;
   cortesHoje?: number;
   metaDiaria?: number;
+  clientesVIP?: number;
   onUpdateMeta?: (novaMeta: number) => void;
 }
 
@@ -46,7 +47,7 @@ const formatarMoedaBR = (valor: number) => {
 
 export function CarteiraBarbeiro({ 
   comissaoTotalMes, totalCortesMes, nomeBarbeiro, 
-  comissaoHoje = 0, cortesHoje = 0, metaDiaria = 150, onUpdateMeta 
+  comissaoHoje = 0, cortesHoje = 0, metaDiaria = 150, clientesVIP = 0, onUpdateMeta 
 }: Props) {
   const [editandoMeta, setEditandoMeta] = useState(false);
   const [novaMetaValor, setNovaMetaValor] = useState(metaDiaria.toString());
@@ -163,6 +164,26 @@ export function CarteiraBarbeiro({
             <p className="text-3xl font-black text-white italic tabular-nums">{cortesHoje}</p>
           </div>
         </Card>
+
+        {clientesVIP > 0 && (
+          <Card className="p-5 flex flex-col gap-3 bg-gradient-to-br from-amber-900/40 to-yellow-900/20 border border-yellow-600/30 rounded-[24px] backdrop-blur-md relative overflow-hidden group col-span-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-yellow-500/20 flex items-center justify-center border border-yellow-500/30 group-hover:scale-110 transition-transform">
+                  <Crown className="h-5 w-5 text-yellow-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-yellow-600/80 uppercase font-black tracking-widest">Clientes VIP</p>
+                  <p className="text-xl font-black text-yellow-300 italic">{clientesVIP} cliente{clientesVIP !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              <div className="text-right text-[9px] text-yellow-600/60">
+                <p className="font-black uppercase">Status Premium</p>
+                <p className="text-yellow-400 font-bold text-xs mt-0.5">👑 Ativo</p>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* RESUMO MENSAL (CRM) */}

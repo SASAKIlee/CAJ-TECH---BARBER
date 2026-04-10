@@ -291,3 +291,26 @@ export function useMutacoesDespesa() {
     })
   };
 }
+
+// ==========================================
+// 6. CLIENTES VIP
+// ==========================================
+export function useClientesVIP(vendedorId?: string) {
+  return useQuery({
+    queryKey: ["clientesVIP", vendedorId],
+    queryFn: async () => {
+      if (!vendedorId) return [];
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("vendedor_id", vendedorId)
+        .neq("status", "deleted");
+      
+      if (error) throw error;
+      
+      // Filtra apenas leads marcados como VIP
+      return (data || []).filter((lead: any) => lead.dados_adicionais?.vip === true);
+    },
+    enabled: !!vendedorId,
+  });
+}

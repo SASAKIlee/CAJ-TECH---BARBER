@@ -113,6 +113,8 @@ export function VisaoDono({
   const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
   const [planoAtual, setPlanoAtual] = useState<PlanoType>("starter");
   const [checkinHabilitado, setCheckinHabilitado] = useState(false); // 🆕
+  const [vipRemindersEnabled, setVipRemindersEnabled] = useState(false);
+  const [vipClubEnabled, setVipClubEnabled] = useState(false);
 
   const [horariosLoja, setHorariosLoja] = useState({
     abertura: "09:00", fechamento: "18:00", dias_trabalho: [1, 2, 3, 4, 5, 6],
@@ -641,47 +643,102 @@ export function VisaoDono({
   }
 
   function renderTabVIP() {
+    const temVIP = planoAtual !== "starter";
+
     return (
       <section className="space-y-4 animate-in fade-in duration-500">
-        <h3 className="font-black text-white uppercase text-xl italic flex items-center gap-2">
-          <Zap className="h-5 w-5" style={{ color: brand }} /> Automações VIP
-        </h3>
-        {planoAtual === "starter" ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5" style={{ color: brand }} />
+            <h3 className="font-black text-white uppercase text-xl italic">Central VIP</h3>
+          </div>
+          <p className="text-sm text-zinc-400 max-w-2xl">Gerencie os recursos premium da sua barbearia: lembretes automáticos, clube de assinaturas e ativos VIP para clientes com maior retenção.</p>
+        </div>
+
+        {/* RESUMO CLIENTES VIP */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          <Card className="p-4 rounded-[20px] border border-white/[0.08] bg-yellow-950/20" style={{ ...glass, borderColor: 'rgba(234,179,8,0.2)' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Crown className="h-3 w-3 text-yellow-500" />
+              <p className="text-[9px] font-black uppercase tracking-widest text-yellow-600">Clientes VIP</p>
+            </div>
+            <p className="text-2xl font-black text-yellow-300 tabular-nums">-</p>
+            <p className="text-[9px] text-yellow-600/60 mt-1 uppercase font-bold">Carregando...</p>
+          </Card>
+
+          <Card className="p-4 rounded-[20px] border border-white/[0.08]" style={glass}>
+            <div className="flex items-center gap-1.5 mb-2 opacity-60">
+              <Trophy className="h-3 w-3" />
+              <p className="text-[9px] font-black uppercase tracking-widest">Ativos VIP</p>
+            </div>
+            <p className="text-xl font-black text-white">{vipRemindersEnabled && vipClubEnabled ? '2/2' : vipRemindersEnabled || vipClubEnabled ? '1/2' : '0/2'}</p>
+          </Card>
+
+          <Card className="p-4 rounded-[20px] border border-white/[0.08] col-span-2 sm:col-span-1" style={glass}>
+            <div className="flex items-center gap-1.5 mb-2 opacity-60">
+              <Users className="h-3 w-3" />
+              <p className="text-[9px] font-black uppercase tracking-widest">Plano VIP</p>
+            </div>
+            <p className="text-lg font-black text-white italic uppercase">{planoAtual}</p>
+          </Card>
+        </div>
+
+        {!temVIP ? (
           <Card className="p-8 rounded-[22px] border border-white/[0.08] text-center flex flex-col items-center gap-4" style={glass}>
             <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
               <Lock className="h-8 w-8 text-zinc-600" />
             </div>
             <div className="space-y-1">
-              <h4 className="text-lg font-bold text-white uppercase italic">Recursos Bloqueados</h4>
-              <p className="text-sm text-zinc-400 max-w-[220px] mx-auto">Sua barbearia está no plano Starter. Evolua para o PRO para liberar:</p>
+              <h4 className="text-lg font-bold text-white uppercase italic">Acesso VIP necessário</h4>
+              <p className="text-sm text-zinc-400 max-w-[260px] mx-auto">Seu plano atual não permite ativar automações e clube de assinatura. Faça upgrade para PRO ou ELITE para liberar esses recursos.</p>
             </div>
             <div className="space-y-3 w-full text-left bg-black/30 p-5 rounded-2xl border border-white/5">
-              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Lembretes WhatsApp <span className="ml-auto text-[8px] bg-white/10 px-2 py-1 rounded-full tracking-widest">EM BREVE</span></p>
-              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Clube de Assinatura <span className="ml-auto text-[8px] bg-white/10 px-2 py-1 rounded-full tracking-widest">EM BREVE</span></p>
-              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Barbeiros Ilimitados</p>
+              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Lembretes automáticos por WhatsApp</p>
+              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Clube de assinatura VIP</p>
+              <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> CRM de clientes VIP</p>
             </div>
-            <Button onClick={() => setModalUpgradeAberto(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg shadow-emerald-600/20 text-sm">Evoluir e Desbloquear</Button>
+            <Button onClick={() => setModalUpgradeAberto(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg shadow-emerald-600/20 text-sm">Evoluir agora</Button>
           </Card>
         ) : (
           <div className="grid gap-4">
-            <Card onClick={() => toast.info("🚀 Funcionalidade em fase final de testes.")} className="p-6 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 cursor-pointer relative group transition-all hover:bg-emerald-500/10">
-              <span className="absolute top-4 right-4 text-[9px] bg-emerald-500/20 text-emerald-500 px-3 py-1 rounded-full font-black uppercase tracking-widest">Em Breve</span>
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 bg-emerald-500/10 rounded-full flex items-center justify-center"><Zap className="h-6 w-6 text-emerald-500" /></div>
+            <Card className="p-6 rounded-3xl border border-white/[0.08] bg-zinc-950/80">
+              <div className="flex items-center justify-between gap-4 mb-4">
                 <div>
-                  <h4 className="font-black text-sm uppercase">Lembretes Automáticos</h4>
-                  <p className="text-xs text-zinc-400 font-medium mt-1">WhatsApp disparado 2h antes de cada agendamento.</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black">Automação</p>
+                  <h4 className="text-xl font-black text-white">Lembretes VIP</h4>
+                  <p className="text-sm text-zinc-400 mt-2">Notifique clientes VIP automaticamente antes do agendamento e reduza faltas.</p>
+                </div>
+                <Switch checked={vipRemindersEnabled} onCheckedChange={(checked) => { setVipRemindersEnabled(!!checked); toast.success(`Lembretes VIP ${checked ? 'ativados' : 'desativados'}`); }} />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                  <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Frequência</p>
+                  <p className="text-sm text-zinc-300">2 horas antes do horário agendado, com mensagem personalizada por WhatsApp.</p>
+                </div>
+                <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                  <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Status</p>
+                  <p className="text-sm text-zinc-300">{vipRemindersEnabled ? 'Ativo para todos os clientes VIP' : 'Desativado'}</p>
                 </div>
               </div>
             </Card>
 
-            <Card onClick={() => toast.info("🚀 Em fase de homologação.")} className="p-6 rounded-3xl border border-yellow-500/20 bg-yellow-500/5 cursor-pointer relative group transition-all hover:bg-yellow-500/10">
-              <span className="absolute top-4 right-4 text-[9px] bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full font-black uppercase tracking-widest">Em Breve</span>
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 bg-yellow-500/10 rounded-full flex items-center justify-center"><Crown className="h-6 w-6 text-yellow-500" /></div>
+            <Card className="p-6 rounded-3xl border border-white/[0.08] bg-zinc-950/80">
+              <div className="flex items-center justify-between gap-4 mb-4">
                 <div>
-                  <h4 className="font-black text-sm uppercase">Clube de Assinatura</h4>
-                  <p className="text-xs text-zinc-400 font-medium mt-1">Crie planos mensais recorrentes para seus clientes VIP.</p>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black">Clube</p>
+                  <h4 className="text-xl font-black text-white">Clube de Assinatura</h4>
+                  <p className="text-sm text-zinc-400 mt-2">Crie um programa de fidelidade com receita recorrente para clientes VIP.</p>
+                </div>
+                <Switch checked={vipClubEnabled} onCheckedChange={(checked) => { setVipClubEnabled(!!checked); toast.success(`Clube de Assinatura ${checked ? 'ativado' : 'desativado'}`); }} />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                  <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Plano</p>
+                  <p className="text-sm text-zinc-300">{planoAtual === 'elite' ? 'VIP completo com limites ilimitados' : 'PRO com até 50 membros no clube'}</p>
+                </div>
+                <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
+                  <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Valor</p>
+                  <p className="text-sm text-zinc-300">{planoAtual === 'elite' ? 'Controle total de clientes VIP' : 'Crie até 50 assinaturas recorrentes'}</p>
                 </div>
               </div>
             </Card>
