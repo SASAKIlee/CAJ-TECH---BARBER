@@ -45,7 +45,6 @@ function gerarHorarios(abertura = "09:00", fechamento = "18:00", inicioAlmoco = 
   return horarios;
 }
 
-// Máscara para WhatsApp (apenas números)
 const aplicarMascaraZap = (v: string) => {
   const digits = v.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits;
@@ -54,7 +53,6 @@ const aplicarMascaraZap = (v: string) => {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
 };
 
-// Validação do nome: apenas letras (com acentos), espaços, apóstrofo e hífen
 const validarNomeRegex = (nome: string) => /^[A-Za-zÀ-ÖØ-öø-ÿ\s'-]*$/.test(nome);
 
 const DIAS_SEMANA_CURTO = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -236,7 +234,6 @@ export default function AgendamentoPublico() {
 
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = e.target.value;
-    // Permite apenas letras, espaços, apóstrofo e hífen
     if (!validarNomeRegex(valor)) return;
     setSelecao((prev) => ({ ...prev, nome: valor }));
     setErroNome(!validarNome(valor));
@@ -258,36 +255,101 @@ export default function AgendamentoPublico() {
     if (servicosSelecionados.length === 0) return toast.error("Selecione pelo menos um serviço.");
 
     setIsSubmitting(true);
-    const toastId = toast.loading("Confirmando reserva...");
-    localStorage.setItem("cliente_nome", selecao.nome.trim());
-    localStorage.setItem("cliente_whatsapp", selecao.whatsapp);
+    const toastId = toast.loading("Verificando disponibilidade...");
 
-    // 🚀 GERA CÓDIGO ÚNICO DO TICKET
-    const codigo = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    setTicketCodigo(codigo);
+    try {
+      // Verificação reativa de disponibilidade
+      const { data: conflitantes, error: erroConsulta } = await supabase
+        .from("agendamentos")
+        .select("horario, servico_id")
+        .eq("barbeiro_id", selecao.barbeiro.id)
+        .eq("data", selecao.data)
+        .neq("status", "Cancelado");
 
-    const agendamentosParaInserir = servicosSelecionados.map((servico) => ({
-      nome_cliente: selecao.nome.trim(),
-      telefone_cliente: selecao.whatsapp.replace(/\D/g, ""),
-      servico_id: servico.id,
-      barbeiro_id: selecao.barbeiro.id,
-      data: selecao.data,
-      horario: selecao.horario,
-      barbearia_slug: slug,
-      status: "Pendente",
-      ticket_codigo: codigo,   // 🚀 NOVO CAMPO
-    }));
+      if (erroConsulta) {
+        toast.dismiss(toastId);
+        setIsSubmitting(false);
+        console.error("Erro ao verificar horários:", erroConsulta);
+        return toast.error("Erro ao verificar disponibilidade. Tente novamente.");
+      }
 
-    const { error } = await supabase.from("agendamentos").insert(agendamentosParaInserir);
+      const slotsOcupadosAtuais: string[] = [];
+      conflitantes?.forEach((ag) => {
+        const serv = servicos.find((s) => s.id === ag.servico_id);
+        const qtdeBlocos = Math.ceil((serv?.duracao_minutos || 30) / 30);
+        let [h, m] = ag.horario.split(":").map(Number);
+        for (let i = 0; i < qtdeBlocos; i++) {
+          slotsOcupadosAtuais.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+          m += 30;
+          if (m >= 60) { m -= 60; h += 1; }
+        }
+      });
 
-    toast.dismiss(toastId);
-    setIsSubmitting(false);
-    if (error) {
-      console.error("Erro ao inserir agendamento:", error);
-      return toast.error("Este horário acabou de ser ocupado ou ocorreu um erro.");
+      const [horaInicio, minInicio] = selecao.horario.split(":").map(Number);
+      const duracaoTotalMinutos = servicosSelecionados.reduce((acc, s) => acc + (s.duracao_minutos || 30), 0);
+      const blocosNecessarios = Math.ceil(duracaoTotalMinutos / 30);
+
+      let conflito = false;
+      for (let i = 0; i < blocosNecessarios; i++) {
+        let h = horaInicio;
+        let m = minInicio + i * 30;
+        if (m >= 60) { h += Math.floor(m / 60); m %= 60; }
+        const slot = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+        if (slotsOcupadosAtuais.includes(slot)) {
+          conflito = true;
+          break;
+        }
+      }
+
+      if (conflito) {
+        toast.dismiss(toastId);
+        setIsSubmitting(false);
+        return toast.error("Este horário foi ocupado enquanto você preenchia os dados. Por favor, escolha outro.");
+      }
+
+      toast.loading("Confirmando reserva...", { id: toastId });
+
+      localStorage.setItem("cliente_nome", selecao.nome.trim());
+      localStorage.setItem("cliente_whatsapp", selecao.whatsapp);
+
+      const codigo = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      setTicketCodigo(codigo);
+
+      const agendamentosParaInserir = servicosSelecionados.map((servico) => ({
+        nome_cliente: selecao.nome.trim(),
+        telefone_cliente: selecao.whatsapp.replace(/\D/g, ""),
+        servico_id: servico.id,
+        barbeiro_id: selecao.barbeiro.id,
+        data: selecao.data,
+        horario: selecao.horario,
+        barbearia_slug: slug,
+        status: "Pendente",
+        ticket_codigo: codigo,
+      }));
+
+      const { error: erroInsercao } = await supabase.from("agendamentos").insert(agendamentosParaInserir);
+
+      toast.dismiss(toastId);
+      setIsSubmitting(false);
+
+      if (erroInsercao) {
+        console.error("Erro detalhado do Supabase:", erroInsercao);
+        if (erroInsercao.code === "23505") {
+          return toast.error("Já existe um agendamento com este código de ticket. Tente novamente.");
+        }
+        if (erroInsercao.message?.includes("violates row-level security")) {
+          return toast.error("Erro de permissão no servidor. Contate o suporte.");
+        }
+        return toast.error("Não foi possível confirmar o agendamento. Tente novamente.");
+      }
+
+      setEtapa(5);
+    } catch (err) {
+      toast.dismiss(toastId);
+      setIsSubmitting(false);
+      console.error("Erro inesperado:", err);
+      toast.error("Ocorreu um erro inesperado. Por favor, tente novamente.");
     }
-
-    setEtapa(5);
   };
 
   const handleCancelarAgendamento = async () => {
@@ -388,7 +450,6 @@ export default function AgendamentoPublico() {
                                 }}
                               >
                                 <div className="flex items-center gap-4">
-                                  {/* Imagem condicional: só exibe se existir URL */}
                                   {s.url_imagem && (
                                     <img src={s.url_imagem} className="w-14 h-14 rounded-2xl object-cover shrink-0" alt="" />
                                   )}
@@ -429,7 +490,6 @@ export default function AgendamentoPublico() {
                           <button key={b.id} onClick={() => { setSelecao({ ...selecao, barbeiro: b }); setEtapa(3); }}
                             className="flex items-center gap-4 rounded-[24px] border p-4 transition-all active:scale-[0.98]"
                             style={{ backgroundColor: hexToRgba(bg, 0.4), borderColor: hexToRgba(textHighlight, 0.05) }}>
-                            {/* Foto do barbeiro condicional */}
                             {b.url_foto ? (
                               <img src={b.url_foto} className="h-14 w-14 rounded-2xl object-cover shrink-0" alt={b.nome} />
                             ) : (
