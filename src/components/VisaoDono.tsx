@@ -4,7 +4,7 @@ import {
   Copy, FileText, Settings2, Clock, Save, 
   BarChart3, CalendarX2, ImagePlus, Loader2, Lock, 
   Zap, Crown, CheckCircle2, X, Timer, QrCode, CheckCircle, UserCircle2,
-  PieChart as PieChartIcon, TrendingUp, Award, Activity
+  PieChart as PieChartIcon, TrendingUp, Award, Activity, Filter
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -71,12 +71,23 @@ function StatCard({ label, value, brand, highlight, delay = 0 }: any) {
 }
 
 export function VisaoDono({
-  faturamentoHoje = 0, comissoesAPagarHoje = 0, lucroRealHoje = 0, faturamentoMensal = 0,
-  comissaoPorBarbeiroHoje = [], barbeiros = [], servicos = [],
-  onAddBarbeiro, onRemoveBarbeiro, onAddServico, onRemoveServico, onToggleBarbeiroStatus, corPrimaria = "#D4AF37",
+  faturamentoHoje: faturamentoHojeProp = 0,
+  comissoesAPagarHoje: comissoesAPagarHojeProp = 0,
+  lucroRealHoje: lucroRealHojeProp = 0,
+  faturamentoMensal: faturamentoMensalProp = 0,
+  comissaoPorBarbeiroHoje = [],
+  barbeiros = [],
+  servicos = [],
+  onAddBarbeiro,
+  onRemoveBarbeiro,
+  onAddServico,
+  onRemoveServico,
+  onToggleBarbeiroStatus,
+  corPrimaria = "#D4AF37",
 }: any) {
   
   const [meuSlug, setMeuSlug] = useState<string>("");
+  const [barbeiroFiltroId, setBarbeiroFiltroId] = useState<string>(""); // vazio = todos
 
   const [nBarbeiro, setNBarbeiro] = useState({ nome: "", comissao: "50", email: "", senha: "" });
   const [imagemBarbeiro, setImagemBarbeiro] = useState<File | null>(null);
@@ -90,7 +101,6 @@ export function VisaoDono({
   const [imagemFundo, setImagemFundo] = useState<File | null>(null);
   const [isUploadingBranding, setIsUploadingBranding] = useState(false);
 
-  // Preview URLs em tempo real
   const previewLogo = imagemLogo ? URL.createObjectURL(imagemLogo) : null;
   const previewFundo = imagemFundo ? URL.createObjectURL(imagemFundo) : null;
 
@@ -143,7 +153,6 @@ export function VisaoDono({
         setIsLojaAtiva(data.ativo !== false); 
         setPlanoAtual(data.plano || "starter");
         
-        // 🚀 CORREÇÃO DO LOAD: Mapeando com os nomes reais do banco de dados (pausa_inicio, dias_abertos, etc)
         setHorariosLoja({
           abertura: data.horario_abertura || "09:00", 
           fechamento: data.horario_fechamento || "18:00",
@@ -299,7 +308,6 @@ export function VisaoDono({
     setIsUploadingServico(false);
   };
 
-  // 🚀 CORREÇÃO DO SAVE: Enviando para o banco de dados exatamente os nomes corretos
   const handleSaveHorarios = async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return toast.error("Sessão expirada.");
@@ -309,9 +317,9 @@ export function VisaoDono({
       const { error } = await supabase.from('barbearias').update({
         horario_abertura: horariosLoja.abertura, 
         horario_fechamento: horariosLoja.fechamento, 
-        dias_abertos: horariosLoja.dias_trabalho,    // Enviando como dias_abertos
-        pausa_inicio: horariosLoja.inicio_almoco,    // Enviando como pausa_inicio
-        pausa_fim: horariosLoja.fim_almoco,          // Enviando como pausa_fim
+        dias_abertos: horariosLoja.dias_trabalho,
+        pausa_inicio: horariosLoja.inicio_almoco,
+        pausa_fim: horariosLoja.fim_almoco,
         datas_fechadas: horariosLoja.datas_fechadas
       }).eq('dono_id', authData.user.id);
       
@@ -384,6 +392,40 @@ export function VisaoDono({
     return `${dia}/${mes}/${ano}`;
   };
 
+  // ==========================================
+  // FILTRO DE BARBEIRO - DADOS FILTRADOS
+  // ==========================================
+  const barbeiroSelecionado = barbeiros.find((b: any) => b.id === barbeiroFiltroId);
+
+  const faturamentoHoje = barbeiroFiltroId
+    ? (comissaoPorBarbeiroHoje.find((item: any) => item.barbeiro.id === barbeiroFiltroId)?.total || 0) / (barbeiroSelecionado?.comissao_pct / 100) || 0
+    : faturamentoHojeProp;
+
+  const comissoesAPagarHoje = barbeiroFiltroId
+    ? comissaoPorBarbeiroHoje.find((item: any) => item.barbeiro.id === barbeiroFiltroId)?.total || 0
+    : comissoesAPagarHojeProp;
+
+  const lucroRealHoje = faturamentoHoje - comissoesAPagarHoje;
+
+  // Para faturamento mensal filtrado (opcional, mas deixamos genérico)
+  const faturamentoMensal = barbeiroFiltroId
+    ? faturamentoMensalProp // Pode ser ajustado depois com lógica similar
+    : faturamentoMensalProp;
+
+  const comissaoPorBarbeiroHojeFiltrada = barbeiroFiltroId
+    ? comissaoPorBarbeiroHoje.filter((item: any) => item.barbeiro.id === barbeiroFiltroId)
+    : comissaoPorBarbeiroHoje;
+
+  const dataEquipe = comissaoPorBarbeiroHojeFiltrada.map((item: any) => ({ 
+    name: item.barbeiro?.nome?.split(' ')[0] || "...", 
+    Total: Number(item.total) || 0 
+  })).sort((a: any, b: any) => b.Total - a.Total);
+
+  const hasDataEquipe = dataEquipe.some((d: any) => d.Total > 0);
+  const topBarbeiro = hasDataEquipe ? dataEquipe[0] : null;
+  const barbeirosAtivosHoje = dataEquipe.filter((d: any) => d.Total > 0).length;
+  const mediaPorBarbeiro = barbeirosAtivosHoje > 0 ? formatarMoedaBR(faturamentoHoje / barbeirosAtivosHoje) : "0,00";
+
   if (isLojaAtiva === false) return renderBloqueioManual();
   if (fasePagamento === 4) return renderBloqueioInadimplencia();
 
@@ -435,10 +477,6 @@ export function VisaoDono({
     </div>
   );
 
-  /** ==========================================
-   * RENDERIZAÇÃO DAS ABAS
-   * ========================================== */
-
   function renderBannersAlerta() {
     if (planoAtual === "starter" && fasePagamento === 1) {
       return (
@@ -468,8 +506,6 @@ export function VisaoDono({
 
   function renderTabResumo() {
     const slug = meuSlug || "seu-slug";
-    
-    // 🚀 AGORA ELE PEGA O LINK CERTO DO AMBIENTE QUE VOCÊ ESTÁ TESTANDO!
     const linkCompleto = `https://${window.location.host}/agendar/${slug}`;
     const linkDisplay = `${window.location.host}/agendar/${slug}`;
 
@@ -499,30 +535,32 @@ export function VisaoDono({
   }
 
   function renderTabDashboard() {
-    const dataEquipe = comissaoPorBarbeiroHoje.map((item: any) => ({ 
-      name: item.barbeiro?.nome?.split(' ')[0] || "...", 
-      Total: Number(item.total) || 0 
-    })).sort((a: any, b: any) => b.Total - a.Total);
-    const hasDataEquipe = dataEquipe.some((d: any) => d.Total > 0);
-
-    const faturamento = Number(faturamentoHoje) || 0;
-    const lucro = Number(lucroRealHoje) || 0;
-    const comissao = Number(comissoesAPagarHoje) || 0;
-    
-    const margem = faturamento > 0 ? Math.round((lucro / faturamento) * 100) : 0;
-    const topBarbeiro = hasDataEquipe ? dataEquipe[0] : null;
-    const barbeirosAtivosHoje = dataEquipe.filter((d: any) => d.Total > 0).length;
-    const mediaPorBarbeiro = barbeirosAtivosHoje > 0 ? formatarMoedaBR(faturamento / barbeirosAtivosHoje) : "0,00";
+    const margem = faturamentoHoje > 0 ? Math.round((lucroRealHoje / faturamentoHoje) * 100) : 0;
 
     const dataFinanceiro = [
-      { name: 'Lucro Líquido', value: lucro },
-      { name: 'Comissões Pagas', value: comissao }
+      { name: 'Lucro Líquido', value: lucroRealHoje },
+      { name: 'Comissões Pagas', value: comissoesAPagarHoje }
     ];
-    const hasDataFinanceiro = lucro > 0 || comissao > 0;
+    const hasDataFinanceiro = lucroRealHoje > 0 || comissoesAPagarHoje > 0;
     const COLORS = [brand, hexToRgba(brand, 0.25)];
 
     return (
       <div className="flex flex-col gap-6">
+        {/* FILTRO DE BARBEIRO */}
+        <div className="flex items-center gap-3">
+          <Filter className="h-4 w-4 text-white/50" />
+          <select
+            value={barbeiroFiltroId}
+            onChange={(e) => setBarbeiroFiltroId(e.target.value)}
+            className="rounded-full border border-white/[0.12] bg-black/35 px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-white/30 color-scheme-dark text-white backdrop-blur-sm"
+          >
+            <option value="">Todos os barbeiros</option>
+            {barbeiros.map((b: any) => (
+              <option key={b.id} value={b.id}>{b.nome}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <Card className="p-4 rounded-[20px] border border-white/[0.08]" style={glass}>
             <div className="flex items-center gap-1.5 mb-2 opacity-60">
@@ -656,6 +694,7 @@ export function VisaoDono({
   }
 
   function renderTabConfig() {
+    // ... (inalterado, mantido igual ao original)
     return (
       <section className="space-y-10 animate-in fade-in duration-500 pb-10">
         
@@ -848,7 +887,7 @@ export function VisaoDono({
           </div>
         </div>
 
-        {/* 🚀 NOVO BLOCO 4: IDENTIDADE VISUAL */}
+        {/* BLOCO 4: IDENTIDADE VISUAL */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <ImagePlus className="h-5 w-5" style={{ color: brand }} />
@@ -859,7 +898,6 @@ export function VisaoDono({
             <div className="space-y-3">
               <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Logo da Barbearia</p>
               
-              {/* Preview Dinâmico da Logo */}
               {previewLogo && (
                 <div className="h-20 w-20 rounded-2xl border border-white/20 overflow-hidden mb-2 shadow-lg">
                   <img src={previewLogo} alt="Preview Logo" className="h-full w-full object-cover" />
@@ -876,7 +914,6 @@ export function VisaoDono({
             <div className="space-y-3">
               <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest">Imagem de Fundo (Capa do App)</p>
               
-              {/* Preview Dinâmico do Fundo */}
               {previewFundo && (
                 <div className="h-32 w-full rounded-2xl border border-white/20 overflow-hidden mb-2 shadow-lg relative">
                   <img src={previewFundo} alt="Preview Fundo" className="h-full w-full object-cover opacity-60" />
@@ -902,7 +939,7 @@ export function VisaoDono({
 
       </section>
     );
-  } // <-- AQUI ESTAVA FALTANDO A CHAVE DE FECHAMENTO
+  }
 
   function renderBloqueioManual() {
     return (
@@ -963,7 +1000,6 @@ export function VisaoDono({
             <button onClick={() => setModalUpgradeAberto(false)} className="bg-white/5 h-12 w-12 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"><X className="text-zinc-500 h-6 w-6" /></button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
-             {/* STARTER */}
              <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between opacity-60">
                 <div>
                   <h3 className="text-zinc-500 font-black uppercase text-xs tracking-widest">Starter</h3>
@@ -975,7 +1011,6 @@ export function VisaoDono({
                 </div>
                 <Button variant="outline" className="border-zinc-800 text-zinc-500 uppercase font-black text-[10px] h-12 rounded-xl" disabled>Seu Plano Atual</Button>
              </Card>
-             {/* PRO */}
              <Card className="p-6 bg-emerald-500/5 border-emerald-500 border-2 rounded-3xl relative md:scale-105 shadow-2xl z-10 flex flex-col justify-between">
                 <div>
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[9px] font-black uppercase px-4 py-1 rounded-full shadow-lg">Mais Vendido</span>
@@ -993,7 +1028,6 @@ export function VisaoDono({
                    <Button onClick={() => handleAbrirCheckout('upgrade', 'pro')} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg">Evoluir e Pagar</Button>
                 )}
              </Card>
-             {/* ELITE */}
              <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between">
                 <div>
                   <h3 className="text-yellow-500 font-black uppercase text-xs tracking-widest flex items-center gap-2"><Crown className="h-4 w-4" /> Elite</h3>

@@ -226,11 +226,16 @@ export default function Index() {
   }, [barbeiros, agendamentos, dataFiltro]);
 
   const handleNovoAgendamento = useCallback(
-    (ag: any) => {
-      return mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug: slug! });
-    },
-    [mutacoesAgendamento, slug]
-  );
+  async (ag: Partial<Agendamento>): Promise<{ error?: any }> => {
+    try {
+      await mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag, slug: slug! });
+      return {};
+    } catch (error: any) {
+      return { error };
+    }
+  },
+  [mutacoesAgendamento, slug]
+);
 
   const handleStatusChange = useCallback(
     (id: string, status: string) => {
