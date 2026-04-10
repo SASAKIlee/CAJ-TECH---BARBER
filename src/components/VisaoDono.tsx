@@ -30,7 +30,6 @@ const DIAS_SEMANA = [
 type DonoSubTab = "resumo" | "dashboard" | "automacoes" | "config";
 type PlanoType = "starter" | "pro" | "elite";
 
-// 🚀 MELHORIA: Formatação de Moeda Padrão Brasil (Com ponto de milhar)
 const formatarMoedaBR = (valor: number) => {
   return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
 };
@@ -143,10 +142,14 @@ export function VisaoDono({
         setMeuSlug(data.slug);
         setIsLojaAtiva(data.ativo !== false); 
         setPlanoAtual(data.plano || "starter");
+        
+        // 🚀 CORREÇÃO DO LOAD: Mapeando com os nomes reais do banco de dados (pausa_inicio, dias_abertos, etc)
         setHorariosLoja({
-          abertura: data.horario_abertura || "09:00", fechamento: data.horario_fechamento || "18:00",
-          inicio_almoco: data.inicio_almoco || "12:00", fim_almoco: data.fim_almoco || "13:00",
-          dias_trabalho: Array.isArray(data.dias_trabalho) ? data.dias_trabalho : [1, 2, 3, 4, 5, 6],
+          abertura: data.horario_abertura || "09:00", 
+          fechamento: data.horario_fechamento || "18:00",
+          inicio_almoco: data.pausa_inicio || "12:00", 
+          fim_almoco: data.pausa_fim || "13:00",
+          dias_trabalho: Array.isArray(data.dias_abertos) ? data.dias_abertos : [1, 2, 3, 4, 5, 6],
           datas_fechadas: Array.isArray(data.datas_fechadas) ? data.datas_fechadas : []
         });
 
@@ -296,6 +299,7 @@ export function VisaoDono({
     setIsUploadingServico(false);
   };
 
+  // 🚀 CORREÇÃO DO SAVE: Enviando para o banco de dados exatamente os nomes corretos
   const handleSaveHorarios = async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return toast.error("Sessão expirada.");
@@ -305,9 +309,9 @@ export function VisaoDono({
       const { error } = await supabase.from('barbearias').update({
         horario_abertura: horariosLoja.abertura, 
         horario_fechamento: horariosLoja.fechamento, 
-        dias_trabalho: horariosLoja.dias_trabalho, 
-        inicio_almoco: horariosLoja.inicio_almoco, 
-        fim_almoco: horariosLoja.fim_almoco, 
+        dias_abertos: horariosLoja.dias_trabalho,    // Enviando como dias_abertos
+        pausa_inicio: horariosLoja.inicio_almoco,    // Enviando como pausa_inicio
+        pausa_fim: horariosLoja.fim_almoco,          // Enviando como pausa_fim
         datas_fechadas: horariosLoja.datas_fechadas
       }).eq('dono_id', authData.user.id);
       
@@ -352,7 +356,6 @@ export function VisaoDono({
     }
   };
 
-  // 🚀 MELHORIA: Trava anti-bug na seleção de dias
   const toggleDiaSemana = (idDia: number) => {
     setHorariosLoja(prev => {
       const isSelected = prev.dias_trabalho.includes(idDia);
