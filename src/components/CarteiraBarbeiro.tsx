@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check, X, Trophy, Crown } from "lucide-react";
+import { useState } from "react";
+import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check, X, Trophy, Crown, Medal } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useCountUp } from "@/hooks/useCountUp";
 
 interface Props {
   comissaoTotalMes: number;
@@ -13,41 +14,21 @@ interface Props {
   cortesHoje?: number;
   metaDiaria?: number;
   clientesVIP?: number;
+  gorjetaHoje?: number;
+  rankingHoje?: number;
+  totalBarbeiros?: number;
   onUpdateMeta?: (novaMeta: number) => void;
-}
-
-// 🚀 Hook de animação para os números (Count-up)
-function useCountUp(target: number, duration = 1000) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    let start = 0;
-    const end = target;
-    if (start === end) return;
-
-    let totalMiliseconds = duration;
-    let incrementTime = (totalMiliseconds / end) * 2;
-    let timer = setInterval(() => {
-      start += (end / 50); // Incremento suave
-      if (start >= end) {
-        setDisplay(end);
-        clearInterval(timer);
-      } else {
-        setDisplay(start);
-      }
-    }, 20);
-
-    return () => clearInterval(timer);
-  }, [target]);
-  return display;
 }
 
 const formatarMoedaBR = (valor: number) => {
   return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
 };
 
-export function CarteiraBarbeiro({ 
-  comissaoTotalMes, totalCortesMes, nomeBarbeiro, 
-  comissaoHoje = 0, cortesHoje = 0, metaDiaria = 150, clientesVIP = 0, onUpdateMeta 
+export function CarteiraBarbeiro({
+  comissaoTotalMes, totalCortesMes, nomeBarbeiro,
+  comissaoHoje = 0, cortesHoje = 0, metaDiaria = 150, clientesVIP = 0,
+  gorjetaHoje = 0, rankingHoje, totalBarbeiros,
+  onUpdateMeta
 }: Props) {
   const [editandoMeta, setEditandoMeta] = useState(false);
   const [novaMetaValor, setNovaMetaValor] = useState(metaDiaria.toString());
@@ -58,6 +39,7 @@ export function CarteiraBarbeiro({
   // Valores animados
   const comissaoAnimada = useCountUp(comissaoHoje);
   const totalMesAnimado = useCountUp(comissaoTotalMes);
+  const gorjetaAnimada = useCountUp(gorjetaHoje);
 
   const handleSalvarMeta = () => {
     const valorNum = Number(novaMetaValor);
@@ -148,7 +130,7 @@ export function CarteiraBarbeiro({
             <Wallet className="h-5 w-5 text-emerald-500" />
           </div>
           <div>
-            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Ganhos Hoje</p>
+            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Comissão Hoje</p>
             <p className="text-2xl font-black text-white italic tabular-nums">
               R$ <span className="text-emerald-400">{formatarMoedaBR(comissaoAnimada)}</span>
             </p>
@@ -164,6 +146,46 @@ export function CarteiraBarbeiro({
             <p className="text-3xl font-black text-white italic tabular-nums">{cortesHoje}</p>
           </div>
         </Card>
+
+        <Card className="p-5 flex flex-col gap-3 bg-gradient-to-br from-emerald-900/40 to-emerald-900/20 border border-emerald-600/30 rounded-[24px] backdrop-blur-md relative overflow-hidden group col-span-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 group-hover:scale-110 transition-transform">
+                <Wallet className="h-5 w-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-[10px] text-emerald-600/80 uppercase font-black tracking-widest">Gorjetas Hoje</p>
+                <p className="text-xl font-black text-emerald-300 italic tabular-nums">R$ {formatarMoedaBR(gorjetaAnimada)}</p>
+              </div>
+            </div>
+            <div className="text-right text-[9px] text-emerald-600/60">
+              <p className="font-black uppercase">Extra</p>
+              <p className="text-emerald-400 font-bold text-xs mt-0.5">💰 Gorjetas</p>
+            </div>
+          </div>
+        </Card>
+
+        {rankingHoje && totalBarbeiros && (
+          <Card className="p-5 flex flex-col gap-3 bg-gradient-to-br from-amber-900/40 to-yellow-900/20 border border-yellow-600/30 rounded-[24px] backdrop-blur-md relative overflow-hidden group col-span-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-yellow-500/20 flex items-center justify-center border border-yellow-500/30 group-hover:scale-110 transition-transform">
+                  <Medal className="h-5 w-5 text-yellow-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-yellow-600/80 uppercase font-black tracking-widest">Ranking Hoje</p>
+                  <p className="text-xl font-black text-yellow-300 italic">
+                    {rankingHoje}º lugar
+                  </p>
+                </div>
+              </div>
+              <div className="text-right text-[9px] text-yellow-600/60">
+                <p className="font-black uppercase">Entre</p>
+                <p className="text-yellow-400 font-bold text-xs mt-0.5">{totalBarbeiros} barbeiros</p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {clientesVIP > 0 && (
           <Card className="p-5 flex flex-col gap-3 bg-gradient-to-br from-amber-900/40 to-yellow-900/20 border border-yellow-600/30 rounded-[24px] backdrop-blur-md relative overflow-hidden group col-span-2">

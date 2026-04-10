@@ -3,11 +3,13 @@ import { Plus, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { agendamentoSchema } from "@/lib/schemas";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import DOMPurify from "dompurify";
 
 const MotionButton = motion.create(Button);
 
@@ -39,11 +41,11 @@ export function NovoAgendamentoModal({
   ctaFg 
 }: any) {
   const [novo, setNovo] = useState({
-    nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal(), horario: "",
+    nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal(), horario: "", observacao: "",
   });
 
   useEffect(() => {
-    if (open) setNovo({ nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal(), horario: "" });
+    if (open) setNovo({ nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal(), horario: "", observacao: "" });
   }, [open, barbeiroSelecionadoId]);
 
   const slotsOcupados = useMemo(() => {
@@ -68,6 +70,7 @@ export function NovoAgendamentoModal({
         nome_cliente: validacao.data.nome, telefone_cliente: validacao.data.telefone,
         servico_id: validacao.data.servicoId, barbeiro_id: validacao.data.barbeiroId,
         data: validacao.data.data, horario: validacao.data.horario,
+        observacao: DOMPurify.sanitize(novo.observacao),
       });
 
       toast.dismiss(toastId);
@@ -167,10 +170,20 @@ export function NovoAgendamentoModal({
             </div>
           </div>
 
-          <MotionButton 
-            className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl" 
-            style={{ backgroundColor: brand, color: ctaFg }} 
-            whileTap={{ scale: 0.95 }} 
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado para o barbeiro (opcional)</label>
+            <Textarea
+              placeholder="Ex: Quero igual da foto..."
+              className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]"
+              value={novo.observacao}
+              onChange={(e) => setNovo({ ...novo, observacao: e.target.value })}
+            />
+          </div>
+
+          <MotionButton
+            className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl"
+            style={{ backgroundColor: brand, color: ctaFg }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => void handleAgendar()}
             disabled={!novo.nome || !novo.barbeiroId || !novo.servicoId || !novo.data || !novo.horario}
           >

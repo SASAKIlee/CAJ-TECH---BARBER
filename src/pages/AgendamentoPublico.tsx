@@ -13,9 +13,11 @@ import {
   User,
   RefreshCw,
   X,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -128,6 +130,8 @@ export default function AgendamentoPublico() {
   const [erroNome, setErroNome] = useState(false);
   const [erroWhatsapp, setErroWhatsapp] = useState(false);
   const [aceiteLGPD, setAceiteLGPD] = useState(false);
+  const [observacao, setObservacao] = useState("");
+  const [mensagemVIP, setMensagemVIP] = useState<string | null>(null);
 
   const etapaRef = useRef<HTMLDivElement>(null);
   
@@ -260,6 +264,23 @@ export default function AgendamentoPublico() {
     const valor = aplicarMascaraZap(e.target.value);
     setSelecao((prev) => ({ ...prev, whatsapp: valor }));
     setErroWhatsapp(!validarWhatsapp(valor));
+
+    // Verificar se o cliente é VIP (5+ agendamentos finalizados)
+    if (validarWhatsapp(valor)) {
+      const telefoneLimpo = valor.replace(/\D/g, "");
+      supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("telefone_cliente", telefoneLimpo)
+        .eq("status", "Finalizado")
+        .then(({ data, error }) => {
+          if (!error && data && data.length >= 5) {
+            setMensagemVIP(`Bem-vindo de volta, ${selecao.nome || "Cliente"}! Você é cliente VIP. 👑`);
+          } else {
+            setMensagemVIP(null);
+          }
+        });
+    }
   };
 
   const handleFinalizar = async () => {
@@ -345,6 +366,7 @@ export default function AgendamentoPublico() {
         status: "Pendente",
         ticket_codigo: codigo,
         lgpd_consent: aceiteLGPD,
+        observacao: DOMPurify.sanitize(observacao),
       }));
 
       // 🔥 USA A MUTATION COM IDEMPOTÊNCIA
@@ -614,6 +636,15 @@ export default function AgendamentoPublico() {
                       <h2 className="text-2xl font-black uppercase italic tracking-tighter" style={{ color: textHighlight }}>Confirmar Dados</h2>
                       <p className="text-sm opacity-50 font-medium" style={{ color: textHighlight }}>Informe seu contato para receber os detalhes.</p>
                     </div>
+
+                    {/* BANNER VIP */}
+                    {mensagemVIP && (
+                      <div className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/30">
+                        <Crown className="h-6 w-6 text-yellow-500 shrink-0" />
+                        <p className="text-sm font-bold text-yellow-300">{mensagemVIP}</p>
+                      </div>
+                    )}
+
                     <div className="rounded-2xl p-4 border space-y-2" style={{ backgroundColor: hexToRgba(bg, 0.4), borderColor: hexToRgba(textHighlight, 0.05) }}>
                       <p className="text-sm font-bold" style={{ color: textHighlight }}>Resumo do agendamento:</p>
                       <ul className="text-xs space-y-1" style={{ color: textHighlight }}>
@@ -642,11 +673,23 @@ export default function AgendamentoPublico() {
                         />
                         {erroWhatsapp && <p className="text-red-400 text-xs mt-1 ml-2">WhatsApp deve ter pelo menos 10 dígitos.</p>}
                       </div>
+
+                      {/* CAMPO DE RECADO */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado para o barbeiro (opcional)</label>
+                        <Textarea
+                          placeholder="Ex: Quero igual da foto..."
+                          className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]"
+                          value={observacao}
+                          onChange={(e) => setObservacao(e.target.value)}
+                        />
+                      </div>
+
                       <div className="flex items-start gap-3 p-4 rounded-2xl bg-black/20 border border-white/5">
-                        <Checkbox 
-                          id="lgpd" 
-                          checked={aceiteLGPD} 
-                          onCheckedChange={(checked) => setAceiteLGPD(!!checked)} 
+                        <Checkbox
+                          id="lgpd"
+                          checked={aceiteLGPD}
+                          onCheckedChange={(checked) => setAceiteLGPD(!!checked)}
                         />
                         <label htmlFor="lgpd" className="text-[11px] text-zinc-400 leading-relaxed cursor-pointer">
                           Li e concordo com a{" "}

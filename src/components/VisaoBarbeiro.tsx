@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Plus, Check, X, MessageCircle, Users, Clock, ShieldAlert, LogOut, Lock,
-  Loader2, Edit, Calendar, Filter
+  Loader2, Edit, Calendar, Filter, Crown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { agendamentoSchema } from "@/lib/schemas";
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
+import DOMPurify from "dompurify";
 
 const MotionButton = motion.create(Button);
 
@@ -53,6 +55,8 @@ interface Agendamento {
   data: string;
   horario: string;
   status: "Pendente" | "Finalizado" | "Cancelado";
+  gorjeta?: number;
+  observacao?: string;
 }
 
 interface VisaoBarbeiroProps {
@@ -77,6 +81,7 @@ interface NovoAgendamentoForm {
   barbeiroId: string;
   data: string;
   horario: string;
+  observacao: string;
 }
 
 interface ErrosForm {
@@ -162,6 +167,7 @@ export function VisaoBarbeiro({
     barbeiroId: barbeiroSelecionadoId || "",
     data: "",
     horario: "",
+    observacao: "",
   });
   const [erros, setErros] = useState<ErrosForm>({});
   const [dismissing, setDismissing] = useState<{ id: string; status: "Finalizado" | "Cancelado" } | null>(null);
@@ -317,6 +323,7 @@ export function VisaoBarbeiro({
         barbeiro_id: validacao.data.barbeiroId,
         data: validacao.data.data,
         horario: validacao.data.horario,
+        observacao: DOMPurify.sanitize(novo.observacao),
       });
 
       toast.dismiss(toastId);
@@ -329,6 +336,7 @@ export function VisaoBarbeiro({
           barbeiroId: barbeiroSelecionadoId,
           data: getHojeLocal(),
           horario: "",
+          observacao: "",
         });
         toast.success(`Agendamento para ${novo.nome} às ${novo.horario} confirmado! ✂️`);
       } else {
@@ -568,6 +576,16 @@ export function VisaoBarbeiro({
                 {erros.horario && <p className="text-red-400 text-[10px] mt-1 ml-2">Selecione um horário.</p>}
               </div>
 
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado para o barbeiro (opcional)</label>
+                <Textarea
+                  placeholder="Ex: Quero igual da foto..."
+                  className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]"
+                  value={novo.observacao}
+                  onChange={(e) => setNovo({ ...novo, observacao: e.target.value })}
+                />
+              </div>
+
               <MotionButton
                 className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl disabled:opacity-50"
                 style={{ backgroundColor: brand, color: ctaFg }}
@@ -689,7 +707,16 @@ export function VisaoBarbeiro({
                       </div>
 
                       <div>
-                        <p className="font-black text-xl text-white uppercase leading-tight mb-2">{ag.nome_cliente}</p>
+                        <p className="font-black text-xl text-white uppercase leading-tight mb-2 flex items-center gap-1">
+                          {ag.nome_cliente}
+                          {(() => {
+                            const totalAgendamentosCliente = agendamentos.filter(
+                              a => a.telefone_cliente === ag.telefone_cliente && a.status === 'Finalizado'
+                            ).length;
+                            const isVip = totalAgendamentosCliente >= 5;
+                            return isVip && <Crown className="h-5 w-5 text-yellow-500" />;
+                          })()}
+                        </p>
                         <div className="flex flex-wrap gap-x-4 gap-y-2 bg-black/30 p-3 rounded-xl border border-white/[0.05]">
                           <span className="text-[10px] font-black text-zinc-400 uppercase flex items-center gap-1.5">
                             <Users className="h-3.5 w-3.5" style={{ color: brand }} /> {barbeiro?.nome || "Profissional"}
@@ -700,6 +727,13 @@ export function VisaoBarbeiro({
                         </div>
                       </div>
                     </div>
+
+                    {ag.observacao && (
+                      <div className="mt-2 flex items-start gap-2 p-3 bg-yellow-500/10 border-l-2 border-yellow-500 rounded-lg">
+                        <MessageCircle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-yellow-100/80 italic">{ag.observacao}</p>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 pt-4 border-t border-white/[0.08]">
                       <MotionButton
