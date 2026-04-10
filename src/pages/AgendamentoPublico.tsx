@@ -650,7 +650,7 @@ export default function AgendamentoPublico() {
                         />
                         <label htmlFor="lgpd" className="text-[11px] text-zinc-400 leading-relaxed cursor-pointer">
                           Li e concordo com a{" "}
-                          <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: brand }}>
+                          <a href="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: brand }}>
                             Política de Privacidade
                           </a>{" "}
                           e autorizo o tratamento dos meus dados para este agendamento.

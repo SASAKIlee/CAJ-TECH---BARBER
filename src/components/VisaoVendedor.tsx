@@ -815,7 +815,7 @@ function ModalCadastro({ formNovoLead, setFormNovoLead, tabAtiva, setTabAtiva, i
           />
           <label htmlFor="lgpd_lead" className="text-[11px] text-zinc-400 leading-relaxed cursor-pointer">
             O cliente leu e concorda com a{" "}
-            <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline text-emerald-500">
+            <a href="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="underline text-emerald-500">
               Política de Privacidade
             </a>.
           </label>

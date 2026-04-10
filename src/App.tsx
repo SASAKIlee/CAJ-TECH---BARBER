@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Button } from "@/components/ui/button";
+import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
         <Route path="/checkin/:slug/:ticket" element={<Checkin />} />
         <Route path="*" element={<AgendamentoPublico />} />
+        <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
       </Routes>
     );
   }
