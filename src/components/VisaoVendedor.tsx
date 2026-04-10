@@ -102,7 +102,7 @@ export function VisaoVendedor({
 
     } catch (error) {
       console.error("Erro na performance:", error);
-      toast.error("Falha de conexão ao carregar seu funil."); // 🚀 AVISO SEGURO
+      toast.error("Falha de conexão ao carregar seu funil."); 
     } finally {
       setLoadingLeads(false);
     }
@@ -191,7 +191,7 @@ export function VisaoVendedor({
     try {
       const { error } = await supabase.from("leads").update({ status: novoStatus }).eq("id", lead.id);
       if (error) throw error;
-      toast.success("Lead avançou no funil! 🚀", { id: tId });
+      toast.success("Enviado para aprovação do CEO! 🚀", { id: tId });
       carregarDadosPerformance();
     } catch(e) {
       toast.error("Erro ao mover lead.", { id: tId });
@@ -307,7 +307,7 @@ export function VisaoVendedor({
                  <Button onClick={() => { setTabAtiva("visita"); setModalCadastroAberto(true); }} size="icon" variant="ghost" className="h-8 w-8 text-zinc-500 bg-zinc-800 rounded-full flex items-center justify-center"><Plus className="h-4 w-4" /></Button>
               </div>
               <div className="flex-1 overflow-y-auto space-y-3 px-1 hide-scrollbar pb-2">
-                {leadsVisita.map(lead => <LeadCard key={lead.id} lead={lead} onFollowUp={() => { setLeadSelecionado(lead); setModalFollowUpAberto(true); }} onMover={() => handleMudarStatusLead(lead, 'pendente')} nextLabel="Aprovar" />)}
+                {leadsVisita.map(lead => <LeadCard key={lead.id} lead={lead} onFollowUp={() => { setLeadSelecionado(lead); setModalFollowUpAberto(true); }} onMover={() => handleMudarStatusLead(lead, 'pendente')} nextLabel="Pendente p/ CEO" />)}
                 {leadsVisita.length === 0 && <div className="text-center py-10 text-[10px] text-zinc-600 font-bold uppercase border border-dashed border-zinc-800 rounded-2xl mx-2">Vazio</div>}
               </div>
             </div>
@@ -315,10 +315,11 @@ export function VisaoVendedor({
             {/* COLUNA 2: NEGOCIAÇÃO / PENDENTE */}
             <div className="min-w-[85vw] sm:min-w-[340px] bg-blue-900/5 rounded-[28px] p-2 border border-blue-900/20 snap-center flex flex-col max-h-[65vh]">
               <div className="flex justify-between items-center px-4 py-3 mb-2">
-                 <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2"><Clock className="h-4 w-4" /> Negociação ({leadsPendente.length})</h4>
+                 <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2"><Clock className="h-4 w-4" /> Aguardando CEO ({leadsPendente.length})</h4>
               </div>
               <div className="flex-1 overflow-y-auto space-y-3 px-1 hide-scrollbar pb-2">
-                {leadsPendente.map(lead => <LeadCard key={lead.id} lead={lead} onFollowUp={() => { setLeadSelecionado(lead); setModalFollowUpAberto(true); }} onMover={() => handleMudarStatusLead(lead, 'convertido')} nextLabel="Fechar Contrato" />)}
+                {/* 🚀 O VENDEDOR NÃO PODE MAIS MOVER DE PENDENTE PARA CONVERTIDO */}
+                {leadsPendente.map(lead => <LeadCard key={lead.id} lead={lead} onFollowUp={() => { setLeadSelecionado(lead); setModalFollowUpAberto(true); }} />)}
                 {leadsPendente.length === 0 && <div className="text-center py-10 text-[10px] text-blue-900/50 font-bold uppercase border border-dashed border-blue-900/20 rounded-2xl mx-2">Vazio</div>}
               </div>
             </div>
@@ -495,7 +496,6 @@ export function VisaoVendedor({
             </div>
             
             <div className="space-y-4">
-               {/* AQUI O BOTÃO APONTA PARA O ARQUIVO REAL */}
                <a 
                   href="/apresentacao-cajtech.pdf" 
                   target="_blank" 
