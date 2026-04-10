@@ -468,6 +468,11 @@ export function VisaoDono({
 
   function renderTabResumo() {
     const slug = meuSlug || "seu-slug";
+    
+    // 🚀 AGORA ELE PEGA O LINK CERTO DO AMBIENTE QUE VOCÊ ESTÁ TESTANDO!
+    const linkCompleto = `${window.location.origin}/agendar/${slug}`;
+    const linkDisplay = `${window.location.host}/agendar/${slug}`;
+
     return (
       <>
         <section>
@@ -475,9 +480,9 @@ export function VisaoDono({
             <div className="absolute -right-4 -top-4 opacity-[0.07]"><Scissors className="h-24 w-24 rotate-12" style={{ color: brand }} /></div>
             <p className="text-[10px] uppercase font-bold tracking-[0.25em] mb-3" style={{ color: brand }}>Link de Agendamento</p>
             <div className="rounded-xl border border-white/[0.08] bg-black/35 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 backdrop-blur-md">
-              <code className="text-[11px] text-zinc-300 font-mono truncate">cajtech.net.br/agendar/{slug}</code>
+              <code className="text-[11px] text-zinc-300 font-mono truncate">{linkDisplay}</code>
               <Button size="sm" className="h-10 px-6 rounded-xl font-black uppercase text-[10px] w-full sm:w-auto" style={{ backgroundColor: brand, color: ctaFg }}
-                onClick={() => { navigator.clipboard.writeText(`https://cajtech.net.br/agendar/${slug}`); toast.success("Link copiado!"); }}>
+                onClick={() => { navigator.clipboard.writeText(linkCompleto); toast.success("Link copiado!"); }}>
                 <Copy className="h-4 w-4 mr-2" /> Copiar Link
               </Button>
             </div>
