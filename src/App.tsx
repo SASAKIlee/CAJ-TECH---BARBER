@@ -28,7 +28,7 @@ const queryClient = new QueryClient({
 function AppRoutes() {
   const { user, loading } = useAuth();
 
-  // 🚀 LOADING PREMIUM (Enquanto o Firebase/Supabase checa se o cara tá logado)
+  // 🚀 LOADING PREMIUM
   if (loading) {
     return (
       <div className="dark min-h-screen bg-black flex flex-col items-center justify-center space-y-4 font-sans">
@@ -42,29 +42,24 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* 🌐 ROTAS PÚBLICAS (Clientes finais) */}
+      {/* 🌐 ROTAS PÚBLICAS (Sempre acessíveis para clientes e donos) */}
       <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
       <Route path="/checkin/:slug/:ticket" element={<Checkin />} />
 
-      {/* 🔒 CONTROLE DE ACESSO */}
-      {!user ? (
-        <>
-          <Route path="/auth" element={<Auth />} />
-          {/* Se não tá logado e tentou qualquer outra coisa, joga pro Login */}
-          <Route path="*" element={<Navigate to="/auth" replace />} />
-        </>
-      ) : (
-        <>
-          {/* 🚀 Se tá logado, a Index assume o controle baseada no userRole internamente */}
-          <Route path="/" element={<Index />} />
-          
-          {/* Se tentar voltar pro Login já estando logado, joga pro Index */}
-          <Route path="/auth" element={<Navigate to="/" replace />} />
-          
-          {/* 🚀 AGORA SIM A TELA 404 ESTÁ FUNCIONANDO! */}
-          <Route path="*" element={<NotFound />} />
-        </>
-      )}
+      {/* 🔒 PROTEÇÃO DE LOGIN: Se já estiver logado, não entra no /auth */}
+      <Route 
+        path="/auth" 
+        element={!user ? <Auth /> : <Navigate to="/" replace />} 
+      />
+
+      {/* 🔒 PROTEÇÃO DO PAINEL: Se não estiver logado, vai para o /auth */}
+      <Route 
+        path="/" 
+        element={user ? <Index /> : <Navigate to="/auth" replace />} 
+      />
+
+      {/* 🚀 TELA 404 (Sempre por último) */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
@@ -75,7 +70,7 @@ const App = () => (
       <Toaster />
       <Sonner />
 
-      {/* Analytics do Vercel mantidos para rastrear os acessos */}
+      {/* Monitoramento Vercel */}
       <Analytics />
       <SpeedInsights />
 
