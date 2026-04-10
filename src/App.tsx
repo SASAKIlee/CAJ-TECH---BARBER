@@ -42,23 +42,23 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* 🌐 ROTAS PÚBLICAS (Sempre acessíveis para clientes e donos) */}
+      {/* 🌐 ROTAS TOTALMENTE PÚBLICAS (Livres de qualquer redirecionamento) */}
       <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
       <Route path="/checkin/:slug/:ticket" element={<Checkin />} />
 
-      {/* 🔒 PROTEÇÃO DE LOGIN: Se já estiver logado, não entra no /auth */}
+      {/* 🔒 LOGIN (Se tá logado e vai tentar abrir o auth, manda pra home) */}
       <Route 
         path="/auth" 
         element={!user ? <Auth /> : <Navigate to="/" replace />} 
       />
 
-      {/* 🔒 PROTEÇÃO DO PAINEL: Se não estiver logado, vai para o /auth */}
+      {/* 🔒 PAINEL DO USUÁRIO LOGADO (Com o exact /) */}
       <Route 
         path="/" 
         element={user ? <Index /> : <Navigate to="/auth" replace />} 
       />
 
-      {/* 🚀 TELA 404 (Sempre por último) */}
+      {/* 🚀 TELA 404 (Apenas se a rota não existir em nenhum lugar) */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
