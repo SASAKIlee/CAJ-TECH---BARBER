@@ -263,35 +263,30 @@ export function VisaoDono({
     }
   };
 
-  const handleAddBarbeiroComFotoETrava = async () => {
-    if (planoAtual === "starter" && barbeiros.length >= 2) {
-      setModalUpgradeAberto(true);
-      return toast.error("Upgrade necessário: Plano Starter permite 2 profissionais.");
-    }
-    const validacao = barbeiroSchema.safeParse(nBarbeiro);
-    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
-    
-    setIsUploadingBarbeiro(true);
-    let urlFinal = null;
-    if (imagemBarbeiro) {
-      urlFinal = await handleUploadImagem(imagemBarbeiro, 'equipe');
-    }
+  const handleUploadImagem = async (file: File, bucket: string) => {
+    try {
+      // 🚀 Melhora a compressão para evitar erro de payload
+      const compressed = await imageCompression(file, { maxSizeMB: 0.2, maxWidthOrHeight: 800 });
+      
+      // 🚀 Gera um nome limpo (evita caracteres especiais que dão Erro 400)
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      
+      const { error, data } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, compressed, { upsert: true });
 
-    onAddBarbeiro(validacao.data.nome, Number(validacao.data.comissao), validacao.data.email, validacao.data.senha, urlFinal);
-    setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
-    setImagemBarbeiro(null);
-    setIsUploadingBarbeiro(false);
+      if (error) throw error;
+      
+      // Pega a URL pública
+      const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(fileName);
+      return publicUrl;
+    } catch (err) {
+      console.error("Erro no Storage:", err);
+      toast.error("Erro ao subir imagem. Verifique as permissões do bucket.");
+      return null;
+    }
   };
-
-  const handleAddServicoComFoto = async () => {
-    const validacao = servicoSchema.safeParse(nServico);
-    if (!validacao.success) return toast.error(validacao.error.errors[0].message);
-    
-    setIsUploadingServico(true);
-    let urlFinal = null;
-    if (imagemServico) {
-      urlFinal = await handleUploadImagem(imagemServico, 'servicos');
-    }
 
     onAddServico(validacao.data.nome, Number(validacao.data.preco), Number(validacao.data.duracao_minutos), urlFinal);
     setNServico({ nome: "", preco: "", duracao_minutos: "30" });
