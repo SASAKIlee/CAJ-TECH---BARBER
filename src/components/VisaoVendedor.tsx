@@ -37,6 +37,8 @@ export function VisaoVendedor({
   const [tabAtiva, setTabAtiva] = useState<"visita" | "contrato">("visita");
   const [formNovoLead, setFormNovoLead] = useState(FORM_NOVO_LEAD_INICIAL);
   const [isSubmitting, setIsSubmitting] = useState(false); 
+  
+  const [leadSendoEditado, setLeadSendoEditado] = useState<string | null>(null);
 
   const [meusLeads, setMeusLeads] = useState<any[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
@@ -63,11 +65,9 @@ export function VisaoVendedor({
         return;
       }
 
-      // 1. BUSCA TODOS OS LEADS DO VENDEDOR
       const { data: leads, error: leadsError } = await supabase.from("leads").select("*").eq("vendedor_id", idReal);
       if (leadsError) throw leadsError;
 
-      // 2. CRUZA COM BARBEARIAS PARA PEGAR CHURN E UPSELL (Inteligência)
       const nomesConvertidos = leads?.filter(l => l.status === 'convertido').map(l => l.nome_barbearia) || [];
       let barbeariasReais: any[] = [];
       
@@ -78,7 +78,6 @@ export function VisaoVendedor({
 
       let somaComissoes = 0;
       
-      // Mapeia os leads injetando os dados reais do sistema para alertas
       const leadsEnriquecidos = leads?.map(lead => {
         if (lead.status === 'convertido') {
           const barbReal = barbeariasReais.find(b => b.nome === lead.nome_barbearia);
@@ -95,7 +94,6 @@ export function VisaoVendedor({
       setMeusLeads(leadsEnriquecidos);
       setRecorrenciaCalculada(somaComissoes);
 
-      // CÁLCULO DA TAXA DE CONVERSÃO
       const total = leadsEnriquecidos.length;
       const convertidos = leadsEnriquecidos.filter(l => l.status === 'convertido').length;
       setTaxaConversao(total > 0 ? Math.round((convertidos / total) * 100) : 0);
@@ -121,26 +119,48 @@ export function VisaoVendedor({
       const { data: { session } } = await supabase.auth.getSession();
       const idReal = session?.user?.id || vendedorId;
 
-      const payload = {
-        nome_barbearia: formNovoLead.nome,
-        bairro: formNovoLead.bairro,
-        status: tabAtiva === "visita" ? "visita" : "pendente",
-        vendedor_id: idReal,
-        dados_adicionais: {
-          cidade: formNovoLead.bairro,
-          plano_escolhido: formNovoLead.plano,
-          email_dono: formNovoLead.email,
-          senha_temp: formNovoLead.senha,
-          telefone: formNovoLead.telefone.replace(/\D/g, ''), // Salva só números
-          cor_primaria: formNovoLead.cor_primaria,
-          cor_secundaria: formNovoLead.cor_secundaria,
-          cor_destaque: formNovoLead.cor_destaque,
-          historico: [] // Array para as anotações do vendedor
-        }
+      const payloadDadosAdicionais = {
+        cidade: formNovoLead.bairro,
+        plano_escolhido: formNovoLead.plano,
+        email_dono: formNovoLead.email,
+        senha_temp: formNovoLead.senha,
+        telefone: formNovoLead.telefone.replace(/\D/g, ''),
+        cor_primaria: formNovoLead.cor_primaria,
+        cor_secundaria: formNovoLead.cor_secundaria,
+        cor_destaque: formNovoLead.cor_destaque,
       };
 
-      const { error } = await supabase.from("leads").insert([payload]);
-      if (error) throw error;
+      if (leadSendoEditado) {
+        const leadAtual = meusLeads.find(l => l.id === leadSendoEditado);
+        
+        const payloadUpdate = {
+          nome_barbearia: formNovoLead.nome,
+          bairro: formNovoLead.bairro,
+          status: "pendente", 
+          dados_adicionais: {
+            ...leadAtual?.dados_adicionais, 
+            ...payloadDadosAdicionais,
+            motivo_recusa: null // 🚀 LIMPA O ERRO ANTIGO SE ESTIVER CORRIGINDO!
+          }
+        };
+
+        const { error } = await supabase.from("leads").update(payloadUpdate).eq("id", leadSendoEditado);
+        if (error) throw error;
+
+      } else {
+        const payloadInsert = {
+          nome_barbearia: formNovoLead.nome,
+          bairro: formNovoLead.bairro,
+          status: tabAtiva === "visita" ? "visita" : "pendente",
+          vendedor_id: idReal,
+          dados_adicionais: {
+            ...payloadDadosAdicionais,
+            historico: [] 
+          }
+        };
+        const { error } = await supabase.from("leads").insert([payloadInsert]);
+        if (error) throw error;
+      }
 
       toast.success(tabAtiva === "visita" ? "Visita registrada no funil!" : "Contrato enviado ao CEO!");
       
@@ -150,8 +170,7 @@ export function VisaoVendedor({
         window.open(`https://api.whatsapp.com/send?phone=${numeroCEO}&text=${encodeURIComponent(mensagem)}`, "_blank");
       }
 
-      setModalCadastroAberto(false);
-      setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
+      fecharModalCadastro();
       carregarDadosPerformance();
 
     } catch (error) {
@@ -159,6 +178,29 @@ export function VisaoVendedor({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handlePrepararContrato = (lead: any) => {
+    setFormNovoLead({
+      nome: lead.nome_barbearia || "",
+      bairro: lead.bairro || "",
+      telefone: lead.dados_adicionais?.telefone || "",
+      email: lead.dados_adicionais?.email_dono || "", // Já puxa se ele preencheu antes e deu erro
+      senha: lead.dados_adicionais?.senha_temp || "",
+      plano: lead.dados_adicionais?.plano_escolhido || "pro",
+      cor_primaria: lead.dados_adicionais?.cor_primaria || "#D4AF37",
+      cor_secundaria: lead.dados_adicionais?.cor_secundaria || "#18181B",
+      cor_destaque: lead.dados_adicionais?.cor_destaque || "#FFFFFF"
+    });
+    setLeadSendoEditado(lead.id);
+    setTabAtiva("contrato");
+    setModalCadastroAberto(true);
+  };
+
+  const fecharModalCadastro = () => {
+    setModalCadastroAberto(false);
+    setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
+    setLeadSendoEditado(null);
   };
 
   const handleSalvarFollowUp = async () => {
@@ -186,18 +228,6 @@ export function VisaoVendedor({
     }
   };
 
-  const handleMudarStatusLead = async (lead: any, novoStatus: string) => {
-    const tId = toast.loading("Movendo no funil...");
-    try {
-      const { error } = await supabase.from("leads").update({ status: novoStatus }).eq("id", lead.id);
-      if (error) throw error;
-      toast.success("Enviado para aprovação do CEO! 🚀", { id: tId });
-      carregarDadosPerformance();
-    } catch(e) {
-      toast.error("Erro ao mover lead.", { id: tId });
-    }
-  };
-
   const copiarLinkAfiliado = () => {
     const link = `${window.location.origin}/convite/${vendedorId || 'parceiro'}`;
     navigator.clipboard.writeText(link);
@@ -209,7 +239,8 @@ export function VisaoVendedor({
     (lead.bairro && lead.bairro.toLowerCase().includes(busca.toLowerCase()))
   );
 
-  const leadsVisita = leadsFiltrados.filter(l => l.status === 'visita');
+  // 🚀 AGORA O VENDEDOR VÊ OS RECUSADOS NA COLUNA 1
+  const leadsVisita = leadsFiltrados.filter(l => l.status === 'visita' || l.status === 'recusado');
   const leadsPendente = leadsFiltrados.filter(l => l.status === 'pendente');
   const leadsConvertido = leadsFiltrados.filter(l => l.status === 'convertido');
 
@@ -282,7 +313,12 @@ export function VisaoVendedor({
         <Button onClick={() => toast.info("📍 Buscando leads num raio de 5km... (Em breve)")} className="bg-zinc-800 text-white hover:bg-zinc-700 font-black h-14 w-14 rounded-2xl shrink-0 border border-zinc-700 flex items-center justify-center">
           <MapPin className="h-6 w-6" />
         </Button>
-        <Button onClick={() => { setTabAtiva("contrato"); setModalCadastroAberto(true); }} className="bg-emerald-600 hover:bg-emerald-500 text-black font-black h-14 w-14 rounded-2xl shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center">
+        <Button onClick={() => { 
+          setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
+          setLeadSendoEditado(null);
+          setTabAtiva("contrato"); 
+          setModalCadastroAberto(true); 
+        }} className="bg-emerald-600 hover:bg-emerald-500 text-black font-black h-14 w-14 rounded-2xl shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center">
           <Plus className="h-7 w-7 stroke-[3px]" />
         </Button>
       </div>
@@ -300,14 +336,27 @@ export function VisaoVendedor({
         ) : (
           <div className="flex gap-4 overflow-x-auto pb-6 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
             
-            {/* COLUNA 1: VISITAS / PROSPECÇÃO */}
+            {/* COLUNA 1: VISITAS E RECUSADOS */}
             <div className="min-w-[85vw] sm:min-w-[340px] bg-zinc-900/30 rounded-[28px] p-2 border border-zinc-800/50 snap-center flex flex-col max-h-[65vh]">
               <div className="flex justify-between items-center px-4 py-3 mb-2">
                  <h4 className="text-[11px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="h-4 w-4" /> Prospecção ({leadsVisita.length})</h4>
-                 <Button onClick={() => { setTabAtiva("visita"); setModalCadastroAberto(true); }} size="icon" variant="ghost" className="h-8 w-8 text-zinc-500 bg-zinc-800 rounded-full flex items-center justify-center"><Plus className="h-4 w-4" /></Button>
+                 <Button onClick={() => { 
+                   setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
+                   setLeadSendoEditado(null);
+                   setTabAtiva("visita"); 
+                   setModalCadastroAberto(true); 
+                 }} size="icon" variant="ghost" className="h-8 w-8 text-zinc-500 bg-zinc-800 rounded-full flex items-center justify-center"><Plus className="h-4 w-4" /></Button>
               </div>
               <div className="flex-1 overflow-y-auto space-y-3 px-1 hide-scrollbar pb-2">
-                {leadsVisita.map(lead => <LeadCard key={lead.id} lead={lead} onFollowUp={() => { setLeadSelecionado(lead); setModalFollowUpAberto(true); }} onMover={() => handleMudarStatusLead(lead, 'pendente')} nextLabel="Pendente p/ CEO" />)}
+                {leadsVisita.map(lead => (
+                  <LeadCard 
+                    key={lead.id} 
+                    lead={lead} 
+                    onFollowUp={() => { setLeadSelecionado(lead); setModalFollowUpAberto(true); }} 
+                    onMover={() => handlePrepararContrato(lead)} 
+                    nextLabel={lead.status === 'recusado' ? "Corrigir Contrato" : "Fechar Contrato"} 
+                  />
+                ))}
                 {leadsVisita.length === 0 && <div className="text-center py-10 text-[10px] text-zinc-600 font-bold uppercase border border-dashed border-zinc-800 rounded-2xl mx-2">Vazio</div>}
               </div>
             </div>
@@ -318,7 +367,6 @@ export function VisaoVendedor({
                  <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2"><Clock className="h-4 w-4" /> Aguardando CEO ({leadsPendente.length})</h4>
               </div>
               <div className="flex-1 overflow-y-auto space-y-3 px-1 hide-scrollbar pb-2">
-                {/* 🚀 O VENDEDOR NÃO PODE MAIS MOVER DE PENDENTE PARA CONVERTIDO */}
                 {leadsPendente.map(lead => <LeadCard key={lead.id} lead={lead} onFollowUp={() => { setLeadSelecionado(lead); setModalFollowUpAberto(true); }} />)}
                 {leadsPendente.length === 0 && <div className="text-center py-10 text-[10px] text-blue-900/50 font-bold uppercase border border-dashed border-blue-900/20 rounded-2xl mx-2">Vazio</div>}
               </div>
@@ -359,7 +407,7 @@ export function VisaoVendedor({
                 {tabAtiva === 'visita' ? <MapPin className="text-zinc-500" /> : <Crown className="text-emerald-500" />}
                 {tabAtiva === 'visita' ? 'Nova Visita' : 'Fechar Contrato'}
               </h2>
-              <button onClick={() => setModalCadastroAberto(false)} className="text-zinc-400 hover:text-white bg-zinc-800/80 h-10 w-10 flex items-center justify-center rounded-full transition-colors"><X className="h-5 w-5" /></button>
+              <button onClick={fecharModalCadastro} className="text-zinc-400 hover:text-white bg-zinc-800/80 h-10 w-10 flex items-center justify-center rounded-full transition-colors"><X className="h-5 w-5" /></button>
             </div>
 
             <div className="space-y-5">
@@ -370,6 +418,7 @@ export function VisaoVendedor({
                 <Input className="bg-black border-zinc-800 text-white h-14 rounded-xl text-base mt-3" placeholder="WhatsApp (DDD + Número)" type="tel" value={formNovoLead.telefone} onChange={e => setFormNovoLead({ ...formNovoLead, telefone: e.target.value })} />
               </div>
               
+              {/* O Form de e-mail e senha aparece quando é Contrato */}
               {tabAtiva === "contrato" && (
                 <div className="space-y-6 pt-5 border-t border-zinc-800/50">
                   <div className="space-y-2">
@@ -413,7 +462,7 @@ export function VisaoVendedor({
             </div>
 
             <Button onClick={handleRegistrarLead} disabled={isSubmitting} className="w-full bg-emerald-600 text-black font-black h-16 rounded-2xl text-lg uppercase italic shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform sticky bottom-0">
-              {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : tabAtiva === 'visita' ? "Salvar Visita" : "Finalizar Instalação"}
+              {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : tabAtiva === 'visita' ? "Salvar Visita" : "Enviar p/ Aprovação"}
             </Button>
           </div>
         </div>
@@ -545,34 +594,44 @@ function LeadCard({ lead, onFollowUp, onMover, isFinal = false, nextLabel }: { l
   const telefone = lead.dados_adicionais?.telefone;
   const planoAtual = lead.dados_adicionais?.plano_escolhido || 'pro';
   
-  // INTELIGÊNCIA: Verifica se é um lead convertido que está inativo no banco real (CHURN)
+  // 🚀 STATUS VISUAIS
   const isChurn = lead.status === 'convertido' && lead.barbearia_real && lead.barbearia_real.ativo === false;
-  // INTELIGÊNCIA: Verifica se é um lead ativo, mas num plano baixo (UPSELL)
   const isUpsell = lead.status === 'convertido' && !isChurn && planoAtual === 'starter';
+  const isRecusado = lead.status === 'recusado';
+  const motivoRecusa = lead.dados_adicionais?.motivo_recusa;
 
-  // 🚀 CORREÇÃO DO BUG SILENCIOSO: Protege a renderização do link se não houver telefone
   const zapLink = telefone ? `https://wa.me/55${telefone}?text=${encodeURIComponent(`Fala mestre, tudo bem? Aqui é da CAJ TECH...`)}` : null;
 
   return (
     <Card className={cn(
       "p-5 bg-zinc-900/60 border-zinc-800 relative overflow-hidden transition-all group hover:border-zinc-600 flex flex-col gap-4",
       isChurn && "border-red-500/50 bg-red-500/5",
-      isUpsell && "border-yellow-500/30"
+      isUpsell && "border-yellow-500/30",
+      isRecusado && "border-red-500/50 bg-red-900/10"
     )}>
       {isChurn && <div className="absolute top-0 right-0 bg-red-600 text-white text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl flex items-center gap-1.5"><AlertCircle className="h-3 w-3" /> Fatura Vencida</div>}
       {isUpsell && <div className="absolute top-0 right-0 bg-yellow-500 text-black text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl flex items-center gap-1.5"><Zap className="h-3 w-3" /> Vender PRO</div>}
+      {/* 🚀 AVISO DE RECUSA DO CEO */}
+      {isRecusado && <div className="absolute top-0 right-0 bg-red-600 text-white text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl flex items-center gap-1.5"><AlertCircle className="h-3 w-3" /> Recusado pelo CEO</div>}
 
       <div>
-        <h4 className={cn("font-black uppercase italic text-base tracking-tight pr-16", isChurn ? "text-red-400" : "text-white")}>{lead.nome_barbearia}</h4>
+        <h4 className={cn("font-black uppercase italic text-base tracking-tight pr-16", isChurn || isRecusado ? "text-red-400" : "text-white")}>{lead.nome_barbearia}</h4>
         <div className="flex items-center gap-3 mt-2 opacity-70 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
           <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {lead.bairro || '---'}</span>
           <span className="flex items-center gap-1"><Crown className={cn("h-3.5 w-3.5", planoAtual === 'starter' ? 'text-zinc-400' : 'text-emerald-500')} /> {planoAtual}</span>
         </div>
+
+        {/* 🚀 MOSTRA O MOTIVO DA RECUSA DENTRO DO CARD */}
+        {isRecusado && motivoRecusa && (
+          <div className="mt-3 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
+            <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mb-1">Motivo da Recusa:</p>
+            <p className="text-xs text-red-200 italic font-medium">"{motivoRecusa}"</p>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-between items-center pt-3 border-t border-zinc-800/50 mt-1">
         <div className="flex gap-2">
-          {/* 🚀 O BOTÃO SÓ APARECE SE TIVER NÚMERO */}
           {zapLink && (
             <Button onClick={() => window.open(zapLink, '_blank')} size="icon" variant="ghost" className="h-11 w-11 text-green-500 bg-green-500/10 hover:bg-green-500/20 rounded-xl" title="Chamar no WhatsApp">
               <MessageCircle className="h-5 w-5" />
@@ -584,7 +643,7 @@ function LeadCard({ lead, onFollowUp, onMover, isFinal = false, nextLabel }: { l
         </div>
 
         {!isFinal && onMover && (
-          <Button onClick={onMover} className="h-11 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl px-4 flex items-center gap-2">
+          <Button onClick={onMover} className={cn("h-11 hover:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl px-4 flex items-center gap-2", isRecusado ? "bg-red-600 hover:bg-red-500 shadow-lg shadow-red-500/20" : "bg-zinc-800")}>
             {nextLabel || "Avançar"} <ArrowRight className="h-4 w-4" />
           </Button>
         )}
