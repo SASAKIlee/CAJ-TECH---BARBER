@@ -470,7 +470,7 @@ export function VisaoDono({
     const slug = meuSlug || "seu-slug";
     
     // 🚀 AGORA ELE PEGA O LINK CERTO DO AMBIENTE QUE VOCÊ ESTÁ TESTANDO!
-    const linkCompleto = `${window.location.origin}/agendar/${slug}`;
+    const linkCompleto = `https://${window.location.host}/agendar/${slug}`;
     const linkDisplay = `${window.location.host}/agendar/${slug}`;
 
     return (
