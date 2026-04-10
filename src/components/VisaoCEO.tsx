@@ -703,7 +703,22 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                             {loja.ativo === false ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
                             {loja.ativo === false ? "Religar Sistema" : "Bloquear Acesso"}
                           </Button>
-                          <Button variant="outline" onClick={() => toast.info("Link temporário de administrador copiado!")} className="flex-1 h-12 text-[10px] font-black uppercase text-zinc-400 border-zinc-700 bg-black rounded-xl">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              // Salva o slug da barbearia para impersonação
+                              localStorage.setItem("ceo_impersonate_slug", loja.slug);
+                              localStorage.setItem("ceo_impersonate_name", loja.nome);
+
+                              toast.success(`Abrindo painel de "${loja.nome}"...`);
+
+                              // Redireciona para o dashboard como se fosse o dono
+                              setTimeout(() => {
+                                window.location.href = "/";
+                              }, 800);
+                            }}
+                            className="flex-1 h-12 text-[10px] font-black uppercase text-zinc-400 border-zinc-700 bg-black rounded-xl hover:bg-zinc-800"
+                          >
                             <Eye className="h-4 w-4 mr-2" /> Acessar Painel
                           </Button>
                         </div>
