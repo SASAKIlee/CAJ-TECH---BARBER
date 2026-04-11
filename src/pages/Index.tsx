@@ -479,7 +479,7 @@ export default function Index() {
   // EFEITOS
   // ==========================================
   useEffect(() => {
-    if (userRole !== "ceo") return;
+    if (userRole !== "ceo" || isImpersonating) return;
 
     async function buscarDadosHQ() {
       const { data: vends } = await supabase.from("perfis_vendedores").select("*").eq("ativo", true);
@@ -506,7 +506,8 @@ export default function Index() {
   // ==========================================
   // RENDERIZAÇÕES CONDICIONAIS
   // ==========================================
-  if (userRole === "ceo") {
+  // Se CEO está impersonando, NÃO mostrar VisaoCEO
+  if (userRole === "ceo" && !isImpersonating) {
     return (
       <div className="dark min-h-screen bg-black text-white flex flex-col">
         <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
