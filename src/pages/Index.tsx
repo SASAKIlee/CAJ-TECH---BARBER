@@ -17,11 +17,12 @@ import {
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento, useClientesVIP
 } from "@/hooks/useQueries";
+import type { AgendamentoInsert } from "@/types/queries";
 
-// Lazy load de componentes pesados
-const VisaoDono = lazy(() => import("@/components/VisaoDono"));
-const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor"));
-const VisaoCEO = lazy(() => import("@/components/VisaoCEO"));
+// Lazy load de componentes pesados (Named Exports)
+const VisaoDono = lazy(() => import("@/components/VisaoDono").then(m => ({ default: m.VisaoDono })));
+const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor").then(m => ({ default: m.VisaoVendedor })));
+const VisaoCEO = lazy(() => import("@/components/VisaoCEO").then(m => ({ default: m.VisaoCEO })));
 
 // ==========================================
 // TIPAGENS (substituindo any)
@@ -355,13 +356,18 @@ export default function Index() {
   // CORREÇÃO: Ajuste da assinatura para compatibilidade com VisaoBarbeiro
   // ==========================================
   const handleNovoAgendamento = useCallback(
-    async (ag: Partial<Agendamento>): Promise<{ error?: any }> => {
+    async (ag: Partial<Agendamento>): Promise<{ error?: unknown }> => {
       if (!slug) return { error: "Slug não definido" };
       try {
         const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        await mutacoesAgendamento.adicionarAgendamento.mutateAsync({ ag: [ag], slug, idempotencyKey });
+        // Cast seguro: o formulário valida os campos obrigatórios antes de chamar
+        await mutacoesAgendamento.adicionarAgendamento.mutateAsync({
+          ag: [ag as unknown as AgendamentoInsert],
+          slug,
+          idempotencyKey
+        });
         return {};
-      } catch (error: any) {
+      } catch (error) {
         return { error };
       }
     },
@@ -520,47 +526,47 @@ export default function Index() {
   // Se CEO está impersonando, NÃO mostrar VisaoCEO
   if (userRole === "ceo" && !isImpersonating) {
     return (
-      <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
-        <div className="dark min-h-screen bg-black text-white flex flex-col">
-          <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
-            <div className="flex items-center gap-3">
-              <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-              <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
-            </div>
-            <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
-              <LogOut className="h-5 w-5" />
-            </Button>
-          </header>
-          <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
-            <VisaoCEO totalLojas={dadosCEO.lojas} faturamentoTotal={dadosCEO.faturamento} vendedores={dadosCEO.vendedores} />
-          </main>
-          <div className="p-8 text-center bg-black mt-auto">
-            <p className="text-zinc-800 text-[8px] font-black uppercase tracking-[0.5em]">Sistema Criptografado</p>
+      <div className="dark min-h-screen bg-black text-white flex flex-col">
+        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
           </div>
+          <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </header>
+        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+          <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
+            <VisaoCEO totalLojas={dadosCEO.lojas} faturamentoTotal={dadosCEO.faturamento} vendedores={dadosCEO.vendedores} />
+          </Suspense>
+        </main>
+        <div className="p-8 text-center bg-black mt-auto">
+          <p className="text-zinc-800 text-[8px] font-black uppercase tracking-[0.5em]">Sistema Criptografado</p>
         </div>
-      </Suspense>
+      </div>
     );
   }
 
   if (userRole === "vendedor") {
     return (
-      <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
-        <div className="dark min-h-screen bg-black text-white flex flex-col">
-          <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
-            <div className="flex items-center gap-3">
-              <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-              <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
-            </div>
-            <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
-              <LogOut className="h-5 w-5" />
-            </Button>
-          </header>
-          <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+      <div className="dark min-h-screen bg-black text-white flex flex-col">
+        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </header>
+        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+          <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
             <VisaoVendedor />
-          </main>
-          <TermosDeUso />
-        </div>
-      </Suspense>
+          </Suspense>
+        </main>
+        <TermosDeUso />
+      </div>
     );
   }
 
