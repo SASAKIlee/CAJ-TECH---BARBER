@@ -39,10 +39,10 @@ export default defineConfig({
       workbox: {
         // Cache de arquivos estáticos
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        
+
         // Limite de cache para 4MB para evitar erros de build na Vercel
-        maximumFileSizeToCacheInBytes: 4000000, 
-        
+        maximumFileSizeToCacheInBytes: 4000000,
+
         // Garante que o app não mostre a tela de erro offline em sub-rotas
         navigateFallback: '/index.html'
       }
@@ -53,4 +53,17 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Separa bibliotecas pesadas em chunks separados
+          'recharts': ['recharts'],
+          'lucide-react': ['lucide-react'],
+          'framer-motion': ['framer-motion'],
+          'image-processing': ['browser-image-compression', 'html2canvas'],
+        }
+      }
+    }
+  }
 })

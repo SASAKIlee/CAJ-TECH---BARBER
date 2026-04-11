@@ -3,6 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { createClient } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { useEffect } from "react";
+import type {
+  AgendamentoInsert,
+  AgendamentoUpdate,
+  BarbeiroInsert,
+  BarbeiroStatusUpdate,
+  BarbeiroMetaUpdate,
+  BarbeiroRemove,
+  ServicoInsert,
+  ServicoRemove,
+  DespesaInsert,
+  QueryCacheContext,
+  SupabaseError,
+} from "@/types/queries";
+import { getErrorMessage, logError } from "@/lib/error-handler";
 
 // Variáveis de ambiente (necessárias para criar contas de barbeiro sem deslogar o dono)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -27,7 +41,7 @@ export function useBarbearia(options?: { enabled?: boolean }) {
       const { data: lojaDono } = await supabase.from("barbearias").select("*").eq("dono_id", user.id).maybeSingle();
       
       let lojaData = lojaDono;
-      let isDono = !!lojaDono;
+      const isDono = !!lojaDono;
 
       // Se não for dono, checa se é BARBEIRO
       if (!isDono) {
@@ -88,10 +102,10 @@ export function useMutacoesAgendamento() {
   const queryClient = useQueryClient();
   return {
     adicionarAgendamento: useMutation({
-      mutationFn: async ({ ag, slug, idempotencyKey }: { 
-        ag: any[]; 
-        slug: string; 
-        idempotencyKey: string 
+      mutationFn: async ({ ag, slug, idempotencyKey }: {
+        ag: AgendamentoInsert[];
+        slug: string;
+        idempotencyKey: string;
       }) => {
         // Verifica duplicidade usando a chave
         const { data: existing } = await supabase
@@ -119,11 +133,14 @@ export function useMutacoesAgendamento() {
         queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
         toast.success("Agendado com sucesso! ✂️");
       },
-      onError: (err: any) => toast.error(`Erro ao agendar: ${err.message}`)
+      onError: (err: SupabaseError) => {
+        logError(err, "adicionarAgendamento");
+        toast.error(getErrorMessage(err));
+      }
     }),
 
     atualizarStatusAgendamento: useMutation({
-      mutationFn: async ({ id, status, comissaoGanha = 0, slug }: any) => {
+      mutationFn: async ({ id, status, comissaoGanha = 0, slug }: AgendamentoUpdate) => {
         const { error } = await supabase.from("agendamentos").update({ status, comissao_ganha: comissaoGanha }).eq("id", id);
         if (error) throw error;
       },
@@ -131,17 +148,26 @@ export function useMutacoesAgendamento() {
       onMutate: async (novoStatus) => {
         await queryClient.cancelQueries({ queryKey: ["agendamentos", novoStatus.slug] });
         const anterior = queryClient.getQueryData(["agendamentos", novoStatus.slug]);
-        queryClient.setQueryData(["agendamentos", novoStatus.slug], (velhos: any) => 
-          velhos?.map((ag: any) => ag.id === novoStatus.id ? { ...ag, status: novoStatus.status } : ag)
+        queryClient.setQueryData(
+          ["agendamentos", novoStatus.slug],
+          (velhos: AgendamentoInsert[] | undefined) =>
+            velhos?.map((ag) =>
+              (ag as unknown as { id: string }).id === novoStatus.id
+                ? { ...(ag as object), status: novoStatus.status }
+                : ag
+            )
         );
         return { anterior };
       },
-      onError: (err, vars, context) => {
-        queryClient.setQueryData(["agendamentos", vars.slug], context?.anterior);
-        toast.error("Falha ao atualizar o status.");
+      onError: (err: SupabaseError, vars: AgendamentoUpdate, context?: QueryCacheContext) => {
+        logError(err, "atualizarStatusAgendamento");
+        queryClient.setQueryData(["agendamentos", vars.slug], (context as QueryCacheContext)?.anterior);
+        toast.error(getErrorMessage(err));
       },
-      onSettled: (vars: any) => {
-        queryClient.invalidateQueries({ queryKey: ["agendamentos", vars?.slug] });
+      onSettled: (_data, _error, vars) => {
+        if (vars?.slug) {
+          queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
+        }
       }
     })
   };
@@ -166,15 +192,15 @@ export function useMutacoesBarbeiro() {
   const queryClient = useQueryClient();
   return {
     adicionarBarbeiro: useMutation({
-      mutationFn: async ({ nome, comissao_pct, email, senha, slug }: any) => {
+      mutationFn: async ({ nome, comissao_pct, email, senha, slug, url_foto }: BarbeiroInsert) => {
         const tempClient = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
         const { data: authData, error: authError } = await tempClient.auth.signUp({ email, password: senha });
         if (authError) throw authError;
 
         const userId = authData.user!.id;
         await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
-        const { error: barbError } = await supabase.from("barbeiros").insert({ 
-          id: userId, nome, comissao_pct, barbearia_slug: slug, ativo: true 
+        const { error: barbError } = await supabase.from("barbeiros").insert({
+          id: userId, nome, comissao_pct, barbearia_slug: slug, ativo: true, url_foto
         });
         if (barbError) throw barbError;
       },
@@ -182,11 +208,14 @@ export function useMutacoesBarbeiro() {
         queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
         toast.success("Barbeiro contratado com sucesso!");
       },
-      onError: (err: any) => toast.error(err.message)
+      onError: (err: SupabaseError) => {
+        logError(err, "adicionarBarbeiro");
+        toast.error(getErrorMessage(err));
+      }
     }),
 
     alternarStatusBarbeiro: useMutation({
-      mutationFn: async ({ id, novoStatus }: any) => {
+      mutationFn: async ({ id, novoStatus, slug }: BarbeiroStatusUpdate) => {
         const { error } = await supabase.from("barbeiros").update({ ativo: novoStatus }).eq("id", id);
         if (error) throw error;
       },
@@ -194,7 +223,7 @@ export function useMutacoesBarbeiro() {
     }),
 
     atualizarMetaBarbeiro: useMutation({
-      mutationFn: async ({ id, meta }: any) => {
+      mutationFn: async ({ id, meta, slug }: BarbeiroMetaUpdate) => {
         const { error } = await supabase.from("barbeiros").update({ meta_diaria: meta }).eq("id", id);
         if (error) throw error;
       },
@@ -205,7 +234,7 @@ export function useMutacoesBarbeiro() {
     }),
 
     removerBarbeiro: useMutation({
-      mutationFn: async ({ id, estaAtivo }: any) => {
+      mutationFn: async ({ id, estaAtivo, slug }: BarbeiroRemove) => {
         if (estaAtivo) throw new Error("Desative o barbeiro primeiro.");
         const { error } = await supabase.from("barbeiros").delete().eq("id", id);
         if (error) throw error;
@@ -214,7 +243,10 @@ export function useMutacoesBarbeiro() {
         queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
         toast.success("Barbeiro removido.");
       },
-      onError: (err: any) => toast.error(err.message)
+      onError: (err: SupabaseError) => {
+        logError(err, "removerBarbeiro");
+        toast.error(getErrorMessage(err));
+      }
     })
   };
 }
@@ -238,9 +270,9 @@ export function useMutacoesServico() {
   const queryClient = useQueryClient();
   return {
     adicionarServico: useMutation({
-      mutationFn: async ({ nome, preco, duracao_minutos, url_imagem, slug }: any) => {
-        const { error } = await supabase.from("servicos").insert({ 
-          nome, preco, duracao_minutos, url_imagem, barbearia_slug: slug 
+      mutationFn: async ({ nome, preco, duracao_minutos, url_imagem, slug }: ServicoInsert) => {
+        const { error } = await supabase.from("servicos").insert({
+          nome, preco, duracao_minutos, url_imagem, barbearia_slug: slug
         });
         if (error) throw error;
       },
@@ -250,7 +282,7 @@ export function useMutacoesServico() {
       }
     }),
     removerServico: useMutation({
-      mutationFn: async ({ id }: any) => {
+      mutationFn: async ({ id, slug }: ServicoRemove) => {
         const { error } = await supabase.from("servicos").delete().eq("id", id);
         if (error) throw error;
       },
@@ -278,9 +310,9 @@ export function useMutacoesDespesa() {
   const queryClient = useQueryClient();
   return {
     adicionarDespesa: useMutation({
-      mutationFn: async ({ descricao, valor, data, slug }: any) => {
-        const { error } = await supabase.from("despesas").insert({ 
-          descricao, valor, data, barbearia_slug: slug 
+      mutationFn: async ({ descricao, valor, data, slug }: DespesaInsert) => {
+        const { error } = await supabase.from("despesas").insert({
+          descricao, valor, data, barbearia_slug: slug
         });
         if (error) throw error;
       },
@@ -295,6 +327,13 @@ export function useMutacoesDespesa() {
 // ==========================================
 // 6. CLIENTES VIP
 // ==========================================
+interface LeadRow {
+  id?: string;
+  vendedor_id?: string;
+  status?: string;
+  dados_adicionais?: Record<string, unknown> | null;
+}
+
 export function useClientesVIP(vendedorId?: string) {
   return useQuery({
     queryKey: ["clientesVIP", vendedorId],
@@ -305,11 +344,11 @@ export function useClientesVIP(vendedorId?: string) {
         .select("*")
         .eq("vendedor_id", vendedorId)
         .neq("status", "deleted");
-      
+
       if (error) throw error;
-      
+
       // Filtra apenas leads marcados como VIP
-      return (data || []).filter((lead: any) => lead.dados_adicionais?.vip === true);
+      return (data as LeadRow[] || []).filter((lead) => lead.dados_adicionais?.vip === true);
     },
     enabled: !!vendedorId,
   });

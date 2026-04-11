@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar, RefreshCw, User, Loader2, Eye, X } from "lucide-react";
@@ -5,9 +6,6 @@ import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackd
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { VisaoBarbeiro } from "@/components/VisaoBarbeiro";
-import { VisaoDono } from "@/components/VisaoDono";
-import { VisaoVendedor } from "@/components/VisaoVendedor";
-import { VisaoCEO } from "@/components/VisaoCEO";
 import { CarteiraBarbeiro } from "@/components/CarteiraBarbeiro";
 import { IndexPageSkeleton } from "@/components/IndexPageSkeleton";
 import { DataLoadError } from "@/components/DataLoadError";
@@ -15,11 +13,15 @@ import { Button } from "@/components/ui/button";
 import { TermosDeUso } from "@/components/TermosDeUso";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
 import {
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento, useClientesVIP
 } from "@/hooks/useQueries";
+
+// Lazy load de componentes pesados
+const VisaoDono = lazy(() => import("@/components/VisaoDono"));
+const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor"));
+const VisaoCEO = lazy(() => import("@/components/VisaoCEO"));
 
 // ==========================================
 // TIPAGENS (substituindo any)
@@ -224,9 +226,18 @@ export default function Index() {
   // ==========================================
   // USAR DADOS DE IMPERSONAÇÃO OU DADOS NORMAIS
   // ==========================================
-  const barbeiros = isImpersonating ? (impersonateData?.barbeiros || []) : barbeirosNormal;
-  const servicos = isImpersonating ? (impersonateData?.servicos || []) : servicosNormal;
-  const agendamentos = isImpersonating ? (impersonateData?.agendamentos || []) : agendamentosNormal;
+  const barbeiros = useMemo(() =>
+    isImpersonating ? (impersonateData?.barbeiros || []) : barbeirosNormal,
+    [isImpersonating, impersonateData?.barbeiros, barbeirosNormal]
+  );
+  const servicos = useMemo(() =>
+    isImpersonating ? (impersonateData?.servicos || []) : servicosNormal,
+    [isImpersonating, impersonateData?.servicos, servicosNormal]
+  );
+  const agendamentos = useMemo(() =>
+    isImpersonating ? (impersonateData?.agendamentos || []) : agendamentosNormal,
+    [isImpersonating, impersonateData?.agendamentos, agendamentosNormal]
+  );
 
   const carregandoDependentes = !!slug && (barbeirosQuery.isLoading || servicosQuery.isLoading || agendamentosQuery.isLoading);
   const buscandoDependentes = !!slug && (barbeirosQuery.isFetching || servicosQuery.isFetching || agendamentosQuery.isFetching);
@@ -486,13 +497,13 @@ export default function Index() {
       const { data: lojas } = await supabase.from("barbearias").select("*");
 
       const totalLojasReal = lojas?.length || 0;
-      const listaVendedores = vends?.map((v: any) => ({ id: v.id, nome: v.nome, total_lojas: 0 })) || [];
+      const listaVendedores = vends?.map((v) => ({ id: v.id, nome: v.nome, total_lojas: 0 })) || [];
 
       setDadosCEO({ lojas: totalLojasReal, faturamento: totalLojasReal * 50, vendedores: listaVendedores });
     }
 
     buscarDadosHQ();
-  }, [userRole]);
+  }, [userRole, isImpersonating]);
 
   useEffect(() => {
     if (!barbeariaQueryEnabled) return;
@@ -509,43 +520,47 @@ export default function Index() {
   // Se CEO está impersonando, NÃO mostrar VisaoCEO
   if (userRole === "ceo" && !isImpersonating) {
     return (
-      <div className="dark min-h-screen bg-black text-white flex flex-col">
-        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
+      <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
+        <div className="dark min-h-screen bg-black text-white flex flex-col">
+          <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+            <div className="flex items-center gap-3">
+              <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+              <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
+            </div>
+            <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </header>
+          <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+            <VisaoCEO totalLojas={dadosCEO.lojas} faturamentoTotal={dadosCEO.faturamento} vendedores={dadosCEO.vendedores} />
+          </main>
+          <div className="p-8 text-center bg-black mt-auto">
+            <p className="text-zinc-800 text-[8px] font-black uppercase tracking-[0.5em]">Sistema Criptografado</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
-            <LogOut className="h-5 w-5" />
-          </Button>
-        </header>
-        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
-          <VisaoCEO totalLojas={dadosCEO.lojas} faturamentoTotal={dadosCEO.faturamento} vendedores={dadosCEO.vendedores} />
-        </main>
-        <div className="p-8 text-center bg-black mt-auto">
-          <p className="text-zinc-800 text-[8px] font-black uppercase tracking-[0.5em]">Sistema Criptografado</p>
         </div>
-      </div>
+      </Suspense>
     );
   }
 
   if (userRole === "vendedor") {
     return (
-      <div className="dark min-h-screen bg-black text-white flex flex-col">
-        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
-          </div>
-          <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
-            <LogOut className="h-5 w-5" />
-          </Button>
-        </header>
-        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
-          <VisaoVendedor />
-        </main>
-        <TermosDeUso />
-      </div>
+      <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
+        <div className="dark min-h-screen bg-black text-white flex flex-col">
+          <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+            <div className="flex items-center gap-3">
+              <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
+              <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
+            </div>
+            <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </header>
+          <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+            <VisaoVendedor />
+          </main>
+          <TermosDeUso />
+        </div>
+      </Suspense>
     );
   }
 
@@ -737,34 +752,36 @@ export default function Index() {
               )}
 
               {tab === "dono" && (
-                <>
-                  {isImpersonating && (
-                    <div className="mb-4 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2 text-yellow-400 text-sm">
-                      <Eye className="h-4 w-4 shrink-0" />
-                      <span className="font-bold">Modo visualização - Alterações desabilitadas</span>
-                    </div>
-                  )}
-                  <VisaoDono
-                    faturamentoHoje={stats.faturamentoHoje}
-                    faturamentoMensal={stats.faturamentoMensal}
-                    comissoesAPagarHoje={stats.comissoesAPagarHoje}
-                    lucroRealHoje={stats.faturamentoHoje - stats.comissoesAPagarHoje}
-                    despesasNoDia={0}
-                    comissaoPorBarbeiroHoje={comissaoPorBarbeiroHoje}
-                    barbeiros={barbeiros}
-                    servicos={servicos}
-                    corPrimaria={marca}
-                    onAddBarbeiro={isImpersonating ? undefined : handleAddBarbeiro}
-                    onRemoveBarbeiro={isImpersonating ? undefined : handleRemoveBarbeiro}
-                    onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
-                    onAddServico={isImpersonating ? undefined : handleAddServico}
-                    onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
-                    onAddDespesa={isImpersonating ? undefined : (despesa: any) => {
-                      console.log("Despesa a salvar:", despesa);
-                      toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
-                    }}
-                  />
-                </>
+                <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
+                  <>
+                    {isImpersonating && (
+                      <div className="mb-4 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2 text-yellow-400 text-sm">
+                        <Eye className="h-4 w-4 shrink-0" />
+                        <span className="font-bold">Modo visualização - Alterações desabilitadas</span>
+                      </div>
+                    )}
+                    <VisaoDono
+                      faturamentoHoje={stats.faturamentoHoje}
+                      faturamentoMensal={stats.faturamentoMensal}
+                      comissoesAPagarHoje={stats.comissoesAPagarHoje}
+                      lucroRealHoje={stats.faturamentoHoje - stats.comissoesAPagarHoje}
+                      despesasNoDia={0}
+                      comissaoPorBarbeiroHoje={comissaoPorBarbeiroHoje}
+                      barbeiros={barbeiros}
+                      servicos={servicos}
+                      corPrimaria={marca}
+                      onAddBarbeiro={isImpersonating ? undefined : handleAddBarbeiro}
+                      onRemoveBarbeiro={isImpersonating ? undefined : handleRemoveBarbeiro}
+                      onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
+                      onAddServico={isImpersonating ? undefined : handleAddServico}
+                      onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
+                      onAddDespesa={isImpersonating ? undefined : (despesa: any) => {
+                        console.log("Despesa a salvar:", despesa);
+                        toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
+                      }}
+                    />
+                  </>
+                </Suspense>
               )}
             </motion.div>
           </AnimatePresence>
