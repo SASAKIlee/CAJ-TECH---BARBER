@@ -69,6 +69,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" replace />} />
+      {/* Rota de convite do vendedor: redireciona para login */}
+      <Route path="/convite/:id" element={<Navigate to="/auth" replace />} />
       <Route path="/" element={user ? <Index /> : <Navigate to="/auth" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
