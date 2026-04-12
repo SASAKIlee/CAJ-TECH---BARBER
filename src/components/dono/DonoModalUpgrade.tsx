@@ -88,42 +88,36 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
             )}
           </Card>
 
-          <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between">
+          <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between opacity-50">
             <div>
-              <h3 className="text-yellow-500 font-black uppercase text-xs tracking-widest flex items-center gap-2">
-                <Crown className="h-4 w-4" /> Elite
-              </h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-yellow-500 font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                  <Crown className="h-4 w-4" /> Elite
+                </h3>
+                <span className="text-[8px] bg-yellow-500/20 text-yellow-500 px-2 py-1 rounded-full tracking-widest font-bold">EM BREVE</span>
+              </div>
               <p className="text-4xl font-black text-white my-4 italic">
                 R$ 497<span className="text-xs opacity-30">/mês</span>
               </p>
-              <ul className="text-[11px] text-zinc-400 space-y-3 mb-6">
+              <ul className="text-[11px] text-zinc-500 space-y-3 mb-6">
                 <li className="flex gap-2 font-bold uppercase">
-                  <CheckCircle2 className="h-4 w-4 text-yellow-500 shrink-0" /> Tudo do Pro +
+                  <CheckCircle2 className="h-4 w-4 text-yellow-500/50 shrink-0" /> Tudo do Pro +
                 </li>
                 <li className="flex gap-2 font-bold uppercase">
-                  <CheckCircle2 className="h-4 w-4 text-yellow-500 shrink-0" /> Marketing Completo
+                  <CheckCircle2 className="h-4 w-4 text-yellow-500/50 shrink-0" /> Marketing Completo
                 </li>
                 <li className="flex gap-2 font-bold uppercase">
-                  <CheckCircle2 className="h-4 w-4 text-yellow-500 shrink-0" /> Gestão de Tráfego Pago
+                  <CheckCircle2 className="h-4 w-4 text-yellow-500/50 shrink-0" /> Gestão de Tráfego Pago
                 </li>
               </ul>
             </div>
-            {planoAtual === "elite" ? (
-              <Button
-                variant="outline"
-                className="border-zinc-800 text-zinc-500 uppercase font-black text-[10px] h-12 rounded-xl"
-                disabled
-              >
-                Seu Plano Atual
-              </Button>
-            ) : (
-              <Button
-                onClick={() => onUpgrade("elite")}
-                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-black uppercase h-14 rounded-xl shadow-lg"
-              >
-                Evoluir e Pagar
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              className="border-zinc-800 text-zinc-600 uppercase font-black text-[10px] h-12 rounded-xl"
+              disabled
+            >
+              Indisponível no Momento
+            </Button>
           </Card>
         </div>
       </div>

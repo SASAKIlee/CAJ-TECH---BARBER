@@ -36,6 +36,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [planos, setPlanos] = useState<Record<string, string>>({});
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [novoAviso, setNovoAviso] = useState("");
+  const [enviandoAviso, setEnviandoAviso] = useState(false);
   
   const [buscaLojas, setBuscaLojas] = useState(""); 
   const [filtroLojas, setFiltroLojas] = useState<FiltroLoja>("todas"); 
@@ -380,10 +381,30 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     }
   };
 
-  const dispararAviso = () => {
-    if (!novoAviso) return;
-    toast.success("Megafone ativado! Aviso será exibido (Simulação).");
-    setNovoAviso("");
+  const dispararAviso = async () => {
+    if (!novoAviso.trim()) return;
+    
+    setEnviandoAviso(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase
+        .from('avisos_rede')
+        .insert({ 
+          mensagem: novoAviso,
+          criado_por: user?.id,
+          ativo: true
+        });
+
+      if (error) throw error;
+
+      toast.success("Aviso enviado para toda a rede! 📢");
+      setNovoAviso("");
+    } catch (err: any) {
+      toast.error("Erro ao enviar: " + err.message);
+    } finally {
+      setEnviandoAviso(false);
+    }
   };
 
   const exportarCaixa = () => {
@@ -545,7 +566,9 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                 </div>
                 <div className="flex gap-2">
                   <Input placeholder="Escreva uma novidade..." className="bg-black/50 border-blue-500/20 text-xs text-white" value={novoAviso} onChange={(e) => setNovoAviso(e.target.value)} />
-                  <Button onClick={dispararAviso} className="bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white">Enviar</Button>
+                  <Button onClick={dispararAviso} disabled={enviandoAviso} className="bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white">
+                    {enviandoAviso ? "Enviando..." : "Enviar"}
+                  </Button>
                 </div>
               </Card>
             </div>

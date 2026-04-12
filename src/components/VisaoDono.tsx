@@ -4,6 +4,8 @@ import {
   BarChart3,
   Zap,
   Settings2,
+  Megaphone,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
@@ -69,6 +71,7 @@ export function VisaoDono({
   corPrimaria = "#D4AF37",
 }: VisaoDonoProps) {
   const { data, updateData, pixGerado, setPixGerado, tempoPix, setTempoPix } = useDonoData();
+  const [avisoRede, setAvisoRede] = useState<string | null>(null);
   const [barbeiroFiltroId, setBarbeiroFiltroId] = useState("");
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
@@ -101,6 +104,34 @@ export function VisaoDono({
     center: { x: 0, opacity: 1 },
     exit: (dir: number) => ({ x: dir * -56, opacity: 0 }),
   };
+
+  // ==========================================
+  // EFEITOS
+  // ==========================================
+  // Busca aviso global do CEO ao carregar
+  useEffect(() => {
+    const buscarAviso = async () => {
+      const { data, error } = await supabase
+        .from('avisos_rede')
+        .select('mensagem, criado_em')
+        .eq('ativo', true)
+        .order('criado_em', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data) {
+        const dataAviso = new Date(data.criado_em);
+        const agora = new Date();
+        const diffHoras = (agora.getTime() - dataAviso.getTime()) / (1000 * 60 * 60);
+        
+        if (diffHoras < 24) {
+          setAvisoRede(data.mensagem);
+        }
+      }
+    };
+
+    buscarAviso();
+  }, []);
 
   // ==========================================
   // MEMOS PARA CÁLCULOS DERIVADOS
@@ -357,6 +388,22 @@ export function VisaoDono({
   // ==========================================
   return (
     <div className="flex flex-col gap-6 pb-40 pt-4 w-full overflow-x-hidden text-white">
+      {/* BANNER DE AVISO GLOBAL (do CEO) */}
+      {avisoRede && (
+        <div className="mx-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-xl shadow-lg flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center gap-2">
+            <Megaphone className="h-5 w-5 animate-pulse shrink-0" />
+            <span className="font-bold text-sm uppercase tracking-wide">{avisoRede}</span>
+          </div>
+          <button 
+            onClick={() => setAvisoRede(null)} 
+            className="hover:bg-white/20 rounded-full p-1 transition-colors shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="px-4 flex flex-col gap-3">
         <DonoBannersAlerta
           planoAtual={data.planoAtual}

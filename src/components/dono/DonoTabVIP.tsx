@@ -14,7 +14,9 @@ export function DonoTabVIP({
   brand,
   glass,
 }: DonoTabVIPProps) {
-  const temVIP = planoAtual !== "starter";
+  // Apenas plano PRO tem acesso VIP. Starter e Elite estão bloqueados.
+  const temVIP = planoAtual === "pro";
+  const isElite = planoAtual === "elite";
 
   return (
     <section className="space-y-4 animate-in fade-in duration-500">
@@ -61,44 +63,52 @@ export function DonoTabVIP({
       {!temVIP ? (
         <Card className="p-8 rounded-[22px] border border-white/[0.08] text-center flex flex-col items-center gap-4" style={glass}>
           <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
-            <Lock className="h-8 w-8 text-zinc-600" />
+            {isElite ? <Lock className="h-8 w-8 text-yellow-500" /> : <Lock className="h-8 w-8 text-zinc-600" />}
           </div>
           <div className="space-y-1">
-            <h4 className="text-lg font-bold text-white uppercase italic">Acesso VIP necessário</h4>
+            <h4 className="text-lg font-bold text-white uppercase italic">
+              {isElite ? "Plano Elite - Em Breve" : "Acesso VIP necessário"}
+            </h4>
             <p className="text-sm text-zinc-400 max-w-[260px] mx-auto">
-              Seu plano atual não permite ativar automações e clube de assinatura. Faça upgrade para PRO ou ELITE para liberar esses recursos.
+              {isElite
+                ? "O plano Elite está sendo preparado. Aguarde novidades sobre Marketing e Tráfego Pago."
+                : "Seu plano atual não permite ativar automações e clube de assinatura. Faça upgrade para PRO para liberar esses recursos."}
             </p>
           </div>
-          <div className="space-y-3 w-full text-left bg-black/30 p-5 rounded-2xl border border-white/5">
-            <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Lembretes WhatsApp
-            </p>
-            <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Dashboard de Ganhos{" "}
-              <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
-            </p>
-            <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Cliente VIP{" "}
-              <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
-            </p>
-            <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Recados do Cliente{" "}
-              <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
-            </p>
-            <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Barbeiros Ilimitados
-            </p>
-            <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Relatórios Avançados{" "}
-              <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
-            </p>
-          </div>
-          <Button
-            onClick={onUpgradeClick}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg shadow-emerald-600/20 text-sm"
-          >
-            Evoluir agora
-          </Button>
+          {!isElite && (
+            <>
+              <div className="space-y-3 w-full text-left bg-black/30 p-5 rounded-2xl border border-white/5">
+                <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Lembretes WhatsApp
+                </p>
+                <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Dashboard de Ganhos{" "}
+                  <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
+                </p>
+                <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Cliente VIP{" "}
+                  <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
+                </p>
+                <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Recados do Cliente{" "}
+                  <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
+                </p>
+                <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Barbeiros Ilimitados
+                </p>
+                <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" /> Relatórios Avançados{" "}
+                  <span className="ml-auto text-[8px] bg-emerald-500/20 text-emerald-500 px-2 py-1 rounded-full tracking-widest">NOVO</span>
+                </p>
+              </div>
+              <Button
+                onClick={onUpgradeClick}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg shadow-emerald-600/20 text-sm"
+              >
+                Evoluir para PRO
+              </Button>
+            </>
+          )}
         </Card>
       ) : (
         <div className="grid gap-4">
@@ -145,15 +155,11 @@ export function DonoTabVIP({
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Plano</p>
-                <p className="text-sm text-zinc-300">
-                  {planoAtual === "elite" ? "VIP completo com limites ilimitados" : "PRO com até 50 membros no clube"}
-                </p>
+                <p className="text-sm text-zinc-300">Até 50 membros no clube de assinatura</p>
               </div>
               <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Valor</p>
-                <p className="text-sm text-zinc-300">
-                  {planoAtual === "elite" ? "Controle total de clientes VIP" : "Crie até 50 assinaturas recorrentes"}
-                </p>
+                <p className="text-sm text-zinc-300">Crie até 50 assinaturas recorrentes</p>
               </div>
             </div>
           </Card>
