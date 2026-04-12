@@ -1,50 +1,64 @@
-import { useState, useEffect } from "react";
-import { 
+import { useState, useEffect, useMemo, useCallback } from "react";
+import {
   TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
   BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
-  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone, Calendar, CreditCard, Filter, ArrowRight, Activity, Bot
+  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone, Calendar, CreditCard, Filter, ArrowRight, Activity, Bot, Settings, Edit3, PieChart as PieChartIcon
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { createClient } from "@supabase/supabase-js";
-import { toast } from "sonner"; 
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { cn } from "@/lib/utils";
+import type { Vendedor, CarteiraComissao, ComissaoTipo } from "@/types/vendedor";
 
 // Variáveis de ambiente
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-type CEOTab = "dashboard" | "aprovacoes" | "lojas" | "equipe";
+type CEOTab = "dashboard" | "aprovacoes" | "lojas" | "equipe" | "comissoes";
 type FiltroLoja = "todas" | "ativas" | "bloqueadas" | "trial";
 
 export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   const [tabAtiva, setTabAtiva] = useState<CEOTab>("dashboard");
   const [leadsRecentes, setLeadsRecentes] = useState<any[]>([]);
   const [lojasAtivas, setLojasAtivas] = useState<any[]>([]);
-  const [ranking, setRanking] = useState<any[]>([]);
-  
+  const [ranking, setRanking] = useState<Vendedor[]>([]);
+  const [carteira, setCarteira] = useState<CarteiraComissao[]>([]);
+  const [loadingCarteira, setLoadingCarteira] = useState(false);
+
   const [expandido, setExpandido] = useState<string | null>(null);
-  const [lojaExpandida, setLojaExpandida] = useState<string | null>(null); 
-  const [vendedorExpandido, setVendedorExpandido] = useState<string | null>(null); 
-  
+  const [lojaExpandida, setLojaExpandida] = useState<string | null>(null);
+  const [vendedorExpandido, setVendedorExpandido] = useState<string | null>(null);
+
   const [slugs, setSlugs] = useState<Record<string, string>>({});
   const [planos, setPlanos] = useState<Record<string, string>>({});
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [novoAviso, setNovoAviso] = useState("");
   const [enviandoAviso, setEnviandoAviso] = useState(false);
-  
-  const [buscaLojas, setBuscaLojas] = useState(""); 
-  const [filtroLojas, setFiltroLojas] = useState<FiltroLoja>("todas"); 
 
-  const [buscaAprovacoes, setBuscaAprovacoes] = useState(""); 
+  const [buscaLojas, setBuscaLojas] = useState("");
+  const [filtroLojas, setFiltroLojas] = useState<FiltroLoja>("todas");
+
+  const [buscaAprovacoes, setBuscaAprovacoes] = useState("");
 
   const [modalConsultorAberto, setModalConsultorAberto] = useState(false);
   const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
+  
+  // Modal de edição de comissão
+  const [modalComissaoAberto, setModalComissaoAberto] = useState(false);
+  const [vendedorSelecionado, setVendedorSelecionado] = useState<Vendedor | null>(null);
+  
+  // New state for plan-specific commissions
+  const [comissaoStarter, setComissaoStarter] = useState("");
+  const [comissaoPro, setComissaoPro] = useState("");
+  const [comissaoElite, setComissaoElite] = useState("");
+
   const [isSavingConsultor, setIsSavingConsultor] = useState(false);
   const [isPagarComissao, setIsPagarComissao] = useState(false);
 
@@ -88,8 +102,35 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
       
       setLojasAtivas(lojasEnriquecidas);
 
-      const { data: vendedoresDB } = await supabase.from('perfis_vendedores').select('*');
+      const { data: vendedoresDB } = await supabase
+        .from('perfis_vendedores')
+        .select('*');
       const listaVendedores = vendedoresDB || vendedores;
+
+      // Buscar carteira de comissões
+      setLoadingCarteira(true);
+      const { data: carteiraDB } = await supabase
+        .from('carteira_comissoes')
+        .select(`
+          *,
+          vendedor:perfis_vendedores(nome)
+        `)
+        .order('mes_referencia', { ascending: false });
+      
+      if (carteiraDB) {
+        const carteiraFormatada: CarteiraComissao[] = carteiraDB.map(c => ({
+          id: c.id,
+          vendedor_id: c.vendedor_id,
+          mes_referencia: c.mes_referencia,
+          valor_acumulado: Number(c.valor_acumulado || 0),
+          status: c.status,
+          data_fechamento: c.data_fechamento,
+          data_pagamento: c.data_pagamento,
+          vendedor_nome: (c as any).vendedor?.nome || 'Desconhecido'
+        }));
+        setCarteira(carteiraFormatada);
+      }
+      setLoadingCarteira(false);
 
       let totalReceita = 0;
       lojasEnriquecidas.forEach(l => {
@@ -105,7 +146,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
 
       const rankingCalculado = listaVendedores.map((v: any) => {
         const leadsDoVendedor = leadsData.filter(lead => lead.vendedor_id === v.id);
-        
+
         let comissaoPendente = 0;
         let mrrGerado = 0;
         let qtdVisita = 0;
@@ -118,16 +159,30 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
           if (lead.status === 'convertido') {
             qtdConvertido++;
             const plano = lead.dados_adicionais?.plano_escolhido || 'pro';
-            mrrGerado += getValorPlano(plano);
+            const valorPlano = getValorPlano(plano);
+            mrrGerado += valorPlano;
+            
+            // Lógica Nova: Comissão específica por plano
             if (!lead.dados_adicionais?.comissao_paga) {
-              comissaoPendente += getComissaoPlano(plano);
+              let taxaAplicada = 30; // Padrão PRO
+
+              if (plano === 'starter') {
+                taxaAplicada = Number(v.comissao_starter || 20);
+              } else if (plano === 'elite') {
+                taxaAplicada = Number(v.comissao_elite || 40);
+              } else {
+                // Fallback para PRO ou legado
+                taxaAplicada = Number(v.comissao_pro || v.comissao_valor || 30);
+              }
+
+              comissaoPendente += (valorPlano * taxaAplicada) / 100;
             }
           }
         });
 
         return {
-          ...v, 
-          ativo: v.ativo !== false, 
+          ...v,
+          ativo: v.ativo !== false,
           leads_visita: qtdVisita,
           leads_pendente: qtdPendente,
           leads_convertido: qtdConvertido,
@@ -135,10 +190,41 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
           comissao_pendente: comissaoPendente
         };
       });
-      
-      setRanking(rankingCalculado.sort((a, b) => b.mrr_gerado - a.mrr_gerado)); 
+
+      setRanking(rankingCalculado.sort((a, b) => b.mrr_gerado - a.mrr_gerado));
     } catch (err) {
-      console.error("Erro ao carregar dados do CEO:", err); 
+      console.error("Erro ao carregar dados do CEO:", err);
+    }
+  };
+
+  const salvarComissao = async () => {
+    if (!vendedorSelecionado) return;
+    const valStarter = Number(comissaoStarter);
+    const valPro = Number(comissaoPro);
+    const valElite = Number(comissaoElite);
+
+    if (isNaN(valStarter) || isNaN(valPro) || isNaN(valElite) || 
+        valStarter < 0 || valPro < 0 || valElite < 0) {
+      return toast.error("Valores inválidos. Verifique as porcentagens.");
+    }
+
+    try {
+      const { error } = await supabase
+        .from('perfis_vendedores')
+        .update({ 
+          comissao_starter: valStarter, 
+          comissao_pro: valPro,
+          comissao_elite: valElite
+        })
+        .eq('id', vendedorSelecionado.id);
+
+      if (error) throw error;
+
+      toast.success("Comissões por plano atualizadas!");
+      setModalComissaoAberto(false);
+      carregarDados();
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
     }
   };
 
@@ -434,6 +520,7 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
     { id: "aprovacoes", icon: ClipboardList, label: "Aprovações", badge: statPendentes },
     { id: "lojas", icon: Store, label: "Lojas Ativas" },
     { id: "equipe", icon: Users, label: "Equipe Comercial" },
+    { id: "comissoes", icon: Wallet, label: "Comissões" },
   ];
 
   return (
@@ -807,6 +894,31 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                           </div>
                         </div>
 
+                        {/* CONFIGURAÇÃO DE COMISSÃO */}
+                        <div className="flex items-center justify-between bg-blue-500/5 rounded-xl p-3 border border-blue-500/20 mb-3">
+                          <div className="flex items-center gap-2">
+                            <Settings className="h-4 w-4 text-blue-400" />
+                            <p className="text-[10px] text-blue-400 font-bold uppercase">
+                              Config: S {v.comissao_starter || 20}% | P {v.comissao_pro || 30}% | E {v.comissao_elite || 40}%
+                            </p>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVendedorSelecionado(v);
+                              setComissaoStarter(String(v.comissao_starter || 20));
+                              setComissaoPro(String(v.comissao_pro || 30));
+                              setComissaoElite(String(v.comissao_elite || 40));
+                              setModalComissaoAberto(true);
+                            }}
+                            className="h-8 text-[10px] text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                          >
+                            <Edit3 className="h-3 w-3 mr-1" /> Configurar
+                          </Button>
+                        </div>
+
                         {/* FECHAMENTO DE COMISSÃO */}
                         <div className="flex justify-between items-center bg-emerald-500/5 rounded-xl p-4 border border-emerald-500/20">
                           <div>
@@ -833,6 +945,53 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
                     )}
                   </Card>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* ================= ABA 5: COMISSÕES (CARTEIRA) ================= */}
+          {tabAtiva === "comissoes" && (
+            <div className="space-y-6">
+              <div className="bg-zinc-900/50 p-6 rounded-2xl border border-zinc-800">
+                <h3 className="text-xl font-black uppercase italic text-white flex items-center gap-2 mb-2">
+                  <Wallet className="h-6 w-6 text-emerald-500" /> Carteira de Comissões
+                </h3>
+                <p className="text-sm text-zinc-400 mb-6">
+                  Acompanhe os valores acumulados e gerencie os pagamentos mensais.
+                </p>
+
+                {loadingCarteira ? (
+                  <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-500 h-8 w-8" /></div>
+                ) : carteira.length === 0 ? (
+                  <div className="text-center py-10 text-zinc-500">Nenhuma comissão registrada ainda.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {carteira.map((item) => (
+                      <Card key={item.id} className="bg-black/40 border-zinc-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-bold text-white text-sm">{item.vendedor_nome}</p>
+                            <Badge className={cn(
+                              "text-[9px] px-1.5 py-0",
+                              item.status === 'acumulando' ? "bg-blue-500/20 text-blue-400" :
+                              item.status === 'fechado' ? "bg-yellow-500/20 text-yellow-400" :
+                              "bg-emerald-500/20 text-emerald-400"
+                            )}>
+                              {item.status.toUpperCase()}
+                            </Badge>
+                          </div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-bold">Referência: {item.mes_referencia}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-[9px] text-zinc-500 font-black uppercase">Saldo Acumulado</p>
+                            <p className="text-xl font-black text-emerald-500 italic">{formatarMoeda(item.valor_acumulado)}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -871,6 +1030,66 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
             <Button onClick={handleCadastrarConsultor} disabled={isSavingConsultor} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl text-sm uppercase italic shadow-lg shadow-emerald-600/20">
               {isSavingConsultor ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar e Liberar Acesso"}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL EDITAR COMISSÃO ================= */}
+      {modalComissaoAberto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm transition-all">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center">
+              <h2 className="text-white font-black uppercase italic text-xl">Comissão por Plano</h2>
+              <button onClick={() => setModalComissaoAberto(false)} className="text-zinc-500 hover:text-white transition-colors bg-zinc-800 h-8 w-8 flex items-center justify-center rounded-full">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-sm text-zinc-400">
+              Configurando para: <span className="text-white font-bold">{vendedorSelecionado?.nome}</span>
+            </p>
+
+            <div className="space-y-4">
+              {/* Starter */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Plano Starter (%)</label>
+                <Input 
+                  type="number" 
+                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-zinc-500" 
+                  value={comissaoStarter} 
+                  onChange={e => setComissaoStarter(e.target.value)} 
+                />
+              </div>
+
+              {/* PRO */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">Plano PRO (%)</label>
+                <Input 
+                  type="number" 
+                  className="bg-black border-emerald-500/30 text-white h-12 rounded-xl focus:border-emerald-500" 
+                  value={comissaoPro} 
+                  onChange={e => setComissaoPro(e.target.value)} 
+                />
+              </div>
+
+              {/* Elite */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-yellow-500 uppercase ml-1">Plano Elite (%)</label>
+                <Input 
+                  type="number" 
+                  className="bg-black border-yellow-500/30 text-white h-12 rounded-xl focus:border-yellow-500" 
+                  value={comissaoElite} 
+                  onChange={e => setComissaoElite(e.target.value)} 
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={() => setModalComissaoAberto(false)} className="flex-1 bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700">Cancelar</Button>
+              <Button onClick={salvarComissao} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black h-12 rounded-2xl text-sm uppercase italic shadow-lg shadow-emerald-600/20">
+                Salvar
+              </Button>
+            </div>
           </div>
         </div>
       )}

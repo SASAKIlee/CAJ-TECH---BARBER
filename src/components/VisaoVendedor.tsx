@@ -506,9 +506,18 @@ export function VisaoVendedor({
             </div>
             <h1 className="text-3xl font-black text-white italic uppercase tracking-tighter">Fala, {vendedorNome.split(" ")[0]} 🚀</h1>
           </div>
-          <Button onClick={copiarLinkAfiliado} className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black border border-emerald-500/30 h-12 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center" aria-label="Copiar link de afiliado">
-            <Share2 className="h-4 w-4 mr-2" /> Meu Link
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={copiarLinkAfiliado} className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black border border-emerald-500/30 h-12 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center" aria-label="Copiar link de afiliado">
+              <Share2 className="h-4 w-4 mr-2" /> Meu Link
+            </Button>
+            <Button
+              onClick={() => window.open("/demo", "_blank")}
+              className="bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-black border border-blue-500/30 h-12 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center"
+              aria-label="Abrir demonstração do sistema"
+            >
+              <BookOpen className="h-4 w-4 mr-2" /> Demo
+            </Button>
+          </div>
         </div>
 
         {/* Barra de meta */}

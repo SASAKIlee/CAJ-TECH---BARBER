@@ -9,6 +9,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Button } from "@/components/ui/button";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
+import Demo from "./pages/Demo";
 
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
@@ -49,16 +50,16 @@ function AppRoutes() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // 🛡️ TRAVA ABSOLUTA: Se for agendamento, para o mundo e mostra a tela.
-  const isPublic = location.pathname.startsWith('/agendar/') || location.pathname.startsWith('/checkin/');
+  // 🛡️ TRAVA ABSOLUTA: Se for agendamento ou demo, para o mundo e mostra a tela.
+  const isPublic = location.pathname.startsWith('/agendar/') || location.pathname.startsWith('/checkin/') || location.pathname === '/demo';
 
   if (isPublic) {
     return (
       <Routes>
         <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
         <Route path="/checkin/:slug/:ticket" element={<Checkin />} />
+        <Route path="/demo" element={<Demo />} />
         <Route path="*" element={<AgendamentoPublico />} />
-        <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
       </Routes>
     );
   }
@@ -72,6 +73,8 @@ function AppRoutes() {
       {/* Rota de convite do vendedor: redireciona para login */}
       <Route path="/convite/:id" element={<Navigate to="/auth" replace />} />
       <Route path="/" element={user ? <Index /> : <Navigate to="/auth" replace />} />
+      {/* Política de Privacidade acessível a todos */}
+      <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
