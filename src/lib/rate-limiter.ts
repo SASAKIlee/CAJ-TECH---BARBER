@@ -1,6 +1,9 @@
 /**
  * Rate Limiter simples para prevenir spam no agendamento público.
  * Limita a 5 tentativas por IP/sessão por hora.
+ *
+ * @module rate-limiter
+ * @author CAJ TECH
  */
 
 interface RateLimitEntry {
@@ -10,8 +13,10 @@ interface RateLimitEntry {
 
 const rateLimitMap = new Map<string, RateLimitEntry>();
 
+/** Limite máximo de requisições por janela de tempo */
 const LIMIT = 5;
-const WINDOW_MS = 60 * 60 * 1000; // 1 hora
+/** Janela de tempo em milissegundos (1 hora) */
+const WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * Verifica se o identificador (IP ou session) excedeu o limite.

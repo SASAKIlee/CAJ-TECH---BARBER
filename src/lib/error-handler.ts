@@ -1,6 +1,9 @@
 /**
  * Utilitário para tratamento padronizado de erros do Supabase.
  * Retorna mensagens amigáveis e específicas por tipo de erro.
+ *
+ * @module error-handler
+ * @author CAJ TECH
  */
 
 export interface SupabaseError {

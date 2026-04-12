@@ -2,9 +2,16 @@ import { useState, useEffect, useRef } from "react";
 
 /**
  * Hook para animação suave de contagem numérica usando requestAnimationFrame.
- * @param target Valor final alvo
- * @param duration Duração da animação em ms (padrão: 900)
- * @returns Valor animado atual
+ * Ideal para exibir valores monetários ou estatísticas com efeito visual.
+ *
+ * @module useCountUp
+ * @author CAJ TECH
+ * @param target Valor final alvo da animação
+ * @param duration Duração da animação em milissegundos (padrão: 900ms)
+ * @returns Valor animado atual para exibição
+ *
+ * @example
+ * const valor = useCountUp(1500); // Anima de 0 até 1500
  */
 export function useCountUp(target: number, duration = 900): number {
   const [display, setDisplay] = useState(target);
