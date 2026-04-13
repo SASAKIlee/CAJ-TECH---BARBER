@@ -64,6 +64,7 @@ export function useBarbearia(options?: { enabled?: boolean }) {
         cor_destaque: lojaData.cor_destaque?.trim() || "#FFFFFF",
         url_fundo: lojaData.url_fundo?.trim() || null,
         url_logo: lojaData.url_logo?.trim() || null,
+        checkin_habilitado: lojaData.checkin_habilitado ?? false,
       };
     },
     staleTime: Infinity,

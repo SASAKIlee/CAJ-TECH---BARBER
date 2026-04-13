@@ -112,32 +112,8 @@ export function DonoTabVIP({
         </Card>
       ) : (
         <div className="grid gap-4">
-          <Card className="p-6 rounded-3xl border border-white/[0.08] bg-zinc-950/80">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black">Automação</p>
-                <h4 className="text-xl font-black text-white">Lembretes VIP</h4>
-                <p className="text-sm text-zinc-400 mt-2">Notifique clientes VIP automaticamente antes do agendamento e reduza faltas.</p>
-              </div>
-              <Switch
-                checked={vipRemindersEnabled}
-                onCheckedChange={(checked) => {
-                  onVipRemindersChange(!!checked);
-                }}
-              />
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Frequência</p>
-                <p className="text-sm text-zinc-300">2 horas antes do horário agendado, com mensagem personalizada por WhatsApp.</p>
-              </div>
-              <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black mb-2">Status</p>
-                <p className="text-sm text-zinc-300">{vipRemindersEnabled ? "Ativo para todos os clientes VIP" : "Desativado"}</p>
-              </div>
-            </div>
-          </Card>
-
+          {/* Lembretes VIP desativados temporariamente pois a funcionalidade não está pronta */}
+          
           <Card className="p-6 rounded-3xl border border-white/[0.08] bg-zinc-950/80">
             <div className="flex items-center justify-between gap-4 mb-4">
               <div>

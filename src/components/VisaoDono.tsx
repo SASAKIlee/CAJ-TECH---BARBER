@@ -387,16 +387,16 @@ export function VisaoDono({
   // RENDER PRINCIPAL
   // ==========================================
   return (
-    <div className="flex flex-col gap-6 pb-40 pt-4 w-full overflow-x-hidden text-white">
+    <div className="flex flex-col gap-6 pb-40 pt-4 w-full overflow-x-hidden text-white relative">
       {/* BANNER DE AVISO GLOBAL (do CEO) */}
       {avisoRede && (
-        <div className="mx-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-xl shadow-lg flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center gap-2">
+        <div className="mx-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-xl shadow-lg flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 z-30">
+          <div className="flex items-center gap-2 overflow-hidden">
             <Megaphone className="h-5 w-5 animate-pulse shrink-0" />
-            <span className="font-bold text-sm uppercase tracking-wide">{avisoRede}</span>
+            <span className="font-bold text-sm uppercase tracking-wide truncate">{avisoRede}</span>
           </div>
-          <button 
-            onClick={() => setAvisoRede(null)} 
+          <button
+            onClick={() => setAvisoRede(null)}
             className="hover:bg-white/20 rounded-full p-1 transition-colors shrink-0"
           >
             <X className="h-4 w-4" />

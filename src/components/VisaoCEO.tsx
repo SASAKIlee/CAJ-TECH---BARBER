@@ -444,28 +444,51 @@ export function VisaoCEO({ totalLojas = 0, vendedores = [] }: any) {
   };
 
   const pagarComissao = async (vendedorId: string) => {
-    setIsPagarComissao(true);
-    toast.loading("Registrando pagamento de comissões...", { id: "pagamento" });
+    const vendedor = ranking.find(v => v.id === vendedorId)
+    if (!vendedor || vendedor.comissao_pendente <= 0) return
+
+    if (!confirm(`Confirmar pagamento de ${formatarMoeda(vendedor.comissao_pendente)} para ${vendedor.nome}?\n\nO valor será transferido via Mercado Pago.`)) return
+
+    setIsPagarComissao(true)
+    toast.loading("Processando pagamento...", { id: "pagamento" })
     try {
-      const leadsParaPagar = leadsRecentes.filter(l => l.vendedor_id === vendedorId && l.status === 'convertido' && !l.dados_adicionais?.comissao_paga);
-      
+      const { data: session } = await supabase.auth.getSession()
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pagar-comissao`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.session?.access_token}`
+        },
+        body: JSON.stringify({
+          vendedor_id: vendedorId,
+          valor: vendedor.comissao_pendente,
+          vendedor_email: vendedor.email
+        })
+      })
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Falha na comunicação com o gateway de pagamento")
+
+      // Marca as comissões como pagas no banco
+      const leadsParaPagar = leadsRecentes.filter(l => l.vendedor_id === vendedorId && l.status === 'convertido' && !l.dados_adicionais?.comissao_paga)
+
       for (const lead of leadsParaPagar) {
-        const novosDadosAdicionais = { 
-          ...lead.dados_adicionais, 
-          comissao_paga: true, 
-          data_pagamento_comissao: new Date().toISOString() 
-        };
-        await supabase.from("leads").update({ dados_adicionais: novosDadosAdicionais }).eq("id", lead.id);
+        const novosDadosAdicionais = {
+          ...lead.dados_adicionais,
+          comissao_paga: true,
+          data_pagamento_comissao: new Date().toISOString()
+        }
+        await supabase.from("leads").update({ dados_adicionais: novosDadosAdicionais }).eq("id", lead.id)
       }
-      
-      toast.success("Comissões liquidadas e registradas no sistema!", { id: "pagamento" });
-      carregarDados(); 
-    } catch (err) {
-      toast.error("Erro ao registrar pagamento.", { id: "pagamento" });
+
+      toast.success(`Pagamento de ${formatarMoeda(vendedor.comissao_pendente)} realizado com sucesso para ${vendedor.nome}!`, { id: "pagamento" })
+      carregarDados()
+    } catch (err: any) {
+      toast.error("Erro ao pagar: " + err.message, { id: "pagamento" })
     } finally {
-      setIsPagarComissao(false);
+      setIsPagarComissao(false)
     }
-  };
+  }
 
   const dispararAviso = async () => {
     if (!novoAviso.trim()) return;

@@ -67,6 +67,7 @@ interface Barbearia {
   isDono?: boolean;
   ativo?: boolean;
   plano?: string;
+  checkin_habilitado?: boolean;
 }
 
 // ==========================================
@@ -732,6 +733,7 @@ export default function Index() {
                   corPrimaria={marca}
                   onNovoAgendamento={handleNovoAgendamento}
                   onStatusChange={handleStatusChange}
+                  checkinHabilitado={barbearia?.checkin_habilitado || false}
                 />
               )}
 

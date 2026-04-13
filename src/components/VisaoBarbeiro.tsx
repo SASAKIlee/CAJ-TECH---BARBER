@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Plus, Check, X, MessageCircle, Users, Clock, ShieldAlert, LogOut, Lock,
-  Loader2, Edit, Calendar, Filter, Crown
+  Loader2, Edit, Calendar, Filter, Crown, Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -72,6 +72,7 @@ interface VisaoBarbeiroProps {
   isDono: boolean;
   userId?: string;
   corPrimaria?: string;
+  checkinHabilitado?: boolean;
 }
 
 interface NovoAgendamentoForm {
@@ -417,7 +418,19 @@ export function VisaoBarbeiro({
           )}
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <div className="flex gap-2">
+          {/* Botão Scanner (Placeholder para integração futura com lib de QR) */}
+          <MotionButton
+            variant="outline"
+            className="rounded-[20px] border-white/10 bg-white/5 h-14 px-6 font-black uppercase text-xs text-white hover:bg-white/10"
+            whileTap={{ scale: 0.95 }}
+            onClick={() => toast.info("Funcionalidade de Scanner será ativada em breve! 📸")}
+            aria-label="Escanear QR Code"
+          >
+            <Camera className="h-5 w-5 mr-2" /> Scanner
+          </MotionButton>
+
+          <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <MotionButton
               className="rounded-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] gap-2 h-14 px-8 font-black uppercase text-xs border-0"
@@ -600,6 +613,7 @@ export function VisaoBarbeiro({
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
       {isDono && (
         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
