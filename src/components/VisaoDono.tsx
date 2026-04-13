@@ -6,6 +6,10 @@ import {
   Settings2,
   Megaphone,
   X,
+  AlertTriangle,
+  ListOrdered,
+  ShoppingBag,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
@@ -26,6 +30,10 @@ import { DonoBannersAlerta } from "@/components/dono/DonoBannersAlerta";
 import { DonoModalUpgrade } from "@/components/dono/DonoModalUpgrade";
 import { DonoModalRenovacao } from "@/components/dono/DonoModalRenovacao";
 import { DonoBloqueio } from "@/components/dono/DonoBloqueio";
+import { RadarVendas } from "@/components/dono/RadarVendas";
+import { FilaEsperaInteligente } from "@/components/dono/FilaEsperaInteligente";
+import { LojinhaPDV } from "@/components/dono/LojinhaPDV";
+import { GestaoDespesas } from "@/components/dono/GestaoDespesas";
 
 const MotionButton = motion.create(Button);
 
@@ -75,6 +83,9 @@ export function VisaoDono({
   const [barbeiroFiltroId, setBarbeiroFiltroId] = useState("");
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
+  
+  // Sub-navegação para aba VIP
+  const [vipSubTab, setVipSubTab] = useState<"radar" | "fila" | "lojinha" | "despesas" | "automacoes">("automacoes");
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
   const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter");
@@ -110,6 +121,8 @@ export function VisaoDono({
   // ==========================================
   // Busca aviso global do CEO ao carregar
   useEffect(() => {
+    let dismissTimer: ReturnType<typeof setTimeout>;
+    
     const buscarAviso = async () => {
       const { data, error } = await supabase
         .from('avisos_rede')
@@ -123,14 +136,22 @@ export function VisaoDono({
         const dataAviso = new Date(data.criado_em);
         const agora = new Date();
         const diffHoras = (agora.getTime() - dataAviso.getTime()) / (1000 * 60 * 60);
-        
+
         if (diffHoras < 24) {
           setAvisoRede(data.mensagem);
+          
+          // Auto-dismiss após 10 segundos
+          dismissTimer = setTimeout(() => setAvisoRede(null), 10000);
         }
       }
     };
 
     buscarAviso();
+    
+    // Cleanup do timer
+    return () => {
+      if (dismissTimer) clearTimeout(dismissTimer);
+    };
   }, []);
 
   // ==========================================
@@ -155,9 +176,12 @@ export function VisaoDono({
   // ==========================================
   const switchSub = useCallback(
     (next: DonoSubTab) => {
-      const order: DonoSubTab[] = ["resumo", "dashboard", "automacoes", "config"];
+      const order: DonoSubTab[] = ["resumo", "dashboard", "vip", "config"];
       setSubDir(order.indexOf(next) > order.indexOf(subTab) ? 1 : -1);
       setSubTab(next);
+      if (next === "vip") {
+        setVipSubTab("automacoes"); // Reset para automacoes ao entrar em VIP
+      }
     },
     [subTab]
   );
@@ -387,24 +411,24 @@ export function VisaoDono({
   // RENDER PRINCIPAL
   // ==========================================
   return (
-    <div className="flex flex-col gap-6 pb-40 pt-4 w-full overflow-x-hidden text-white relative">
+    <div className="flex flex-col gap-4 sm:gap-6 pb-32 sm:pb-40 pt-3 sm:pt-4 w-full overflow-x-hidden text-white relative min-h-screen">
       {/* BANNER DE AVISO GLOBAL (do CEO) */}
       {avisoRede && (
-        <div className="mx-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-xl shadow-lg flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 z-30">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <Megaphone className="h-5 w-5 animate-pulse shrink-0" />
-            <span className="font-bold text-sm uppercase tracking-wide truncate">{avisoRede}</span>
+        <div className="mx-2 sm:mx-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2.5 sm:p-3 rounded-xl shadow-lg flex items-center justify-between gap-2 sm:gap-4 animate-in fade-in slide-in-from-top-4 z-30">
+          <div className="flex items-center gap-2 overflow-hidden min-w-0">
+            <Megaphone className="h-4 w-4 sm:h-5 sm:w-5 animate-pulse shrink-0" />
+            <span className="font-bold text-xs sm:text-sm uppercase tracking-wide truncate">{avisoRede}</span>
           </div>
           <button
             onClick={() => setAvisoRede(null)}
-            className="hover:bg-white/20 rounded-full p-1 transition-colors shrink-0"
+            className="hover:bg-white/20 rounded-full p-1 sm:p-1.5 transition-colors shrink-0"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
         </div>
       )}
 
-      <div className="px-4 flex flex-col gap-3">
+      <div className="px-2 sm:px-4 flex flex-col gap-2 sm:gap-3">
         <DonoBannersAlerta
           planoAtual={data.planoAtual}
           fasePagamento={data.fasePagamento}
@@ -416,12 +440,13 @@ export function VisaoDono({
         />
       </div>
 
-      <div className="px-4">
-        <div className="flex rounded-2xl border border-white/[0.08] p-1.5 gap-1.5 shadow-2xl" style={glass}>
+      {/* Navegação Principal - Sticky */}
+      <div className="px-2 sm:px-4 sticky top-0 z-40 bg-gradient-to-b from-black via-black/95 to-transparent backdrop-blur-xl pb-2 pt-2">
+        <div className="flex rounded-2xl border border-white/[0.08] p-1 gap-1 shadow-2xl bg-zinc-900/50">
           {([
             { id: "resumo", label: "Resumo", Icon: FileText },
             { id: "dashboard", label: "Métricas", Icon: BarChart3 },
-            { id: "automacoes", label: "VIP", Icon: Zap },
+            { id: "vip", label: "VIP", Icon: Zap },
             { id: "config", label: "Ajustes", Icon: Settings2 },
           ] as const).map(({ id, label, Icon }) => (
             <MotionButton
@@ -431,21 +456,23 @@ export function VisaoDono({
               whileTap={{ scale: 0.95 }}
               onClick={() => switchSub(id as DonoSubTab)}
               className={cn(
-                "flex-1 h-12 rounded-xl text-[10px] font-bold uppercase tracking-wide px-1 transition-colors",
-                subTab === id ? "shadow-lg border-0" : "text-white/60 hover:text-white"
+                "flex-1 min-w-0 h-11 sm:h-12 rounded-xl text-[9px] sm:text-[10px] font-bold uppercase tracking-wide px-1 sm:px-2 transition-all duration-200",
+                subTab === id
+                  ? "shadow-lg border-0 scale-[0.98]"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
               )}
               style={subTab === id ? { backgroundColor: brand, color: ctaFg } : undefined}
             >
-              <div className="flex flex-col items-center gap-1">
-                <Icon className="h-4 w-4" />
-                <span className="hidden xs:inline">{label}</span>
+              <div className="flex flex-col items-center justify-center gap-0.5 sm:gap-1">
+                <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="truncate text-[8px] sm:text-[10px] leading-tight">{label}</span>
               </div>
             </MotionButton>
           ))}
         </div>
       </div>
 
-      <div className="px-4">
+      <div className="px-2 sm:px-4">
         <AnimatePresence mode="wait" initial={false} custom={subDir}>
           <motion.div
             key={subTab}
@@ -471,18 +498,65 @@ export function VisaoDono({
                 glass={glass}
               />
             )}
-            {subTab === "automacoes" && (
-              <DonoTabVIP
-                planoAtual={data.planoAtual}
-                vipRemindersEnabled={data.vipRemindersEnabled}
-                vipClubEnabled={data.vipClubEnabled}
-                onVipRemindersChange={(enabled) => updateData({ vipRemindersEnabled: enabled })}
-                onVipClubChange={(enabled) => updateData({ vipClubEnabled: enabled })}
-                onUpgradeClick={() => setModalUpgradeAberto(true)}
-                brand={brand}
-                ctaFg={ctaFg}
-                glass={glass}
-              />
+            {subTab === "vip" && (
+              <div className="space-y-4">
+                {/* Sub-abas VIP */}
+                <div className="flex rounded-xl border border-white/[0.08] p-1 gap-0.5 bg-zinc-900/50 overflow-x-auto hide-scrollbar">
+                  {([
+                    { id: "automacoes" as const, label: "Automações", Icon: Zap },
+                    { id: "radar" as const, label: "Radar", Icon: AlertTriangle },
+                    { id: "fila" as const, label: "Fila", Icon: ListOrdered },
+                    { id: "lojinha" as const, label: "Lojinha", Icon: ShoppingBag },
+                    { id: "despesas" as const, label: "Despesas", Icon: Receipt },
+                  ]).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      onClick={() => setVipSubTab(id)}
+                      className={cn(
+                        "flex-shrink-0 flex items-center gap-1.5 py-2 px-3 sm:px-4 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-200",
+                        vipSubTab === id
+                          ? "bg-white/10 text-white shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="whitespace-nowrap">{label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Conteúdo VIP */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={vipSubTab}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    {vipSubTab === "radar" && (
+                      <RadarVendas slug={data.slug} brand={brand} glass={glass} />
+                    )}
+                    {vipSubTab === "fila" && (
+                      <FilaEsperaInteligente slug={data.slug} barbeiros={barbeiros} brand={brand} glass={glass} />
+                    )}
+                    {vipSubTab === "lojinha" && (
+                      <LojinhaPDV slug={data.slug} brand={brand} glass={glass} />
+                    )}
+                    {vipSubTab === "despesas" && (
+                      <GestaoDespesas slug={data.slug} brand={brand} glass={glass} faturamentoMes={faturamentoMensalProp} />
+                    )}
+                    {vipSubTab === "automacoes" && (
+                      <DonoTabVIP
+                        planoAtual={data.planoAtual}
+                        onUpgradeClick={() => setModalUpgradeAberto(true)}
+                        brand={brand}
+                        glass={glass}
+                      />
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             )}
             {subTab === "config" && (
               <DonoTabConfig

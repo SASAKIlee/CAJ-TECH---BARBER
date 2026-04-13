@@ -1,4 +1,4 @@
-import { X, Crown, CheckCircle2 } from "lucide-react";
+import { X, Crown, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DonoModalUpgradeProps, PlanoType } from "@/types/dono";
@@ -8,6 +8,9 @@ const VALORES_PLANO: Record<PlanoType, number> = {
   pro: 99.9,
   elite: 497.0,
 };
+
+// Funcionalidades desabilitadas temporariamente
+const WHATSAPP_DISABLED = true;
 
 export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoModalUpgradeProps) {
   if (!open) return null;
@@ -25,9 +28,10 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
-          <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between opacity-60">
+          {/* PLANO STARTER */}
+          <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between">
             <div>
-              <h3 className="text-zinc-500 font-black uppercase text-xs tracking-widest">Starter</h3>
+              <h3 className="text-zinc-400 font-black uppercase text-xs tracking-widest">Starter</h3>
               <p className="text-4xl font-black text-white my-4 italic">
                 R$ 50<span className="text-xs opacity-30">/mês</span>
               </p>
@@ -38,17 +42,36 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
                 <li className="flex gap-2 font-bold uppercase">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Link de Agendamento
                 </li>
+                <li className="flex gap-2 font-bold uppercase">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Dashboard Básico
+                </li>
+                {WHATSAPP_DISABLED && (
+                  <li className="flex gap-2 font-bold uppercase opacity-40">
+                    <AlertCircle className="h-4 w-4 text-zinc-600 shrink-0" /> WhatsApp (Em Breve)
+                  </li>
+                )}
               </ul>
             </div>
-            <Button
-              variant="outline"
-              className="border-zinc-800 text-zinc-500 uppercase font-black text-[10px] h-12 rounded-xl"
-              disabled
-            >
-              Seu Plano Atual
-            </Button>
+            {planoAtual === "starter" ? (
+              <Button
+                variant="outline"
+                className="border-zinc-800 text-zinc-500 uppercase font-black text-[10px] h-12 rounded-xl"
+                disabled
+              >
+                Seu Plano Atual
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="border-zinc-700 text-zinc-300 uppercase font-black text-[10px] h-12 rounded-xl hover:bg-zinc-800"
+                onClick={() => onUpgrade("starter")}
+              >
+                Downgrade
+              </Button>
+            )}
           </Card>
 
+          {/* PLANO PRO - Mais Vendido */}
           <Card className="p-6 bg-emerald-500/5 border-emerald-500 border-2 rounded-3xl relative md:scale-105 shadow-2xl z-10 flex flex-col justify-between">
             <div>
               <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[9px] font-black uppercase px-4 py-1 rounded-full shadow-lg">
@@ -60,14 +83,28 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
               </p>
               <ul className="text-[11px] text-zinc-300 space-y-3 mb-6">
                 <li className="flex gap-2 font-bold uppercase">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Barbeiros Ilimitados
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Profissionais ILIMITADOS
                 </li>
                 <li className="flex gap-2 font-bold uppercase">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> WhatsApp VIP (Automação)
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Dashboard Completo (Lucro Real)
                 </li>
                 <li className="flex gap-2 font-bold uppercase">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Clube de Assinatura
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Radar de Vendas (Clientes Sumidos)
                 </li>
+                <li className="flex gap-2 font-bold uppercase">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Fila de Espera Inteligente
+                </li>
+                <li className="flex gap-2 font-bold uppercase">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Lojinha (PDV + Estoque)
+                </li>
+                <li className="flex gap-2 font-bold uppercase">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Cliente VIP 👑
+                </li>
+                {WHATSAPP_DISABLED && (
+                  <li className="flex gap-2 font-bold uppercase opacity-40">
+                    <AlertCircle className="h-4 w-4 text-zinc-600 shrink-0" /> WhatsApp Automação (Em Breve)
+                  </li>
+                )}
               </ul>
             </div>
             {planoAtual === "pro" ? (
@@ -83,11 +120,12 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
                 onClick={() => onUpgrade("pro")}
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg"
               >
-                Evoluir e Pagar
+                Evoluir para PRO
               </Button>
             )}
           </Card>
 
+          {/* PLANO ELITE - Em Breve */}
           <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between opacity-50">
             <div>
               <div className="flex items-center justify-between mb-2">

@@ -2,7 +2,7 @@
 // TIPOS PARA VisaoDono E COMPONENTES FILHOS
 // ==========================================
 
-export type DonoSubTab = "resumo" | "dashboard" | "automacoes" | "config";
+export type DonoSubTab = "resumo" | "dashboard" | "vip" | "config";
 export type PlanoType = "starter" | "pro" | "elite";
 export type FasePagamento = 1 | 2 | 3 | 4;
 
@@ -98,13 +98,8 @@ export interface DonoTabDashboardProps {
 
 export interface DonoTabVIPProps {
   planoAtual: PlanoType;
-  vipRemindersEnabled: boolean;
-  vipClubEnabled: boolean;
-  onVipRemindersChange: (enabled: boolean) => void;
-  onVipClubChange: (enabled: boolean) => void;
   onUpgradeClick: () => void;
   brand: string;
-  ctaFg: string;
   glass: React.CSSProperties;
 }
 
@@ -186,4 +181,59 @@ export interface DonoBloqueioProps {
   onCopiarPix: () => void;
   onRenovacaoClick: () => void;
   getValorPlano: (plano: PlanoType) => number;
+}
+
+// ==========================================
+// NOVOS TIPOS PARA FUNCIONALIDADES PRO
+// ==========================================
+
+export interface Despesa {
+  id: string;
+  barbearia_id: string;
+  descricao: string;
+  valor: number;
+  categoria: string;
+  data: string;
+  criado_em: string;
+}
+
+export interface Produto {
+  id: string;
+  barbearia_id: string;
+  nome: string;
+  preco: number;
+  estoque: number;
+  criado_em: string;
+}
+
+export interface VendaProduto {
+  id: string;
+  barbearia_id: string;
+  produto_id: string;
+  produto_nome?: string;
+  quantidade: number;
+  valor_total: number;
+  data: string;
+}
+
+export interface FilaEspera {
+  id: string;
+  barbearia_id: string;
+  nome_cliente: string;
+  telefone: string;
+  servico_desejado: string;
+  barbeiro_preferido?: string;
+  data_inscricao: string;
+  status: "aguardando" | "notificado" | "confirmado" | "desistiu";
+  prioridade?: number;
+}
+
+export interface ClienteRadar {
+  id: string;
+  nome: string;
+  telefone: string;
+  ultimo_agendamento: string;
+  dias_sem_visitar: number;
+  total_visitas: number;
+  valor_total_gasto: number;
 }

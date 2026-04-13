@@ -666,44 +666,52 @@ export default function Index() {
         <ImpersonationBanner />
 
         {tab !== "carteira" && (
-          <div className="border-b border-white/[0.08] p-3 flex items-center justify-center gap-3 sticky top-0 z-10 w-full shrink-0 bg-black/30 backdrop-blur-xl">
-            <Calendar className="h-4 w-4 text-white/50" />
-            <input
-              type="date"
-              value={dataFiltro}
-              onChange={(e) => setDataFiltro(e.target.value)}
-              className="rounded-full border border-white/[0.12] bg-black/35 px-4 py-1 text-sm outline-none focus:ring-1 focus:ring-white/30 color-scheme-dark text-white backdrop-blur-sm"
-            />
+          <div className="border-b border-white/[0.08] px-2 sm:px-4 py-2 flex items-center gap-2 sticky top-0 z-10 w-full shrink-0 bg-black/80 backdrop-blur-xl overflow-x-auto hide-scrollbar">
+            {/* Data - Compacta e bonita */}
+            <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
+              <Calendar className="h-4 w-4 text-zinc-400" />
+              <input
+                type="date"
+                value={dataFiltro}
+                onChange={(e) => setDataFiltro(e.target.value)}
+                className="bg-transparent text-[11px] sm:text-sm outline-none text-white font-medium w-[115px] sm:w-auto"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+
+            {/* Botão Hoje */}
             <motion.div whileTap={{ scale: 0.95 }}>
               <Button
                 variant="secondary"
                 size="sm"
-                className="rounded-full px-4 h-8 text-[10px] font-bold uppercase border-white/[0.1] bg-white/[0.08] text-white hover:bg-white/[0.12]"
+                className="rounded-lg px-3 sm:px-4 h-9 sm:h-10 text-[9px] sm:text-[10px] font-bold uppercase border-white/[0.08] bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1] hover:text-white shrink-0"
                 onClick={() => setDataFiltro(getLocalDate())}
               >
                 Hoje
               </Button>
             </motion.div>
 
-            {/* SELETOR DE BARBEIRO PARA DONOS */}
+            {/* SELETOR DE BARBEIRO (só para donos) */}
             {isDono && barbeiros.length > 0 && (
-              <div className="flex items-center gap-2 ml-2">
-                <User className="h-4 w-4 text-white/50" />
+              <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
+                <User className="h-4 w-4 text-zinc-400" />
                 <select
                   value={barbeiroSelecionadoId}
                   onChange={(e) => setBarbeiroSelecionadoId(e.target.value)}
-                  className="rounded-full border border-white/[0.12] bg-black/35 px-3 py-1 text-sm outline-none focus:ring-1 focus:ring-white/30 color-scheme-dark text-white backdrop-blur-sm"
+                  className="bg-transparent text-[11px] sm:text-sm outline-none text-zinc-300 min-w-[100px] sm:min-w-[130px] appearance-none pr-5 font-medium"
+                  style={{ colorScheme: 'dark' }}
                 >
-                  <option value="">Todos os barbeiros</option>
+                  <option value="" className="bg-zinc-900 text-zinc-300">Todos</option>
                   {barbeiros.map((b) => (
-                    <option key={b.id} value={b.id}>
+                    <option key={b.id} value={b.id} className="bg-zinc-900 text-zinc-300">
                       {b.nome}
                     </option>
                   ))}
                 </select>
               </div>
             )}
-            {agendamentosQuery.isFetching && <Loader2 className="h-4 w-4 animate-spin text-white/50" />}
+
+            {agendamentosQuery.isFetching && <Loader2 className="h-4 w-4 animate-spin text-zinc-500 shrink-0" />}
           </div>
         )}
 
