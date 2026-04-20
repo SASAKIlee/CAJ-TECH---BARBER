@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import DOMPurify from "dompurify";
-import { DonoBloqueio } from "@/components/dono/DonoBloqueio"; // ← NOVO
+import { DonoBloqueio } from "@/components/dono/DonoBloqueio";
 import type { PlanoType } from "@/types/dono";
 
 const MotionButton = motion.create(Button);
@@ -77,7 +77,6 @@ interface VisaoBarbeiroProps {
   userId?: string;
   corPrimaria?: string;
   checkinHabilitado?: boolean;
-  // Novas props para bloqueio por inadimplência (opcionais, usadas apenas quando isDono=true)
   planoAtual?: PlanoType;
   pixGerado?: string | null;
   tempoPix?: number;
@@ -184,15 +183,12 @@ export function VisaoBarbeiro({
   onGerarPix = () => {},
   onCopiarPix = () => {},
   onRenovacaoClick = () => {},
-  getValorPlano = () => 99.9,
+  getValorPlano = () => 50,
 }: VisaoBarbeiroProps) {
   const navigate = useNavigate();
   const scannerInputRef = useRef<HTMLInputElement>(null);
   const scannerAbortControllerRef = useRef<AbortController | null>(null);
 
-  // ==========================================
-  // ESTADOS
-  // ==========================================
   const [open, setOpen] = useState(false);
   const [infoLoja, setInfoLoja] = useState({
     abertura: HORARIO_PADRAO_ABERTURA,
@@ -259,7 +255,6 @@ export function VisaoBarbeiro({
     return () => controller.abort();
   }, [slugBarbearia]);
 
-  // Sincroniza barbeiroSelecionadoId com o userId para barbeiros comuns
   useEffect(() => {
     if (!isDono && userId && barbeiroSelecionadoId !== userId) {
       setBarbeiroSelecionadoId(userId);
@@ -472,7 +467,6 @@ export function VisaoBarbeiro({
     scannerInputRef.current?.click();
   }, [checkinHabilitado]);
 
-  // Cleanup do scanner ao desmontar
   useEffect(() => {
     return () => {
       scannerAbortControllerRef.current?.abort();
@@ -488,9 +482,9 @@ export function VisaoBarbeiro({
   const lojaInativa = isLojaAtiva === false;
   const bloqueado = lojaInativa || isVencida;
 
-  // Se estiver bloqueado, exibe tela adequada
+  // Se bloqueado, retorna tela de bloqueio e NADA MAIS é renderizado
   if (bloqueado) {
-    // Se for dono e estiver vencido, mostra opção de pagamento (DonoBloqueio)
+    // Se for dono e estiver vencido, mostra tela de pagamento completa
     if (isDono && isVencida) {
       return (
         <DonoBloqueio
@@ -507,7 +501,7 @@ export function VisaoBarbeiro({
       );
     }
 
-    // Para barbeiro ou dono com bloqueio manual
+    // Para barbeiro, dono com bloqueio manual, ou dono inativo (não vencido)
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
         <div className="max-w-sm w-full space-y-6 text-center">
@@ -577,7 +571,7 @@ export function VisaoBarbeiro({
   }
 
   // ==========================================
-  // RENDER NORMAL (AGENDA)
+  // RENDER NORMAL (AGENDA) - SÓ EXECUTA SE NÃO BLOQUEADO
   // ==========================================
   return (
     <div className="space-y-6 text-white pb-32">
@@ -626,13 +620,13 @@ export function VisaoBarbeiro({
               </MotionButton>
             </DialogTrigger>
             <DialogContent className="dark border-white/[0.08] text-white w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar bg-zinc-950/95 backdrop-blur-xl">
+              {/* Conteúdo do modal (mantido igual) */}
               <DialogHeader>
                 <DialogTitle className="text-white font-black uppercase italic text-2xl flex items-center gap-2">
                   <Clock style={{ color: brand }} /> Novo Horário
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-5 pt-4">
-                {/* ... formulário mantido exatamente igual ao original ... */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
                   <Input
