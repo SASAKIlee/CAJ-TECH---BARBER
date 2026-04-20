@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Clock, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -88,7 +88,14 @@ export function ModalNovoAgendamento({
 
     setIsSubmitting(true);
     const toastId = toast.loading("Processando...");
-    const validacao = agendamentoSchema.safeParse(novo);
+
+    // 1. Zod exige um objeto Date, mas o input retorna string. Convertemos para a validação não travar:
+    const dataParaZod = new Date(`${novo.data}T12:00:00`);
+    
+    const validacao = agendamentoSchema.safeParse({
+      ...novo,
+      data: dataParaZod
+    });
 
     if (!validacao.success) {
       toast.dismiss(toastId);
@@ -98,7 +105,17 @@ export function ModalNovoAgendamento({
     }
 
     try {
-      const res = await onNovoAgendamento({ ...validacao.data, observacao: DOMPurify.sanitize(novo.observacao) });
+      // 2. Mapeamento CORRETO para as colunas do banco de dados do Supabase
+      const res = await onNovoAgendamento({
+        nome_cliente: novo.nome,
+        telefone_cliente: novo.telefone,
+        servico_id: novo.servicoId,
+        barbeiro_id: novo.barbeiroId,
+        data: novo.data, // O banco espera a string 'YYYY-MM-DD'
+        horario: novo.horario,
+        observacao: DOMPurify.sanitize(novo.observacao)
+      });
+
       toast.dismiss(toastId);
       if (!res?.error) {
         onOpenChange(false);
