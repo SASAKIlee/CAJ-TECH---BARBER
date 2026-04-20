@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ShoppingBag, Plus, X, Minus, Package, DollarSign, TrendingUp, Loader2, Search, Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Produto, VendaProduto } from "@/types/dono";
-import { usePlan } from "@/hooks/usePlan"; // ← NOVO IMPORT
 
 interface LojinhaPDVProps {
   slug: string;
@@ -18,9 +17,8 @@ interface LojinhaPDVProps {
 }
 
 export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
-  // ← CARREGA O PLANO
-  const { plan, hasProAccess, loading: planLoading } = usePlan(slug);
-
+  const [plano, setPlano] = useState<string | null>(null);
+  const [loadingPlano, setLoadingPlano] = useState(true);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [vendas, setVendas] = useState<VendaProduto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,83 +26,57 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
   const [novoProduto, setNovoProduto] = useState({ nome: "", preco: "", estoque: "" });
   const [busca, setBusca] = useState("");
 
-  // ← BLOQUEIO: Se não for Pro/Elite, mostra tela de upgrade
-  if (planLoading || loading) {
-    return (
-      <Card className="p-8 rounded-2xl border border-white/[0.08] text-center" style={glass}>
-        <Loader2 className="animate-spin text-purple-500 h-8 w-8 mx-auto" />
-        <p className="text-zinc-400 text-sm mt-4">Carregando...</p>
-      </Card>
-    );
-  }
+  const hasProAccess = plano === "pro" || plano === "elite";
 
-  if (!hasProAccess) {
-    return (
-      <Card className="p-6 rounded-2xl border border-white/[0.08] text-center" style={glass}>
-        <div className="flex flex-col items-center">
-          <div className="h-16 w-16 rounded-2xl bg-purple-500/20 flex items-center justify-center mb-4">
-            <Lock className="h-8 w-8 text-purple-400" />
-          </div>
-          <h3 className="font-black text-white uppercase text-lg mb-2">Lojinha / PDV</h3>
-          <p className="text-zinc-400 text-sm mb-4 max-w-xs">
-            Controle de estoque, vendas e histórico é exclusivo do plano <strong className="text-purple-400">Pro</strong>.
-          </p>
-          
-          <div className="bg-black/30 rounded-xl p-4 mb-6 w-full text-left">
-            <p className="text-xs text-zinc-500 uppercase font-black mb-2">No plano Pro você tem:</p>
-            <ul className="text-xs text-zinc-300 space-y-1">
-              <li>✓ Controle de estoque em tempo real</li>
-              <li>✓ Registro de vendas com histórico</li>
-              <li>✓ Cálculo automático de comissões</li>
-              <li>✓ Lembretes de WhatsApp</li>
-            </ul>
-          </div>
+  const carregarPlano = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("barbearias")
+        .select("plano")
+        .eq("slug", slug)
+        .single();
 
-          <Button 
-            onClick={() => window.location.href = "/planos"} 
-            className="font-black uppercase w-full"
-            style={{ backgroundColor: brand }}
-          >
-            Upgrade para Pro — R$ 99,90/mês
-          </Button>
-          <p className="text-[10px] text-zinc-500 mt-2">
-            Plano atual: <strong className="text-zinc-300 uppercase">{plan}</strong>
-          </p>
-        </div>
-      </Card>
-    );
-  }
-
-  // ← RENDERIZAÇÃO NORMAL PARA PRO/ELITE (código original preservado)
-  useEffect(() => {
-    carregarDados();
+      if (error) throw error;
+      setPlano(data?.plano || "starter");
+    } catch (err) {
+      console.error("Erro ao carregar plano:", err);
+      setPlano("starter");
+    } finally {
+      setLoadingPlano(false);
+    }
   }, [slug]);
 
-  const carregarDados = async () => {
+  const carregarDados = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: prods, error: err1 } = await supabase
-        .from("produtos")
-        .select("*")
-        .eq("barbearia_slug", slug)
-        .order("nome", { ascending: true });
+      const [prodsRes, vendasRes] = await Promise.all([
+        supabase.from("produtos").select("*").eq("barbearia_slug", slug).order("nome", { ascending: true }),
+        supabase.from("vendas_produtos").select("*, produtos(nome)").eq("barbearia_slug", slug).order("data", { ascending: false }).limit(50)
+      ]);
 
-      const { data: vds, error: err2 } = await supabase
-        .from("vendas_produtos")
-        .select("*, produtos(nome)")
-        .eq("barbearia_slug", slug)
-        .order("data", { ascending: false })
-        .limit(50);
+      if (prodsRes.error) throw prodsRes.error;
+      if (vendasRes.error) throw vendasRes.error;
 
-      if (err1 || err2) throw err1 || err2;
-      setProdutos(prods || []);
-      setVendas(vds || []);
+      setProdutos(prodsRes.data || []);
+      setVendas(vendasRes.data || []);
     } catch (err: any) {
-      toast.error("Erro ao carregar: " + err.message);
+      toast.error("Erro ao carregar dados: " + err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug]);
+
+  useEffect(() => {
+    carregarPlano();
+  }, [carregarPlano]);
+
+  useEffect(() => {
+    if (hasProAccess) {
+      carregarDados();
+    } else {
+      setLoading(false);
+    }
+  }, [hasProAccess, carregarDados]);
 
   const handleAddProduto = async () => {
     if (!novoProduto.nome || !novoProduto.preco) {
@@ -189,6 +161,56 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
     p.nome.toLowerCase().includes(busca.toLowerCase())
   );
 
+  // Tela de carregamento inicial
+  if (loadingPlano || (loading && hasProAccess)) {
+    return (
+      <Card className="p-8 rounded-2xl border border-white/[0.08] text-center" style={glass}>
+        <Loader2 className="animate-spin text-purple-500 h-8 w-8 mx-auto" />
+        <p className="text-zinc-400 text-sm mt-4">Carregando...</p>
+      </Card>
+    );
+  }
+
+  // Bloqueio para planos sem acesso
+  if (!hasProAccess) {
+    return (
+      <Card className="p-6 rounded-2xl border border-white/[0.08] text-center" style={glass}>
+        <div className="flex flex-col items-center">
+          <div className="h-16 w-16 rounded-2xl bg-purple-500/20 flex items-center justify-center mb-4">
+            <Lock className="h-8 w-8 text-purple-400" />
+          </div>
+          <h3 className="font-black text-white uppercase text-lg mb-2">Lojinha / PDV</h3>
+          <p className="text-zinc-400 text-sm mb-4 max-w-xs">
+            Controle de estoque, vendas e histórico é exclusivo do plano{" "}
+            <strong className="text-purple-400">Pro</strong> ou <strong className="text-purple-400">Elite</strong>.
+          </p>
+
+          <div className="bg-black/30 rounded-xl p-4 mb-6 w-full text-left">
+            <p className="text-xs text-zinc-500 uppercase font-black mb-2">No plano Pro você tem:</p>
+            <ul className="text-xs text-zinc-300 space-y-1">
+              <li>✓ Controle de estoque em tempo real</li>
+              <li>✓ Registro de vendas com histórico</li>
+              <li>✓ Cálculo automático de comissões</li>
+              <li>✓ Lembretes de WhatsApp</li>
+            </ul>
+          </div>
+
+          <Button
+            onClick={() => window.location.href = "/"}
+            className="font-black uppercase w-full"
+            style={{ backgroundColor: brand }}
+          >
+            Fazer Upgrade
+          </Button>
+          <p className="text-[10px] text-zinc-500 mt-2">
+            Plano atual: <strong className="text-zinc-300 uppercase">{plano || "starter"}</strong>
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
+  // Conteúdo completo para planos Pro/Elite
   return (
     <section className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
@@ -228,12 +250,19 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
       {/* Busca */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-        <Input placeholder="Buscar produto..." value={busca} onChange={e => setBusca(e.target.value)} className="bg-black/30 border-white/10 pl-10 h-10 rounded-xl text-sm" />
+        <Input
+          placeholder="Buscar produto..."
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          className="bg-black/30 border-white/10 pl-10 h-10 rounded-xl text-sm"
+        />
       </div>
 
       {/* Produtos */}
       {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-purple-500 h-8 w-8" /></div>
+        <div className="flex justify-center py-10">
+          <Loader2 className="animate-spin text-purple-500 h-8 w-8" />
+        </div>
       ) : produtosFiltrados.length === 0 ? (
         <Card className="p-8 rounded-2xl border border-white/[0.08] text-center" style={glass}>
           <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
@@ -259,19 +288,30 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                     <button onClick={() => handleAjustarEstoque(produto, -1)} className="text-zinc-400 hover:text-white">
                       <Minus className="h-3 w-3" />
                     </button>
-                    <Badge variant="outline" className={cn(
-                      "text-[9px] min-w-[24px] justify-center",
-                      produto.estoque === 0 ? "text-red-400 border-red-500/30" :
-                      produto.estoque <= 3 ? "text-yellow-400 border-yellow-500/30" :
-                      "text-zinc-300 border-white/10"
-                    )}>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[9px] min-w-[24px] justify-center",
+                        produto.estoque === 0
+                          ? "text-red-400 border-red-500/30"
+                          : produto.estoque <= 3
+                          ? "text-yellow-400 border-yellow-500/30"
+                          : "text-zinc-300 border-white/10"
+                      )}
+                    >
                       {produto.estoque}
                     </Badge>
                     <button onClick={() => handleAjustarEstoque(produto, 1)} className="text-zinc-400 hover:text-white">
                       <Plus className="h-3 w-3" />
                     </button>
                   </div>
-                  <Button size="sm" onClick={() => handleVender(produto)} disabled={produto.estoque === 0} className="h-7 px-2 text-[8px] font-black uppercase" style={{ backgroundColor: brand }}>
+                  <Button
+                    size="sm"
+                    onClick={() => handleVender(produto)}
+                    disabled={produto.estoque === 0}
+                    className="h-7 px-2 text-[8px] font-black uppercase"
+                    style={{ backgroundColor: brand }}
+                  >
                     <DollarSign className="h-3 w-3 mr-0.5" /> Vender
                   </Button>
                   <button onClick={() => handleRemoverProduto(produto.id)} className="text-zinc-600 hover:text-red-500 p-1">
@@ -298,9 +338,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                   <span className="text-zinc-500 text-[10px]">
                     {new Date(venda.data).toLocaleDateString("pt-BR")}
                   </span>
-                  <span className="text-emerald-400 font-bold">
-                    R$ {venda.valor_total.toFixed(2)}
-                  </span>
+                  <span className="text-emerald-400 font-bold">R$ {venda.valor_total.toFixed(2)}</span>
                 </div>
               </div>
             ))}
@@ -315,25 +353,50 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
             <Card className="w-full max-w-sm p-6 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-white font-black uppercase text-lg">Novo Produto</h3>
-                <button onClick={() => setModalProduto(false)} className="text-zinc-500 hover:text-white bg-zinc-800 h-8 w-8 rounded-full flex items-center justify-center">
+                <button
+                  onClick={() => setModalProduto(false)}
+                  className="text-zinc-500 hover:text-white bg-zinc-800 h-8 w-8 rounded-full flex items-center justify-center"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <div className="space-y-3">
                 <div>
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Nome do Produto</label>
-                  <Input value={novoProduto.nome} onChange={e => setNovoProduto({ ...novoProduto, nome: e.target.value })} placeholder="Ex: Pomada Modeladora" className="bg-black/30 border-white/10 h-12 rounded-xl" />
+                  <Input
+                    value={novoProduto.nome}
+                    onChange={e => setNovoProduto({ ...novoProduto, nome: e.target.value })}
+                    placeholder="Ex: Pomada Modeladora"
+                    className="bg-black/30 border-white/10 h-12 rounded-xl"
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Preço (R$)</label>
-                  <Input type="number" step="0.01" value={novoProduto.preco} onChange={e => setNovoProduto({ ...novoProduto, preco: e.target.value })} placeholder="29.90" className="bg-black/30 border-white/10 h-12 rounded-xl" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={novoProduto.preco}
+                    onChange={e => setNovoProduto({ ...novoProduto, preco: e.target.value })}
+                    placeholder="29.90"
+                    className="bg-black/30 border-white/10 h-12 rounded-xl"
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Estoque Inicial</label>
-                  <Input type="number" value={novoProduto.estoque} onChange={e => setNovoProduto({ ...novoProduto, estoque: e.target.value })} placeholder="10" className="bg-black/30 border-white/10 h-12 rounded-xl" />
+                  <Input
+                    type="number"
+                    value={novoProduto.estoque}
+                    onChange={e => setNovoProduto({ ...novoProduto, estoque: e.target.value })}
+                    placeholder="10"
+                    className="bg-black/30 border-white/10 h-12 rounded-xl"
+                  />
                 </div>
               </div>
-              <Button onClick={handleAddProduto} className="w-full h-12 font-black text-xs uppercase" style={{ backgroundColor: brand }}>
+              <Button
+                onClick={handleAddProduto}
+                className="w-full h-12 font-black text-xs uppercase"
+                style={{ backgroundColor: brand }}
+              >
                 Cadastrar Produto
               </Button>
             </Card>

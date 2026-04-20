@@ -1,9 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* 🚀 CORREÇÃO: Adicionado o peso 900 (Black) que usamos muito nos botões e títulos */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @layer base {
   :root {
@@ -32,38 +31,35 @@
   }
 
   .dark {
-    /* 🚀 CORREÇÃO: Fundo realmente Preto/Zinco para combinar com o design Premium */
-    --background: 0 0% 0%; 
+    --background: 0 0% 0%;
     --foreground: 0 0% 100%;
-    --card: 240 5% 6%; /* Zinc 950 */
+    --card: 240 5% 6%;
     --card-foreground: 0 0% 100%;
     --popover: 240 5% 6%;
     --popover-foreground: 0 0% 100%;
-    --primary: 45 93% 47%; /* CAJ Gold */
+    --primary: 45 93% 47%;
     --primary-foreground: 0 0% 0%;
-    --secondary: 240 4% 16%; /* Zinc 800 */
+    --secondary: 240 4% 16%;
     --secondary-foreground: 0 0% 100%;
     --muted: 240 5% 15%;
-    --muted-foreground: 240 5% 65%; /* text-zinc-400 */
+    --muted-foreground: 240 5% 65%;
     --accent: 45 93% 47%;
     --accent-foreground: 0 0% 0%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
-    --border: 240 5% 15%; /* Zinc 800 */
+    --border: 240 5% 15%;
     --input: 240 5% 15%;
     --ring: 45 93% 47%;
-    /* 🚀 CORREÇÃO: Arredondamento padrão maior para os Selects e Dialogs do Shadcn */
-    --radius: 1.2rem; 
+    --radius: 1.2rem;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
-    /* 🚀 CORREÇÃO: Remove o "flash azul" feio no mobile ao clicar em botões */
-    -webkit-tap-highlight-color: transparent; 
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -71,9 +67,8 @@
     font-family: 'Inter', sans-serif;
   }
 
-  /* 🚀 CORREÇÃO: A cor de seleção de texto (quando o usuário arrasta o mouse ou dedo) */
   ::selection {
-    background-color: hsl(45 93% 47% / 0.3); /* Dourado transparente */
+    background-color: hsl(45 93% 47% / 0.3);
     color: white;
   }
 }
@@ -83,9 +78,6 @@
     @apply bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/50 shadow-xl;
   }
 
-  /* ==================================================== */
-  /* SCROLLBARS PREMIUM (USADAS EM TODO O APP)          */
-  /* ==================================================== */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
