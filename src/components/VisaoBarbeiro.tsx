@@ -37,8 +37,12 @@ export function VisaoBarbeiro(props: any) {
   const perfilLogado = barbeiros.find((b: any) => b.id === userId);
 
   // Busca de configurações da Loja
+  // Busca de configurações da Loja
   useEffect(() => {
-    if (!slugBarbearia) return;
+    if (!slugBarbearia) {
+      setIsLojaAtiva(true); // Se não achar o slug, destrava o loading infinito!
+      return;
+    }
     const controller = new AbortController();
     supabase.from('barbearias').select('horario_abertura, horario_fechamento, nome, ativo, data_vencimento').eq('slug', slugBarbearia).single()
       .then(({ data }) => {
