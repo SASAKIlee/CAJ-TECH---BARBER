@@ -59,7 +59,6 @@ interface Agendamento {
   barbearia_slug: string;
 }
 
-// Interface usada pelo hook useBarbearia (já deve existir nos tipos globais, mas reforçamos)
 interface Barbearia {
   id: string;
   slug: string;
@@ -611,7 +610,7 @@ export default function Index() {
   }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
 
   // ==========================================
-  // VERIFICAÇÃO DE BLOQUEIO (SEM ERROS)
+  // VERIFICAÇÃO DE BLOQUEIO (CORRIGIDA)
   // ==========================================
   const hoje = new Date();
   let dataVenc: Date | null = null;
@@ -816,99 +815,117 @@ export default function Index() {
         )}
 
         <main className="flex-1 p-3 sm:p-4 md:p-6 pb-28 max-w-7xl mx-auto w-full flex flex-col min-h-0">
-          <AnimatePresence mode="wait" initial={false} custom={tabSlideDir}>
-            <motion.div
-              key={tab}
-              custom={tabSlideDir}
-              variants={tabPanelVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ type: "spring", stiffness: 400, damping: 36 }}
-              className="flex-1 w-full"
-            >
-              {tab === "barbeiro" && (
-                <VisaoBarbeiro
-                  barbeiros={barbeiros}
-                  servicos={servicos}
-                  agendamentos={stats.agendamentosParaExibir}
-                  barbeiroSelecionadoId={barbeiroSelecionadoId}
-                  setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
-                  horariosOcupados={horariosOcupados}
-                  servicos_find={servicos_find}
-                  isDono={isDono || false}
-                  userId={user?.id}
-                  corPrimaria={marca}
-                  onNovoAgendamento={handleNovoAgendamento}
-                  onStatusChange={handleStatusChange}
-                  checkinHabilitado={barbearia?.checkin_habilitado || false}
-                  planoAtual={(donoData.planoAtual as PlanoType) || "pro"}
-                  pixGerado={pixGerado}
-                  tempoPix={tempoPix}
-                  isGerandoPix={isGerandoPix}
-                  onGerarPix={handleGerarPix}
-                  onCopiarPix={handleCopiarPix}
-                  onRenovacaoClick={handleRenovacaoClick}
-                  getValorPlano={getValorPlano}
-                />
-              )}
+          {lojaBloqueada ? (
+            <div className="flex flex-col items-center justify-center flex-1 h-full text-center px-4">
+              <div className="bg-zinc-900 border border-red-500/30 p-8 rounded-2xl max-w-md w-full shadow-2xl">
+                <Wallet className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-black text-white mb-2 uppercase italic tracking-tight">Assinatura Vencida</h2>
+                <p className="text-zinc-400 text-sm mb-6">
+                  O acesso ao painel da barbearia foi suspenso. Para continuar utilizando a plataforma e liberar o acesso aos seus barbeiros, renove sua assinatura.
+                </p>
+                <Button 
+                  onClick={handleRenovacaoClick}
+                  className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold h-12 uppercase tracking-tight hover:brightness-110"
+                >
+                  Renovar Assinatura Agora
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <AnimatePresence mode="wait" initial={false} custom={tabSlideDir}>
+              <motion.div
+                key={tab}
+                custom={tabSlideDir}
+                variants={tabPanelVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ type: "spring", stiffness: 400, damping: 36 }}
+                className="flex-1 w-full"
+              >
+                {tab === "barbeiro" && (
+                  <VisaoBarbeiro
+                    barbeiros={barbeiros}
+                    servicos={servicos}
+                    agendamentos={stats.agendamentosParaExibir}
+                    barbeiroSelecionadoId={barbeiroSelecionadoId}
+                    setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
+                    horariosOcupados={horariosOcupados}
+                    servicos_find={servicos_find}
+                    isDono={isDono || false}
+                    userId={user?.id}
+                    corPrimaria={marca}
+                    onNovoAgendamento={handleNovoAgendamento}
+                    onStatusChange={handleStatusChange}
+                    checkinHabilitado={barbearia?.checkin_habilitado || false}
+                    planoAtual={(donoData.planoAtual as PlanoType) || "pro"}
+                    pixGerado={pixGerado}
+                    tempoPix={tempoPix}
+                    isGerandoPix={isGerandoPix}
+                    onGerarPix={handleGerarPix}
+                    onCopiarPix={handleCopiarPix}
+                    onRenovacaoClick={handleRenovacaoClick}
+                    getValorPlano={getValorPlano}
+                  />
+                )}
 
-              {tab === "carteira" && (
-                <CarteiraBarbeiro
-                  comissaoTotalMes={stats.agMesBarbeiro.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
-                  totalCortesMes={stats.agMesBarbeiro.length}
-                  nomeBarbeiro={barbeiros.find((b) => b.id === user?.id)?.nome || "Barbeiro"}
-                  comissaoHoje={stats.agendamentosParaExibir
-                    .filter((ag) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id)
-                    .reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
-                  cortesHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id).length}
-                  metaDiaria={barbeiros.find((b) => b.id === user?.id)?.meta_diaria || 150}
-                  clientesVIP={clientesVIP.length}
-                  onUpdateMeta={(novaMeta: number) => {
-                    if (user?.id && slug) {
-                      withLoadingToast(
-                        mutacoesBarbeiro.atualizarMetaBarbeiro.mutateAsync({ id: user.id, meta: novaMeta, slug }),
-                        { loading: "Salvando meta...", success: "Meta atualizada!", error: "Erro ao salvar." }
-                      );
-                    }
-                  }}
-                />
-              )}
+                {tab === "carteira" && (
+                  <CarteiraBarbeiro
+                    comissaoTotalMes={stats.agMesBarbeiro.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
+                    totalCortesMes={stats.agMesBarbeiro.length}
+                    nomeBarbeiro={barbeiros.find((b) => b.id === user?.id)?.nome || "Barbeiro"}
+                    comissaoHoje={stats.agendamentosParaExibir
+                      .filter((ag) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id)
+                      .reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
+                    cortesHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id).length}
+                    metaDiaria={barbeiros.find((b) => b.id === user?.id)?.meta_diaria || 150}
+                    clientesVIP={clientesVIP.length}
+                    onUpdateMeta={(novaMeta: number) => {
+                      if (user?.id && slug) {
+                        withLoadingToast(
+                          mutacoesBarbeiro.atualizarMetaBarbeiro.mutateAsync({ id: user.id, meta: novaMeta, slug }),
+                          { loading: "Salvando meta...", success: "Meta atualizada!", error: "Erro ao salvar." }
+                        );
+                      }
+                    }}
+                  />
+                )}
 
-              {tab === "dono" && (
-                <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
-                  <>
-                    {isImpersonating && (
-                      <div className="mb-4 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2 text-yellow-400 text-sm">
-                        <Eye className="h-4 w-4 shrink-0" />
-                        <span className="font-bold">Modo visualização - Alterações desabilitadas</span>
-                      </div>
-                    )}
-                    <VisaoDono
-                      faturamentoHoje={stats.faturamentoHoje}
-                      faturamentoMensal={stats.faturamentoMensal}
-                      comissoesAPagarHoje={stats.comissoesAPagarHoje}
-                      lucroRealHoje={stats.faturamentoHoje - stats.comissoesAPagarHoje}
-                      despesasNoDia={0}
-                      comissaoPorBarbeiroHoje={comissaoPorBarbeiroHoje}
-                      barbeiros={barbeiros}
-                      servicos={servicos}
-                      corPrimaria={marca}
-                      onAddBarbeiro={isImpersonating ? undefined : handleAddBarbeiro}
-                      onRemoveBarbeiro={isImpersonating ? undefined : handleRemoveBarbeiro}
-                      onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
-                      onAddServico={isImpersonating ? undefined : handleAddServico}
-                      onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
-                      onAddDespesa={isImpersonating ? undefined : (despesa: unknown) => {
-                        console.log("Despesa a salvar:", despesa);
-                        toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
-                      }}
-                    />
-                  </>
-                </Suspense>
-              )}
-            </motion.div>
-          </AnimatePresence>
+                {tab === "dono" && (
+                  <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
+                    <>
+                      {isImpersonating && (
+                        <div className="mb-4 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-2 text-yellow-400 text-sm">
+                          <Eye className="h-4 w-4 shrink-0" />
+                          <span className="font-bold">Modo visualização - Alterações desabilitadas</span>
+                        </div>
+                      )}
+                      <VisaoDono
+                        faturamentoHoje={stats.faturamentoHoje}
+                        faturamentoMensal={stats.faturamentoMensal}
+                        comissoesAPagarHoje={stats.comissoesAPagarHoje}
+                        lucroRealHoje={stats.faturamentoHoje - stats.comissoesAPagarHoje}
+                        despesasNoDia={0}
+                        comissaoPorBarbeiroHoje={comissaoPorBarbeiroHoje}
+                        barbeiros={barbeiros}
+                        servicos={servicos}
+                        corPrimaria={marca}
+                        onAddBarbeiro={isImpersonating ? undefined : handleAddBarbeiro}
+                        onRemoveBarbeiro={isImpersonating ? undefined : handleRemoveBarbeiro}
+                        onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
+                        onAddServico={isImpersonating ? undefined : handleAddServico}
+                        onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
+                        onAddDespesa={isImpersonating ? undefined : (despesa: unknown) => {
+                          console.log("Despesa a salvar:", despesa);
+                          toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
+                        }}
+                      />
+                    </>
+                  </Suspense>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          )}
         </main>
 
         {!lojaBloqueada && (
