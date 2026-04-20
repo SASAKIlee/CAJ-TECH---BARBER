@@ -58,7 +58,7 @@ export function useDonoData() {
           ...prev,
           slug: data.slug,
           isLojaAtiva: data.ativo !== false,
-          planoAtual: data.plano || "starter",
+          planoAtual: normalizePlano(data.plano),
           checkinHabilitado: data.checkin_habilitado ?? false,
           vipRemindersEnabled: data.vip_reminders_enabled ?? false,
           vipClubEnabled: data.vip_club_enabled ?? false,
@@ -103,6 +103,13 @@ export function useDonoData() {
     tempoPix,
     setTempoPix,
   };
+}
+
+/** Garante comparação de plano estável (DB pode enviar PRO/pro, etc.). */
+function normalizePlano(raw: unknown): PlanoType {
+  const p = String(raw ?? "starter").toLowerCase().trim();
+  if (p === "pro" || p === "elite" || p === "starter") return p;
+  return "starter";
 }
 
 function calcularFasePagamento(dataVencimento: string | null): FasePagamento {

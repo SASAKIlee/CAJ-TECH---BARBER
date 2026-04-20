@@ -9,8 +9,8 @@ export function DonoTabVIP({
   brand,
   glass,
 }: DonoTabVIPProps) {
-  // Apenas plano PRO tem acesso VIP. Starter e Elite estão bloqueados.
-  const temVIP = planoAtual === "pro";
+  // Planos PRO e ELITE liberam a área VIP (automações em evolução; demais ferramentas nas sub-abas).
+  const temVIP = planoAtual === "pro" || planoAtual === "elite";
   const isElite = planoAtual === "elite";
 
   return (
@@ -51,18 +51,13 @@ export function DonoTabVIP({
             {isElite ? <Lock className="h-8 w-8 text-yellow-500" /> : <Lock className="h-8 w-8 text-zinc-600" />}
           </div>
           <div className="space-y-1">
-            <h4 className="text-lg font-bold text-white uppercase italic">
-              {isElite ? "Plano Elite - Em Breve" : "Acesso VIP necessário"}
-            </h4>
+            <h4 className="text-lg font-bold text-white uppercase italic">Acesso VIP necessário</h4>
             <p className="text-sm text-zinc-400 max-w-[260px] mx-auto">
-              {isElite
-                ? "O plano Elite está sendo preparado. Aguarde novidades sobre Marketing e Tráfego Pago."
-                : "Seu plano atual não permite ativar automações e recursos VIP. Faça upgrade para PRO para liberar esses recursos."}
+              Seu plano atual não inclui as automações e recursos VIP. Faça upgrade para PRO ou ELITE para liberar a Central VIP completa.
             </p>
           </div>
-          {!isElite && (
-            <>
-              <div className="space-y-3 w-full text-left bg-black/30 p-5 rounded-2xl border border-white/5">
+          <>
+            <div className="space-y-3 w-full text-left bg-black/30 p-5 rounded-2xl border border-white/5">
                 <p className="text-xs text-emerald-500 font-black uppercase flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4" /> WhatsApp Automação (Em Breve)
                 </p>
@@ -92,8 +87,7 @@ export function DonoTabVIP({
               >
                 Evoluir para PRO
               </Button>
-            </>
-          )}
+          </>
         </Card>
       ) : (
         <div className="grid gap-4">

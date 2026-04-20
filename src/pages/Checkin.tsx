@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, Calendar, Clock, User, Scissors, Hash, MapPin } from "lucide-react";
@@ -35,7 +34,6 @@ interface AgendamentoCheckin {
 export default function Checkin() {
   const { slug, ticket } = useParams<{ slug: string; ticket: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [agendamento, setAgendamento] = useState<AgendamentoCheckin | null>(null);
@@ -55,11 +53,6 @@ export default function Checkin() {
   };
 
   useEffect(() => {
-    if (!user) {
-      navigate(`/auth?redirect=/checkin/${slug}/${ticket}`);
-      return;
-    }
-
     async function verificarTicket() {
       try {
         // 1. Verifica se a barbearia tem check-in habilitado
@@ -137,10 +130,10 @@ export default function Checkin() {
     }
 
     verificarTicket();
-  }, [slug, ticket, user, navigate]);
+  }, [slug, ticket, navigate]);
 
   const handleConfirmarCheckin = async () => {
-    if (!agendamento || !user) return;
+    if (!agendamento) return;
 
     setIsSubmitting(true);
     try {
@@ -162,7 +155,9 @@ export default function Checkin() {
       const { error } = await supabase
         .from("agendamentos")
         .update({ status: "Check-in", comissao_ganha: comissaoGanha })
-        .eq("ticket_codigo", ticket);
+        .eq("id", agendamento.id)
+        .eq("ticket_codigo", ticket)
+        .eq("barbearia_slug", slug ?? "");
 
       if (error) throw error;
 
@@ -175,8 +170,6 @@ export default function Checkin() {
       setIsSubmitting(false);
     }
   };
-
-  if (!user) return null;
 
   const brand = agendamento?.barbearia?.cor_primaria || "#D4AF37";
 

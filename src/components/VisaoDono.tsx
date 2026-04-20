@@ -186,6 +186,27 @@ export function VisaoDono({
     [subTab]
   );
 
+  const persistCheckin = useCallback(
+    async (enabled: boolean) => {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        toast.error("Sessão expirada.");
+        return;
+      }
+      const prev = data.checkinHabilitado;
+      updateData({ checkinHabilitado: enabled });
+      const { error } = await supabase
+        .from("barbearias")
+        .update({ checkin_habilitado: enabled })
+        .eq("dono_id", authData.user.id);
+      if (error) {
+        updateData({ checkinHabilitado: prev });
+        toast.error("Erro ao salvar check-in.");
+      }
+    },
+    [data.checkinHabilitado, updateData]
+  );
+
   const handleUploadImagem = useCallback(async (file: File, bucket: string): Promise<string | null> => {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 600 });
@@ -336,31 +357,71 @@ export function VisaoDono({
     [data.planoAtual, setPixGerado]
   );
 
-  const handleGerarPixDinâmico = useCallback(async () => {
-    setIsGerandoPix(true);
-    try {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user) throw new Error("Sessão expirada. Recarregue a página.");
-      const { data: barbearia } = await supabase.from("barbearias").select("id").eq("dono_id", authData.user.id).single();
-      if (!barbearia) throw new Error("Barbearia não identificada. Entre em contato com o suporte.");
-      const { data, error } = await supabase.functions.invoke("mercado-pago-pix", {
-        body: {
-          barbearia_id: barbearia.id,
-          plano: planoPagamento,
-          email_dono: authData.user.email || "financeiro@cajtech.net.br",
-        },
-      });
-      if (error || data?.error) throw new Error(data?.error || "Erro na comunicação com o servidor de pagamentos.");
-      setPixGerado(data.qr_code);
-      setTempoPix(900);
-      toast.success("PIX gerado com sucesso! Copie o código abaixo.");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Falha ao gerar o PIX. Verifique o console.";
-      toast.error(message);
-    } finally {
-      setIsGerandoPix(false);
-    }
-  }, [planoPagamento, setPixGerado, setTempoPix]);
+  const handleGerarPixDinâmico = useCallback(
+    async (planoParaCobranca?: PlanoType) => {
+      const planoCobranca =
+        planoParaCobranca === "starter" || planoParaCobranca === "pro" || planoParaCobranca === "elite"
+          ? planoParaCobranca
+          : planoPagamento;
+      setIsGerandoPix(true);
+      try {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) throw new Error("Sessão expirada. Recarregue a página.");
+        const { data: barbearia } = await supabase.from("barbearias").select("id").eq("dono_id", authData.user.id).single();
+        if (!barbearia) throw new Error("Barbearia não identificada. Entre em contato com o suporte.");
+        const { data: fnData, error: fnError } = await supabase.functions.invoke("mercado-pago-pix", {
+          body: {
+            barbearia_id: barbearia.id,
+            plano: planoCobranca,
+            email_dono: authData.user.email || "financeiro@cajtech.net.br",
+          },
+        });
+
+        if (fnError) {
+          let detail = fnError.message || "Erro na Edge Function mercado-pago-pix.";
+          const ctx = (fnError as { context?: Response }).context;
+          if (ctx && typeof ctx.json === "function") {
+            try {
+              const body = (await ctx.json()) as { error?: string; message?: string };
+              if (body?.error) detail = String(body.error);
+              else if (body?.message) detail = String(body.message);
+            } catch {
+              /* ignore */
+            }
+          }
+          throw new Error(detail);
+        }
+
+        const payload = fnData as Record<string, unknown> | null;
+        if (payload && typeof payload.error === "string" && payload.error) {
+          throw new Error(payload.error);
+        }
+
+        const brCode =
+          (typeof payload?.qr_code === "string" && payload.qr_code) ||
+          (typeof payload?.br_code === "string" && payload.br_code) ||
+          (typeof payload?.copiaECola === "string" && payload.copiaECola) ||
+          (typeof payload?.pix_copy_paste === "string" && payload.pix_copy_paste) ||
+          "";
+
+        if (!brCode.trim()) {
+          throw new Error(
+            "Resposta sem código PIX. Verifique se a função mercado-pago-pix está publicada no Supabase e se as credenciais do Mercado Pago estão configuradas."
+          );
+        }
+
+        setPixGerado(brCode.trim());
+        setTempoPix(900);
+        toast.success("PIX gerado com sucesso! Copie o código abaixo.");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Falha ao gerar o PIX. Verifique o console.";
+        toast.error(message);
+      } finally {
+        setIsGerandoPix(false);
+      }
+    },
+    [planoPagamento, setPixGerado, setTempoPix]
+  );
 
   const copiarPix = useCallback(() => {
     if (pixGerado) {
@@ -399,9 +460,9 @@ export function VisaoDono({
         pixGerado={pixGerado}
         tempoPix={tempoPix}
         isGerandoPix={isGerandoPix}
-        onGerarPix={() => handleAbrirCheckout("renovacao")}
+        onGerarPix={() => void handleGerarPixDinâmico(data.planoAtual)}
         onCopiarPix={copiarPix}
-        onRenovacaoClick={() => handleAbrirCheckout("renovacao")}
+        onRenovacaoClick={() => void handleGerarPixDinâmico(data.planoAtual)}
         getValorPlano={getValorPlano}
       />
     );
@@ -498,66 +559,74 @@ export function VisaoDono({
                 glass={glass}
               />
             )}
-            {subTab === "vip" && (
-              <div className="space-y-4">
-                {/* Sub-abas VIP */}
-                <div className="flex rounded-xl border border-white/[0.08] p-1 gap-0.5 bg-zinc-900/50 overflow-x-auto hide-scrollbar">
-                  {([
-                    { id: "automacoes" as const, label: "Automações", Icon: Zap },
-                    { id: "radar" as const, label: "Radar", Icon: AlertTriangle },
-                    { id: "fila" as const, label: "Fila", Icon: ListOrdered },
-                    { id: "lojinha" as const, label: "Lojinha", Icon: ShoppingBag },
-                    { id: "despesas" as const, label: "Despesas", Icon: Receipt },
-                  ]).map(({ id, label, Icon }) => (
-                    <button
-                      key={id}
-                      onClick={() => setVipSubTab(id)}
-                      className={cn(
-                        "flex-shrink-0 flex items-center gap-1.5 py-2 px-3 sm:px-4 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-200",
-                        vipSubTab === id
-                          ? "bg-white/10 text-white shadow-sm"
-                          : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      <span className="whitespace-nowrap">{label}</span>
-                    </button>
-                  ))}
-                </div>
+            {subTab === "vip" &&
+              (data.planoAtual === "pro" || data.planoAtual === "elite" ? (
+                <div className="space-y-4">
+                  {/* Sub-abas VIP — planos PRO e ELITE (alinhado às políticas RLS das tabelas VIP) */}
+                  <div className="flex rounded-xl border border-white/[0.08] p-1 gap-0.5 bg-zinc-900/50 overflow-x-auto hide-scrollbar">
+                    {([
+                      { id: "automacoes" as const, label: "Automações", Icon: Zap },
+                      { id: "radar" as const, label: "Radar", Icon: AlertTriangle },
+                      { id: "fila" as const, label: "Fila", Icon: ListOrdered },
+                      { id: "lojinha" as const, label: "Lojinha", Icon: ShoppingBag },
+                      { id: "despesas" as const, label: "Despesas", Icon: Receipt },
+                    ]).map(({ id, label, Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setVipSubTab(id)}
+                        className={cn(
+                          "flex-shrink-0 flex items-center gap-1.5 py-2 px-3 sm:px-4 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-200",
+                          vipSubTab === id
+                            ? "bg-white/10 text-white shadow-sm"
+                            : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="whitespace-nowrap">{label}</span>
+                      </button>
+                    ))}
+                  </div>
 
-                {/* Conteúdo VIP */}
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={vipSubTab}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    {vipSubTab === "radar" && (
-                      <RadarVendas slug={data.slug} brand={brand} glass={glass} />
-                    )}
-                    {vipSubTab === "fila" && (
-                      <FilaEsperaInteligente slug={data.slug} barbeiros={barbeiros} brand={brand} glass={glass} />
-                    )}
-                    {vipSubTab === "lojinha" && (
-                      <LojinhaPDV slug={data.slug} brand={brand} glass={glass} />
-                    )}
-                    {vipSubTab === "despesas" && (
-                      <GestaoDespesas slug={data.slug} brand={brand} glass={glass} faturamentoMes={faturamentoMensalProp} />
-                    )}
-                    {vipSubTab === "automacoes" && (
-                      <DonoTabVIP
-                        planoAtual={data.planoAtual}
-                        onUpgradeClick={() => setModalUpgradeAberto(true)}
-                        brand={brand}
-                        glass={glass}
-                      />
-                    )}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            )}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={vipSubTab}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      {vipSubTab === "radar" && (
+                        <RadarVendas slug={data.slug} brand={brand} glass={glass} />
+                      )}
+                      {vipSubTab === "fila" && (
+                        <FilaEsperaInteligente slug={data.slug} barbeiros={barbeiros} brand={brand} glass={glass} />
+                      )}
+                      {vipSubTab === "lojinha" && (
+                        <LojinhaPDV slug={data.slug} brand={brand} glass={glass} />
+                      )}
+                      {vipSubTab === "despesas" && (
+                        <GestaoDespesas slug={data.slug} brand={brand} glass={glass} faturamentoMes={faturamentoMensalProp} />
+                      )}
+                      {vipSubTab === "automacoes" && (
+                        <DonoTabVIP
+                          planoAtual={data.planoAtual}
+                          onUpgradeClick={() => setModalUpgradeAberto(true)}
+                          brand={brand}
+                          glass={glass}
+                        />
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <DonoTabVIP
+                  planoAtual={data.planoAtual}
+                  onUpgradeClick={() => setModalUpgradeAberto(true)}
+                  brand={brand}
+                  glass={glass}
+                />
+              ))}
             {subTab === "config" && (
               <DonoTabConfig
                 barbeiros={barbeiros}
@@ -579,7 +648,7 @@ export function VisaoDono({
                 brand={brand}
                 ctaFg={ctaFg}
                 glass={glass}
-                onCheckinChange={(enabled) => updateData({ checkinHabilitado: enabled })}
+                onCheckinChange={persistCheckin}
                 onNBarbeiroChange={setNBarbeiro}
                 onNServicoChange={setNServico}
                 onImagemBarbeiroChange={setImagemBarbeiro}
@@ -619,7 +688,7 @@ export function VisaoDono({
         pixGerado={pixGerado}
         tempoPix={tempoPix}
         isGerandoPix={isGerandoPix}
-        onGerarPix={handleGerarPixDinâmico}
+        onGerarPix={() => void handleGerarPixDinâmico()}
         onCopiarPix={copiarPix}
       />
     </div>

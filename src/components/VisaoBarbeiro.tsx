@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type ChangeEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import jsQR from "jsqr";
 import {
   Plus, Check, X, MessageCircle, Users, Clock, ShieldAlert, LogOut, Lock,
   Loader2, Edit, Calendar, Filter, Crown, Camera
@@ -33,7 +35,7 @@ const HORARIO_PADRAO_NOME = "nossa barbearia";
 interface Barbeiro {
   id: string;
   nome: string;
-  ativo: boolean;
+  ativo?: boolean;
   barbearia_slug?: string;
   comissao_pct?: number;
   url_foto?: string;
@@ -133,6 +135,21 @@ function validarTelefone(telefone: string): boolean {
   return telefone.replace(/\D/g, "").length >= 10;
 }
 
+/** Extrai pathname `/checkin/:slug/:ticket` a partir do texto decodificado do QR. */
+function extractCheckinPathFromQr(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  try {
+    const url = new URL(t);
+    if (/^\/checkin\/[^/]+\/[^/]+$/.test(url.pathname)) return url.pathname;
+  } catch {
+    /* texto não é URL absoluta */
+  }
+  const m = t.match(/\/checkin\/[^/\s?#]+\/[^/?#\s]+/);
+  if (m) return m[0].startsWith("/") ? m[0] : `/${m[0]}`;
+  return null;
+}
+
 // ==========================================
 // COMPONENTE PRINCIPAL
 // ==========================================
@@ -149,7 +166,10 @@ export function VisaoBarbeiro({
   isDono,
   userId,
   corPrimaria = "#D4AF37",
+  checkinHabilitado = false,
 }: VisaoBarbeiroProps) {
+  const navigate = useNavigate();
+  const scannerInputRef = useRef<HTMLInputElement>(null);
   // ==========================================
   // ESTADOS
   // ==========================================
@@ -368,6 +388,54 @@ export function VisaoBarbeiro({
     return () => clearTimeout(t);
   }, [dismissing]);
 
+  const handleScannerQrFile = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      if (!checkinHabilitado) {
+        toast.info("O check-in digital está desativado nesta barbearia.");
+        return;
+      }
+      try {
+        const bmp = await createImageBitmap(file);
+        const canvas = document.createElement("canvas");
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          toast.error("Não foi possível ler a imagem.");
+          return;
+        }
+        ctx.drawImage(bmp, 0, 0);
+        bmp.close?.();
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+        if (!code?.data) {
+          toast.error("Não foi possível ler o QR Code. Tente outra imagem.");
+          return;
+        }
+        const path = extractCheckinPathFromQr(code.data);
+        if (!path) {
+          toast.error("QR Code não é um ticket de check-in válido.");
+          return;
+        }
+        navigate(path);
+      } catch {
+        toast.error("Erro ao processar a imagem.");
+      }
+    },
+    [checkinHabilitado, navigate]
+  );
+
+  const openScannerFilePicker = useCallback(() => {
+    if (!checkinHabilitado) {
+      toast.info("Ative o check-in digital em Ajustes (visão dono) para usar o scanner.");
+      return;
+    }
+    scannerInputRef.current?.click();
+  }, [checkinHabilitado]);
+
   // ==========================================
   // RENDER
   // ==========================================
@@ -419,13 +487,22 @@ export function VisaoBarbeiro({
         </div>
 
         <div className="flex gap-2">
-          {/* Botão Scanner (Placeholder para integração futura com lib de QR) */}
+          <input
+            ref={scannerInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            tabIndex={-1}
+            onChange={handleScannerQrFile}
+            aria-hidden
+          />
           <MotionButton
+            type="button"
             variant="outline"
             className="rounded-[20px] border-white/10 bg-white/5 h-14 px-6 font-black uppercase text-xs text-white hover:bg-white/10"
             whileTap={{ scale: 0.95 }}
-            onClick={() => toast.info("Funcionalidade de Scanner será ativada em breve! 📸")}
-            aria-label="Escanear QR Code"
+            onClick={openScannerFilePicker}
+            aria-label="Escanear QR Code do ticket de check-in"
           >
             <Camera className="h-5 w-5 mr-2" /> Scanner
           </MotionButton>

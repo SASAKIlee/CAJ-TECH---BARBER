@@ -83,15 +83,16 @@ export function FilaEsperaInteligente({ slug, barbeiros, brand, glass }: FilaEsp
       const { error } = await supabase
         .from("fila_espera")
         .update({ status: "notificado" })
-        .eq("id", item.id);
+        .eq("id", item.id)
+        .eq("barbearia_id", slug);
 
       if (error) throw error;
 
       const tel = item.telefone.replace(/\D/g, "");
-      const msg = `Olá ${item.nome}! 👋 Vagou um horário para ${item.servico_desejado} aqui na barbearia! Quer confirmar? Responda SIM para garantir seu lugar.`;
+      const msg = `Olá ${item.nome_cliente}! 👋 Vagou um horário para ${item.servico_desejado} aqui na barbearia! Quer confirmar? Responda SIM para garantir seu lugar.`;
       window.open(`https://api.whatsapp.com/send?phone=55${tel}&text=${encodeURIComponent(msg)}`, "_blank");
 
-      toast.success(`Notificação enviada para ${item.nome}`);
+      toast.success(`Notificação enviada para ${item.nome_cliente}`);
       carregarFila();
     } catch (err: any) {
       toast.error("Erro: " + err.message);
@@ -103,7 +104,8 @@ export function FilaEsperaInteligente({ slug, barbeiros, brand, glass }: FilaEsp
       const { error } = await supabase
         .from("fila_espera")
         .update({ status: "confirmado" })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("barbearia_id", slug);
 
       if (error) throw error;
       toast.success("Cliente confirmado! Agende o horário.");
@@ -118,7 +120,8 @@ export function FilaEsperaInteligente({ slug, barbeiros, brand, glass }: FilaEsp
       const { error } = await supabase
         .from("fila_espera")
         .update({ status: "desistiu" })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("barbearia_id", slug);
 
       if (error) throw error;
       toast.success("Cliente removido da fila.");

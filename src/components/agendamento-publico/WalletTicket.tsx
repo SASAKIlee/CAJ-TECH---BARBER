@@ -28,9 +28,9 @@ type WalletTicketProps = {
   selecao: SelecaoBase;
   slug: string | undefined;
   ticketCodigo: string;
-  servicos: ServicoItem[];
-  precoTotal: number;
-  duracaoTotal: number;
+  servicos?: ServicoItem[];
+  precoTotal?: number;
+  duracaoTotal?: number;
   checkinHabilitado?: boolean; // 🆕 Prop opcional para controlar exibição do QR Code
 };
 
@@ -39,9 +39,9 @@ export function WalletTicket({
   selecao,
   slug,
   ticketCodigo,
-  servicos,
-  precoTotal,
-  duracaoTotal,
+  servicos = [],
+  precoTotal = 0,
+  duracaoTotal = 30,
   checkinHabilitado = false, // padrão desabilitado
 }: WalletTicketProps) {
   const brand = config?.cor_primaria || "#D4AF37";
@@ -53,8 +53,12 @@ export function WalletTicket({
     ? selecao.data.split("-").reverse().join("/")
     : selecao.data;
 
-  const dominioBase = window.location.origin;
-  const linkCheckin = `${dominioBase}/checkin/${slug}/${ticketCodigo}`;
+  const dominioBase = typeof window !== "undefined" ? window.location.origin : "";
+  const slugSeguro = (slug ?? "").trim();
+  const linkCheckin =
+    slugSeguro && ticketCodigo
+      ? `${dominioBase}/checkin/${encodeURIComponent(slugSeguro)}/${encodeURIComponent(ticketCodigo)}`
+      : "";
 
   const servicosNomes = servicos.map(s => s.nome);
   const servicosDisplay = servicosNomes.length <= 2
@@ -132,34 +136,33 @@ export function WalletTicket({
         </div>
       </div>
 
-      {/* Rodapé condicional: QR Code (se habilitado) ou mensagem simples */}
-      {checkinHabilitado ? (
-        <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-8 relative">
-          <div className="absolute -top-3 -left-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
-          <div className="absolute -top-3 -right-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
+      {/* Rodapé: QR sempre visível (check-in na página ainda respeita checkin_habilitado na barbearia) */}
+      <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-8 relative">
+        <div className="absolute -top-3 -left-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
+        <div className="absolute -top-3 -right-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
 
-          <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">
-            Apresente na recepção
-          </p>
+        <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">
+          Apresente na recepção
+        </p>
 
+        {linkCheckin ? (
           <div className="mx-auto flex justify-center rounded-2xl bg-white p-4 shadow-md ring-1 ring-black/[0.05] w-fit relative group">
             <QRCode value={linkCheckin} size={140} level="H" />
           </div>
+        ) : (
+          <p className="text-center text-xs font-bold text-amber-700">Não foi possível montar o link do ticket.</p>
+        )}
 
-          <p className="mt-4 text-center font-mono text-[9px] text-zinc-400 tracking-[0.2em] font-bold">
-            ID: {ticketCodigo.split('-')[0].toUpperCase()}
+        {!checkinHabilitado && (
+          <p className="mt-3 text-center text-[9px] text-zinc-500 font-medium leading-relaxed px-2">
+            O check-in por QR fica disponível quando o dono ativa &quot;Check-in digital&quot; em Ajustes. Você pode apresentar este ticket na recepção.
           </p>
-        </div>
-      ) : (
-        <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-6 text-center">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-            Apresente este comprovante na recepção
-          </p>
-          <p className="mt-4 font-mono text-[9px] text-zinc-400 tracking-[0.2em] font-bold">
-            ID: {ticketCodigo.split('-')[0].toUpperCase()}
-          </p>
-        </div>
-      )}
+        )}
+
+        <p className="mt-4 text-center font-mono text-[9px] text-zinc-400 tracking-[0.2em] font-bold">
+          ID: {ticketCodigo.split("-")[0].toUpperCase()}
+        </p>
+      </div>
 
       {/* Barra inferior */}
       <div
