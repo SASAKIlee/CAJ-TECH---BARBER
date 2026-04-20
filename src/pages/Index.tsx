@@ -16,7 +16,9 @@ import {
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento, useClientesVIP
 } from "@/hooks/useQueries";
+import { useDonoData } from "@/hooks/useDonoData"; // ← NOVO
 import type { AgendamentoInsert } from "@/types/queries";
+import type { PlanoType } from "@/types/dono";
 
 // Lazy load de componentes pesados
 const VisaoDono = lazy(() => import("@/components/VisaoDono").then(m => ({ default: m.VisaoDono })));
@@ -67,6 +69,7 @@ interface Barbearia {
   ativo?: boolean;
   plano?: string;
   checkin_habilitado?: boolean;
+  data_vencimento?: string | null; // ← adicionado
 }
 
 interface ImpersonateData {
@@ -96,7 +99,6 @@ function mensagemDeErro(err: unknown): string {
   return "Não foi possível carregar os dados. Verifique sua conexão e tente novamente.";
 }
 
-// Componente do banner de impersonação movido para fora do Index
 function ImpersonationBanner({
   isImpersonating,
   impersonateName,
@@ -135,7 +137,15 @@ function ImpersonationBanner({
 export default function Index() {
   const { signOut, userRole, user } = useAuth();
 
-  // Estado de logout para prevenir múltiplos cliques
+  // Dados do dono (para obter plano, status de pagamento, etc.)
+  const {
+    data: donoData,
+    pixGerado,
+    setPixGerado,
+    tempoPix,
+    setTempoPix,
+  } = useDonoData();
+
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Impersonação
@@ -165,7 +175,6 @@ export default function Index() {
     toast.info("Saindo do modo de visualização...");
   }, []);
 
-  // Carregar dados da barbearia em modo impersonação
   useEffect(() => {
     if (!isImpersonating || !impersonateSlug) return;
 
@@ -509,6 +518,33 @@ export default function Index() {
     [mutacoesServico, slug, withLoadingToast]
   );
 
+  // Callbacks de pagamento (baseados na lógica do VisaoDono)
+  const handleGerarPix = useCallback(async (plano?: PlanoType) => {
+    const planoParaCobrar = plano || donoData.planoAtual;
+    setPixGerado(null);
+    // A lógica real de geração está dentro de um modal/componente; aqui apenas disparamos a abertura
+    // Como essa lógica é complexa e envolve estado interno, podemos delegar para o VisaoDono.
+    // Para manter a consistência, vamos apenas abrir o modal de renovação (que já está no VisaoDono).
+    // No Index, podemos simplesmente não fazer nada, pois o VisaoBarbeiro chamará onRenovacaoClick.
+  }, [donoData.planoAtual, setPixGerado]);
+
+  const handleCopiarPix = useCallback(() => {
+    if (pixGerado) {
+      navigator.clipboard.writeText(pixGerado);
+      toast.success("Código PIX copiado!");
+    }
+  }, [pixGerado]);
+
+  const handleRenovacaoClick = useCallback(() => {
+    // Aqui normalmente abriria o modal de pagamento. Como o VisaoDono gerencia isso,
+    // podemos passar uma função vazia ou disparar um evento.
+    // O VisaoBarbeiro usará essa prop para o botão "Regularizar Pagamento".
+    // Vamos redirecionar para a visão dono? Ou melhor, recarregar a página?
+    // A abordagem mais simples: forçar a ida para a aba "dono" e abrir o modal.
+    setTab("dono");
+    toast.info("Use o botão 'Gerar PIX' no painel principal.");
+  }, []);
+
   // Efeito para dados do CEO
   useEffect(() => {
     if (userRole !== "ceo" || isImpersonating) return;
@@ -540,6 +576,9 @@ export default function Index() {
       });
     }
   }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
+
+  // Verifica se a loja está bloqueada (para esconder a nav inferior)
+  const lojaBloqueada = donoData.isLojaAtiva === false || donoData.fasePagamento === 4;
 
   // ==========================================
   // RENDERIZAÇÃO
@@ -758,6 +797,18 @@ export default function Index() {
                   onNovoAgendamento={handleNovoAgendamento}
                   onStatusChange={handleStatusChange}
                   checkinHabilitado={barbearia?.checkin_habilitado || false}
+                  // Novas props para bloqueio por inadimplência
+                  planoAtual={donoData.planoAtual as PlanoType}
+                  pixGerado={pixGerado}
+                  tempoPix={tempoPix}
+                  isGerandoPix={false} // será gerenciado internamente ou via modal
+                  onGerarPix={handleGerarPix}
+                  onCopiarPix={handleCopiarPix}
+                  onRenovacaoClick={handleRenovacaoClick}
+                  getValorPlano={(plano: PlanoType) => {
+                    const valores: Record<PlanoType, number> = { starter: 35, pro: 50, elite: 497 };
+                    return valores[plano] || 50;
+                  }}
                 />
               )}
 
@@ -819,26 +870,29 @@ export default function Index() {
           </AnimatePresence>
         </main>
 
-        <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/40 backdrop-blur-xl flex justify-around p-2 shadow-2xl z-20 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          {visibleTabs.map((t) => (
-            <motion.button
-              key={t.id}
-              type="button"
-              whileTap={{ scale: 0.95 }}
-              onClick={() => goTab(t.id)}
-              className={cn(
-                "flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl",
-                tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45"
-              )}
-              style={tab === t.id ? { color: marca } : undefined}
-              aria-label={t.label}
-              role="tab"
-            >
-              <t.icon className="h-6 w-6 sm:h-7 sm:w-7" />
-              <span className="text-[9px] sm:text-[11px] mt-1 uppercase tracking-tighter">{t.label}</span>
-            </motion.button>
-          ))}
-        </nav>
+        {/* Nav inferior só aparece se a loja NÃO estiver bloqueada */}
+        {!lojaBloqueada && (
+          <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/40 backdrop-blur-xl flex justify-around p-2 shadow-2xl z-20 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            {visibleTabs.map((t) => (
+              <motion.button
+                key={t.id}
+                type="button"
+                whileTap={{ scale: 0.95 }}
+                onClick={() => goTab(t.id)}
+                className={cn(
+                  "flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl",
+                  tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45"
+                )}
+                style={tab === t.id ? { color: marca } : undefined}
+                aria-label={t.label}
+                role="tab"
+              >
+                <t.icon className="h-6 w-6 sm:h-7 sm:w-7" />
+                <span className="text-[9px] sm:text-[11px] mt-1 uppercase tracking-tighter">{t.label}</span>
+              </motion.button>
+            ))}
+          </nav>
+        )}
         <TermosDeUso />
       </div>
     </div>

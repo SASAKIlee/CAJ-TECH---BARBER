@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import jsQR from "jsqr";
 import {
   Plus, Check, X, MessageCircle, Users, Clock, ShieldAlert, LogOut, Lock,
-  Loader2, Edit, Calendar, Filter, Crown, Camera
+  Loader2, Calendar, Filter, Crown, Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,6 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 import DOMPurify from "dompurify";
+import { DonoBloqueio } from "@/components/dono/DonoBloqueio"; // ← NOVO
+import type { PlanoType } from "@/types/dono";
 
 const MotionButton = motion.create(Button);
 
@@ -75,6 +77,15 @@ interface VisaoBarbeiroProps {
   userId?: string;
   corPrimaria?: string;
   checkinHabilitado?: boolean;
+  // Novas props para bloqueio por inadimplência (opcionais, usadas apenas quando isDono=true)
+  planoAtual?: PlanoType;
+  pixGerado?: string | null;
+  tempoPix?: number;
+  isGerandoPix?: boolean;
+  onGerarPix?: () => void;
+  onCopiarPix?: () => void;
+  onRenovacaoClick?: () => void;
+  getValorPlano?: (plano: PlanoType) => number;
 }
 
 interface NovoAgendamentoForm {
@@ -166,6 +177,14 @@ export function VisaoBarbeiro({
   userId,
   corPrimaria = "#D4AF37",
   checkinHabilitado = false,
+  planoAtual = "pro",
+  pixGerado = null,
+  tempoPix = 0,
+  isGerandoPix = false,
+  onGerarPix = () => {},
+  onCopiarPix = () => {},
+  onRenovacaoClick = () => {},
+  getValorPlano = () => 99.9,
 }: VisaoBarbeiroProps) {
   const navigate = useNavigate();
   const scannerInputRef = useRef<HTMLInputElement>(null);
@@ -179,6 +198,7 @@ export function VisaoBarbeiro({
     abertura: HORARIO_PADRAO_ABERTURA,
     fechamento: HORARIO_PADRAO_FECHAMENTO,
     nome: HORARIO_PADRAO_NOME,
+    data_vencimento: null as string | null,
   });
   const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
   const [statusFiltro, setStatusFiltro] = useState<"Pendente" | "Todos">("Pendente");
@@ -201,10 +221,10 @@ export function VisaoBarbeiro({
 
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
-  const glass = useMemo(() => ({ 
-    backgroundColor: hexToRgba(brand, 0.1), 
-    backdropFilter: "blur(14px)", 
-    WebkitBackdropFilter: "blur(14px)" 
+  const glass = useMemo(() => ({
+    backgroundColor: hexToRgba(brand, 0.1),
+    backdropFilter: "blur(14px)",
+    WebkitBackdropFilter: "blur(14px)"
   }), [brand]);
 
   const perfilLogado = barbeiros.find((b) => b.id === userId);
@@ -215,22 +235,23 @@ export function VisaoBarbeiro({
   // ==========================================
   useEffect(() => {
     if (!slugBarbearia) return;
-    
+
     const controller = new AbortController();
     async function fetchHorariosConfig() {
       const { data } = await supabase
         .from('barbearias')
-        .select('horario_abertura, horario_fechamento, nome, ativo')
+        .select('horario_abertura, horario_fechamento, nome, ativo, data_vencimento')
         .eq('slug', slugBarbearia)
         .abortSignal(controller.signal)
         .single();
-      
+
       if (data) {
         setIsLojaAtiva(data.ativo !== false);
         setInfoLoja({
           abertura: data.horario_abertura || HORARIO_PADRAO_ABERTURA,
           fechamento: data.horario_fechamento || HORARIO_PADRAO_FECHAMENTO,
           nome: data.nome || HORARIO_PADRAO_NOME,
+          data_vencimento: data.data_vencimento,
         });
       }
     }
@@ -413,23 +434,23 @@ export function VisaoBarbeiro({
       try {
         const bmp = await createImageBitmap(file);
         if (controller.signal.aborted) return;
-        
+
         const canvas = document.createElement("canvas");
         canvas.width = bmp.width;
         canvas.height = bmp.height;
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error("Não foi possível ler a imagem.");
-        
+
         ctx.drawImage(bmp, 0, 0);
         bmp.close?.();
-        
+
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
         if (!code?.data) throw new Error("Não foi possível ler o QR Code.");
-        
+
         const path = extractCheckinPathFromQr(code.data);
         if (!path) throw new Error("QR Code não é um ticket de check-in válido.");
-        
+
         navigate(path);
       } catch (err: any) {
         if (!controller.signal.aborted) {
@@ -459,28 +480,87 @@ export function VisaoBarbeiro({
   }, []);
 
   // ==========================================
-  // RENDER
+  // VERIFICAÇÃO DE BLOQUEIO (CORRIGIDA)
   // ==========================================
-  if (!isDono && (isLojaAtiva === false || (perfilLogado && perfilLogado.ativo === false))) {
+  const hoje = new Date();
+  const dataVenc = infoLoja.data_vencimento ? new Date(infoLoja.data_vencimento) : null;
+  const isVencida = dataVenc && dataVenc < hoje;
+  const lojaInativa = isLojaAtiva === false;
+  const bloqueado = lojaInativa || isVencida;
+
+  // Se estiver bloqueado, exibe tela adequada
+  if (bloqueado) {
+    // Se for dono e estiver vencido, mostra opção de pagamento (DonoBloqueio)
+    if (isDono && isVencida) {
+      return (
+        <DonoBloqueio
+          motivo="inadimplencia"
+          planoAtual={planoAtual}
+          pixGerado={pixGerado}
+          tempoPix={tempoPix}
+          isGerandoPix={isGerandoPix}
+          onGerarPix={onGerarPix}
+          onCopiarPix={onCopiarPix}
+          onRenovacaoClick={onRenovacaoClick}
+          getValorPlano={getValorPlano}
+        />
+      );
+    }
+
+    // Para barbeiro ou dono com bloqueio manual
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
         <div className="max-w-sm w-full space-y-6 text-center">
           <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
             <div className="absolute inset-0 bg-red-600/20 blur-3xl rounded-full" />
-            {isLojaAtiva === false ? (
-              <Lock className="h-12 w-12 text-red-500 relative z-10" />
-            ) : (
-              <ShieldAlert className="h-20 w-20 text-red-500 relative z-10 stroke-[1.5px]" />
-            )}
+            <Lock className="h-12 w-12 text-red-500 relative z-10" />
           </div>
           <div className="space-y-2">
             <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">
-              {isLojaAtiva === false ? "Sistema Bloqueado" : "Acesso Negado"}
+              Sistema Bloqueado
             </h1>
             <p className="text-zinc-400 font-bold uppercase text-xs tracking-widest">
-              {isLojaAtiva === false
-                ? "A barbearia encontra-se com o acesso suspenso."
-                : "Seu perfil de barbeiro está desativado pelo dono."}
+              {isDono
+                ? "Sua barbearia está com acesso suspenso. Regularize para continuar."
+                : "A barbearia encontra-se temporariamente indisponível."}
+            </p>
+          </div>
+          {isDono ? (
+            <Button
+              onClick={onRenovacaoClick}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-12 rounded-xl"
+            >
+              Regularizar Pagamento
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              className="w-full text-zinc-500"
+              onClick={() => supabase.auth.signOut()}
+            >
+              <LogOut className="mr-2 h-4 w-4" /> Sair
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Se barbeiro comum e loja ativa, mas perfil desativado
+  if (!isDono && perfilLogado && perfilLogado.ativo === false) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
+        <div className="max-w-sm w-full space-y-6 text-center">
+          <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 bg-red-600/20 blur-3xl rounded-full" />
+            <ShieldAlert className="h-20 w-20 text-red-500 relative z-10 stroke-[1.5px]" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">
+              Acesso Negado
+            </h1>
+            <p className="text-zinc-400 font-bold uppercase text-xs tracking-widest">
+              Seu perfil de barbeiro está desativado pelo dono.
             </p>
           </div>
           <MotionButton
@@ -496,6 +576,9 @@ export function VisaoBarbeiro({
     );
   }
 
+  // ==========================================
+  // RENDER NORMAL (AGENDA)
+  // ==========================================
   return (
     <div className="space-y-6 text-white pb-32">
       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-2">
@@ -549,7 +632,7 @@ export function VisaoBarbeiro({
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-5 pt-4">
-                {/* ... (restante do formulário mantido exatamente igual) ... */}
+                {/* ... formulário mantido exatamente igual ao original ... */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
                   <Input
