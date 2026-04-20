@@ -1,15 +1,19 @@
+import { useMemo } from "react";
 import { X, CheckCircle, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DonoModalRenovacaoProps } from "@/types/dono";
-
-const formatarMoedaBR = (valor: number) => {
-  return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
-};
 
 const VALORES_PLANO: Record<string, number> = {
   starter: 50.0,
   pro: 99.9,
   elite: 497.0,
+};
+
+const formatarMoedaBR = (valor: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(valor || 0);
 };
 
 const formatarTempo = (segundos: number) => {
@@ -28,25 +32,41 @@ export function DonoModalRenovacao({
   onGerarPix,
   onCopiarPix,
 }: DonoModalRenovacaoProps) {
+  const valorPlano = useMemo(
+    () => VALORES_PLANO[planoAtual] || 0,
+    [planoAtual]
+  );
+
+  const valorFormatado = useMemo(
+    () => formatarMoedaBR(valorPlano),
+    [valorPlano]
+  );
+
+  const tempoFormatado = useMemo(
+    () => formatarTempo(tempoPix),
+    [tempoPix]
+  );
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-[32px] p-8 space-y-6 relative shadow-2xl overflow-hidden animate-in zoom-in-95">
-        <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" />
+        <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500" aria-hidden="true" />
         <button
-          onClick={() => {
-            onClose();
-          }}
-          className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+          onClick={onClose}
+          className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+          aria-label="Fechar modal"
         >
           <X className="h-6 w-6" />
         </button>
 
         <div className="text-center space-y-2">
-          <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Pagamento Seguro</h2>
+          <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">
+            Pagamento Seguro
+          </h2>
           <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">
-            Plano {planoAtual} • R$ {formatarMoedaBR(VALORES_PLANO[planoAtual] || 0)}
+            Plano {planoAtual} • R$ {valorFormatado}
           </p>
         </div>
 
@@ -54,23 +74,33 @@ export function DonoModalRenovacao({
           <Button
             onClick={onGerarPix}
             disabled={isGerandoPix}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl uppercase italic shadow-lg shadow-emerald-600/20"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-14 rounded-2xl uppercase italic shadow-lg shadow-emerald-600/20 disabled:opacity-70"
+            aria-label="Gerar código PIX para pagamento"
           >
-            {isGerandoPix ? <Loader2 className="animate-spin h-5 w-5" /> : "Gerar PIX de Pagamento"}
+            {isGerandoPix ? (
+              <Loader2 className="animate-spin h-5 w-5" />
+            ) : (
+              "Gerar PIX de Pagamento"
+            )}
           </Button>
         ) : (
           <div className="space-y-4 animate-in fade-in zoom-in-95">
             <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl text-center">
               <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 mb-3">
-                <CheckCircle className="h-4 w-4" /> PIX Gerado com Sucesso
+                <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                PIX Gerado com Sucesso
               </p>
               <Button
                 onClick={onCopiarPix}
                 className="w-full bg-emerald-500 text-black hover:bg-emerald-400 font-black h-14 rounded-xl flex items-center gap-2 text-sm"
+                aria-label="Copiar código PIX para área de transferência"
               >
-                <Copy className="h-5 w-5" /> Copiar Código
+                <Copy className="h-5 w-5" aria-hidden="true" />
+                Copiar Código
               </Button>
-              <p className="text-[10px] font-bold text-emerald-500/70 uppercase mt-3">Expira em {formatarTempo(tempoPix)}</p>
+              <p className="text-[10px] font-bold text-emerald-500/70 uppercase mt-3">
+                Expira em {tempoFormatado}
+              </p>
             </div>
             <p className="text-[9px] text-zinc-500 text-center font-medium italic">
               A tela será atualizada sozinha após o pagamento.

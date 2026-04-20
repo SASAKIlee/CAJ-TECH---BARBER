@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import {
   FileText,
   BarChart3,
@@ -61,7 +61,7 @@ interface VisaoDonoProps {
   corPrimaria?: string;
 }
 
-export function VisaoDono({
+function VisaoDonoComponent({
   faturamentoHoje: faturamentoHojeProp = 0,
   comissoesAPagarHoje: comissoesAPagarHojeProp = 0,
   lucroRealHoje: lucroRealHojeProp = 0,
@@ -119,7 +119,6 @@ export function VisaoDono({
   // ==========================================
   // EFEITOS
   // ==========================================
-  // Busca aviso global do CEO ao carregar
   useEffect(() => {
     let dismissTimer: ReturnType<typeof setTimeout>;
     
@@ -139,16 +138,12 @@ export function VisaoDono({
 
         if (diffHoras < 24) {
           setAvisoRede(data.mensagem);
-          
-          // Auto-dismiss após 10 segundos
           dismissTimer = setTimeout(() => setAvisoRede(null), 10000);
         }
       }
     };
 
     buscarAviso();
-    
-    // Cleanup do timer
     return () => {
       if (dismissTimer) clearTimeout(dismissTimer);
     };
@@ -180,7 +175,7 @@ export function VisaoDono({
       setSubDir(order.indexOf(next) > order.indexOf(subTab) ? 1 : -1);
       setSubTab(next);
       if (next === "vip") {
-        setVipSubTab("automacoes"); // Reset para automacoes ao entrar em VIP
+        setVipSubTab("automacoes");
       }
     },
     [subTab]
@@ -473,7 +468,6 @@ export function VisaoDono({
   // ==========================================
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-32 sm:pb-40 pt-3 sm:pt-4 w-full overflow-x-hidden text-white relative min-h-screen">
-      {/* BANNER DE AVISO GLOBAL (do CEO) */}
       {avisoRede && (
         <div className="mx-2 sm:mx-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2.5 sm:p-3 rounded-xl shadow-lg flex items-center justify-between gap-2 sm:gap-4 animate-in fade-in slide-in-from-top-4 z-30">
           <div className="flex items-center gap-2 overflow-hidden min-w-0">
@@ -483,6 +477,7 @@ export function VisaoDono({
           <button
             onClick={() => setAvisoRede(null)}
             className="hover:bg-white/20 rounded-full p-1 sm:p-1.5 transition-colors shrink-0"
+            aria-label="Fechar aviso"
           >
             <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
@@ -501,7 +496,6 @@ export function VisaoDono({
         />
       </div>
 
-      {/* Navegação Principal - Sticky */}
       <div className="px-2 sm:px-4 sticky top-0 z-40 bg-gradient-to-b from-black via-black/95 to-transparent backdrop-blur-xl pb-2 pt-2">
         <div className="flex rounded-2xl border border-white/[0.08] p-1 gap-1 shadow-2xl bg-zinc-900/50">
           {([
@@ -523,6 +517,7 @@ export function VisaoDono({
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
               )}
               style={subTab === id ? { backgroundColor: brand, color: ctaFg } : undefined}
+              aria-label={label}
             >
               <div className="flex flex-col items-center justify-center gap-0.5 sm:gap-1">
                 <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -562,7 +557,6 @@ export function VisaoDono({
             {subTab === "vip" &&
               (data.planoAtual === "pro" || data.planoAtual === "elite" ? (
                 <div className="space-y-4">
-                  {/* Sub-abas VIP — planos PRO e ELITE (alinhado às políticas RLS das tabelas VIP) */}
                   <div className="flex rounded-xl border border-white/[0.08] p-1 gap-0.5 bg-zinc-900/50 overflow-x-auto hide-scrollbar">
                     {([
                       { id: "automacoes" as const, label: "Automações", Icon: Zap },
@@ -581,6 +575,7 @@ export function VisaoDono({
                             ? "bg-white/10 text-white shadow-sm"
                             : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
                         )}
+                        aria-label={`Aba ${label}`}
                       >
                         <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         <span className="whitespace-nowrap">{label}</span>
@@ -694,3 +689,6 @@ export function VisaoDono({
     </div>
   );
 }
+
+// Memoização para evitar re-renderizações desnecessárias
+export const VisaoDono = React.memo(VisaoDonoComponent);

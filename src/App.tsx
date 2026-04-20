@@ -51,7 +51,9 @@ function AppRoutes() {
   const location = useLocation();
 
   // 🛡️ TRAVA ABSOLUTA: Se for agendamento ou demo, para o mundo e mostra a tela.
-  const isPublic = location.pathname.startsWith('/agendar/') || location.pathname.startsWith('/checkin/') || location.pathname === '/demo';
+  const isPublic = location.pathname.startsWith('/agendar/') || 
+                   location.pathname.startsWith('/checkin/') || 
+                   location.pathname === '/demo';
 
   if (isPublic) {
     return (
@@ -59,19 +61,30 @@ function AppRoutes() {
         <Route path="/agendar/:slug" element={<AgendamentoPublico />} />
         <Route path="/checkin/:slug/:ticket" element={<Checkin />} />
         <Route path="/demo" element={<Demo />} />
-        <Route path="*" element={<AgendamentoPublico />} />
+        {/* Redireciona /agendar sem slug para a home */}
+        <Route path="/agendar" element={<Navigate to="/" replace />} />
+        {/* Qualquer outra rota pública não mapeada vai para NotFound */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     );
   }
 
   // 🔒 FLUXO PRIVADO
-  if (loading) return <div className="min-h-screen bg-black" />;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-zinc-400 text-sm uppercase tracking-widest animate-pulse">
+          Carregando...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
       <Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" replace />} />
-      {/* Rota de convite do vendedor: redireciona para login */}
-      <Route path="/convite/:id" element={<Navigate to="/auth" replace />} />
+      {/* Rota de convite do vendedor: redireciona para login passando o id do convite como query param */}
+      <Route path="/convite/:id" element={<Navigate to={`/auth?convite=${window.location.pathname.split('/').pop()}`} replace />} />
       <Route path="/" element={user ? <Index /> : <Navigate to="/auth" replace />} />
       {/* Política de Privacidade acessível a todos */}
       <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />

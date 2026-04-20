@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { X, Crown, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,24 +10,38 @@ const VALORES_PLANO: Record<PlanoType, number> = {
   elite: 497.0,
 };
 
-// Funcionalidades desabilitadas temporariamente
+const formatarMoedaBR = (valor: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(valor || 0);
+};
+
 const WHATSAPP_DISABLED = true;
 
 export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoModalUpgradeProps) {
+  const valorStarter = useMemo(() => formatarMoedaBR(VALORES_PLANO.starter), []);
+  const valorPro = useMemo(() => formatarMoedaBR(VALORES_PLANO.pro), []);
+  const valorElite = useMemo(() => formatarMoedaBR(VALORES_PLANO.elite), []);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl overflow-y-auto">
       <div className="w-full max-w-4xl py-10 mt-10">
         <div className="flex justify-between items-center mb-8 px-4">
-          <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">Planos CAJ TECH</h2>
+          <h2 className="text-white font-black uppercase italic text-2xl tracking-tighter">
+            Planos CAJ TECH
+          </h2>
           <button
             onClick={onClose}
             className="bg-white/5 h-12 w-12 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+            aria-label="Fechar modal de planos"
           >
             <X className="text-zinc-500 h-6 w-6" />
           </button>
         </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
           {/* PLANO STARTER */}
           <Card className="p-6 bg-black border-zinc-800 rounded-3xl flex flex-col justify-between">
@@ -57,6 +72,7 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
                 variant="outline"
                 className="border-zinc-800 text-zinc-500 uppercase font-black text-[10px] h-12 rounded-xl"
                 disabled
+                aria-label="Plano Starter atual"
               >
                 Seu Plano Atual
               </Button>
@@ -65,6 +81,7 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
                 variant="outline"
                 className="border-zinc-700 text-zinc-300 uppercase font-black text-[10px] h-12 rounded-xl hover:bg-zinc-800"
                 onClick={() => onUpgrade("starter")}
+                aria-label="Fazer downgrade para plano Starter"
               >
                 Downgrade
               </Button>
@@ -112,6 +129,7 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
                 variant="outline"
                 className="w-full bg-emerald-500/10 border-emerald-500/30 text-emerald-500 font-black uppercase h-14 rounded-xl"
                 disabled
+                aria-label="Plano PRO atual"
               >
                 Seu Plano Atual
               </Button>
@@ -119,6 +137,7 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
               <Button
                 onClick={() => onUpgrade("pro")}
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase h-14 rounded-xl shadow-lg"
+                aria-label="Fazer upgrade para plano PRO"
               >
                 Evoluir para PRO
               </Button>
@@ -132,7 +151,9 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
                 <h3 className="text-yellow-500 font-black uppercase text-xs tracking-widest flex items-center gap-2">
                   <Crown className="h-4 w-4" /> Elite
                 </h3>
-                <span className="text-[8px] bg-yellow-500/20 text-yellow-500 px-2 py-1 rounded-full tracking-widest font-bold">EM BREVE</span>
+                <span className="text-[8px] bg-yellow-500/20 text-yellow-500 px-2 py-1 rounded-full tracking-widest font-bold">
+                  EM BREVE
+                </span>
               </div>
               <p className="text-4xl font-black text-white my-4 italic">
                 R$ 497<span className="text-xs opacity-30">/mês</span>
@@ -153,6 +174,7 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
               variant="outline"
               className="border-zinc-800 text-zinc-600 uppercase font-black text-[10px] h-12 rounded-xl"
               disabled
+              aria-label="Plano Elite indisponível no momento"
             >
               Indisponível no Momento
             </Button>

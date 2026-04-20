@@ -30,7 +30,7 @@ const HORARIO_PADRAO_FECHAMENTO = "19:00";
 const HORARIO_PADRAO_NOME = "nossa barbearia";
 
 // ==========================================
-// TIPAGENS (MELHORIA #1)
+// TIPAGENS
 // ==========================================
 interface Barbeiro {
   id: string;
@@ -135,7 +135,6 @@ function validarTelefone(telefone: string): boolean {
   return telefone.replace(/\D/g, "").length >= 10;
 }
 
-/** Extrai pathname `/checkin/:slug/:ticket` a partir do texto decodificado do QR. */
 function extractCheckinPathFromQr(text: string): string | null {
   const t = text.trim();
   if (!t) return null;
@@ -170,6 +169,8 @@ export function VisaoBarbeiro({
 }: VisaoBarbeiroProps) {
   const navigate = useNavigate();
   const scannerInputRef = useRef<HTMLInputElement>(null);
+  const scannerAbortControllerRef = useRef<AbortController | null>(null);
+
   // ==========================================
   // ESTADOS
   // ==========================================
@@ -180,7 +181,7 @@ export function VisaoBarbeiro({
     nome: HORARIO_PADRAO_NOME,
   });
   const [isLojaAtiva, setIsLojaAtiva] = useState<boolean | null>(null);
-  const [statusFiltro, setStatusFiltro] = useState<"Pendente" | "Todos">("Pendente"); // MELHORIA #13
+  const [statusFiltro, setStatusFiltro] = useState<"Pendente" | "Todos">("Pendente");
   const [novo, setNovo] = useState<NovoAgendamentoForm>({
     nome: "",
     telefone: "",
@@ -192,29 +193,38 @@ export function VisaoBarbeiro({
   });
   const [erros, setErros] = useState<ErrosForm>({});
   const [dismissing, setDismissing] = useState<{ id: string; status: "Finalizado" | "Cancelado" } | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); // MELHORIA #6
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
 
   const brand = corPrimaria?.trim() || "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
-  const glass = { backgroundColor: hexToRgba(brand, 0.1), backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" } as const;
+  const glass = useMemo(() => ({ 
+    backgroundColor: hexToRgba(brand, 0.1), 
+    backdropFilter: "blur(14px)", 
+    WebkitBackdropFilter: "blur(14px)" 
+  }), [brand]);
 
   const perfilLogado = barbeiros.find((b) => b.id === userId);
+  const slugBarbearia = barbeiros[0]?.barbearia_slug;
 
   // ==========================================
   // EFEITOS
   // ==========================================
   useEffect(() => {
+    if (!slugBarbearia) return;
+    
+    const controller = new AbortController();
     async function fetchHorariosConfig() {
-      const slug = barbeiros[0]?.barbearia_slug;
-      if (!slug) return;
       const { data } = await supabase
         .from('barbearias')
         .select('horario_abertura, horario_fechamento, nome, ativo')
-        .eq('slug', slug)
+        .eq('slug', slugBarbearia)
+        .abortSignal(controller.signal)
         .single();
+      
       if (data) {
         setIsLojaAtiva(data.ativo !== false);
         setInfoLoja({
@@ -225,14 +235,14 @@ export function VisaoBarbeiro({
       }
     }
     fetchHorariosConfig();
-  }, [barbeiros]);
+    return () => controller.abort();
+  }, [slugBarbearia]);
 
   // Sincroniza barbeiroSelecionadoId com o userId para barbeiros comuns
   useEffect(() => {
     if (!isDono && userId && barbeiroSelecionadoId !== userId) {
       setBarbeiroSelecionadoId(userId);
     }
-    // Se for dono e não houver seleção, inicializa vazio (todos)
     if (isDono && barbeiroSelecionadoId === undefined) {
       setBarbeiroSelecionadoId("");
     }
@@ -274,7 +284,6 @@ export function VisaoBarbeiro({
     return [...filtrados].sort((a, b) => String(a.horario).localeCompare(String(b.horario)));
   }, [agendamentos, statusFiltro]);
 
-  // MELHORIA #4: Removida dependência desnecessária de agendamentos
   const slotsOcupados = useMemo(() => {
     if (!novo.data || !novo.barbeiroId) return [];
     return horariosOcupados(novo.data, novo.barbeiroId);
@@ -295,8 +304,7 @@ export function VisaoBarbeiro({
     } else if (field === "telefone") {
       setErros((prev) => ({ ...prev, telefone: !validarTelefone(novo.telefone) }));
     }
-    // Outros campos podem ser validados no submit
-  }, [novo]);
+  }, [novo.nome, novo.telefone]);
 
   const isFormValid = useMemo(() => {
     return (
@@ -310,7 +318,6 @@ export function VisaoBarbeiro({
   }, [novo]);
 
   const handleAgendar = useCallback(async () => {
-    // Validação manual antes do Zod (MELHORIA #2)
     const newErros: ErrosForm = {
       nome: !novo.nome.trim(),
       telefone: !validarTelefone(novo.telefone),
@@ -397,32 +404,40 @@ export function VisaoBarbeiro({
         toast.info("O check-in digital está desativado nesta barbearia.");
         return;
       }
+
+      scannerAbortControllerRef.current?.abort();
+      const controller = new AbortController();
+      scannerAbortControllerRef.current = controller;
+      setIsScanning(true);
+
       try {
         const bmp = await createImageBitmap(file);
+        if (controller.signal.aborted) return;
+        
         const canvas = document.createElement("canvas");
         canvas.width = bmp.width;
         canvas.height = bmp.height;
         const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          toast.error("Não foi possível ler a imagem.");
-          return;
-        }
+        if (!ctx) throw new Error("Não foi possível ler a imagem.");
+        
         ctx.drawImage(bmp, 0, 0);
         bmp.close?.();
+        
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
-        if (!code?.data) {
-          toast.error("Não foi possível ler o QR Code. Tente outra imagem.");
-          return;
-        }
+        if (!code?.data) throw new Error("Não foi possível ler o QR Code.");
+        
         const path = extractCheckinPathFromQr(code.data);
-        if (!path) {
-          toast.error("QR Code não é um ticket de check-in válido.");
-          return;
-        }
+        if (!path) throw new Error("QR Code não é um ticket de check-in válido.");
+        
         navigate(path);
-      } catch {
-        toast.error("Erro ao processar a imagem.");
+      } catch (err: any) {
+        if (!controller.signal.aborted) {
+          toast.error(err.message || "Erro ao processar a imagem.");
+        }
+      } finally {
+        setIsScanning(false);
+        scannerAbortControllerRef.current = null;
       }
     },
     [checkinHabilitado, navigate]
@@ -435,6 +450,13 @@ export function VisaoBarbeiro({
     }
     scannerInputRef.current?.click();
   }, [checkinHabilitado]);
+
+  // Cleanup do scanner ao desmontar
+  useEffect(() => {
+    return () => {
+      scannerAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   // ==========================================
   // RENDER
@@ -499,198 +521,201 @@ export function VisaoBarbeiro({
           <MotionButton
             type="button"
             variant="outline"
-            className="rounded-[20px] border-white/10 bg-white/5 h-14 px-6 font-black uppercase text-xs text-white hover:bg-white/10"
+            className="rounded-[20px] border-white/10 bg-white/5 h-14 px-6 font-black uppercase text-xs text-white hover:bg-white/10 disabled:opacity-50"
             whileTap={{ scale: 0.95 }}
             onClick={openScannerFilePicker}
+            disabled={isScanning}
             aria-label="Escanear QR Code do ticket de check-in"
           >
-            <Camera className="h-5 w-5 mr-2" /> Scanner
+            {isScanning ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Camera className="h-5 w-5 mr-2" />}
+            Scanner
           </MotionButton>
 
           <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <MotionButton
-              className="rounded-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] gap-2 h-14 px-8 font-black uppercase text-xs border-0"
-              style={{ backgroundColor: brand, color: ctaFg }}
-              whileTap={{ scale: 0.95 }}
-              aria-label="Novo agendamento"
-            >
-              <Plus className="h-5 w-5 stroke-[3px]" /> Novo Agendamento
-            </MotionButton>
-          </DialogTrigger>
-          <DialogContent className="dark border-white/[0.08] text-white w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar bg-zinc-950/95 backdrop-blur-xl">
-            <DialogHeader>
-              <DialogTitle className="text-white font-black uppercase italic text-2xl flex items-center gap-2">
-                <Clock style={{ color: brand }} /> Novo Horário
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-5 pt-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
-                <Input
-                  placeholder="Nome Completo"
-                  className={cn(
-                    "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
-                    erros.nome && "border-red-500"
-                  )}
-                  value={novo.nome}
-                  onChange={(e) => {
-                    setNovo({ ...novo, nome: e.target.value });
-                    setErros((prev) => ({ ...prev, nome: false }));
-                  }}
-                  onBlur={() => handleFieldBlur("nome")}
-                />
-                {erros.nome && <p className="text-red-400 text-[10px] mt-1 ml-2">Nome obrigatório.</p>}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
-                <Input
-                  type="tel"
-                  placeholder="(11) 99999-9999"
-                  className={cn(
-                    "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
-                    erros.telefone && "border-red-500"
-                  )}
-                  value={novo.telefone}
-                  onChange={handleTelefoneChange}
-                  onBlur={() => handleFieldBlur("telefone")}
-                />
-                {erros.telefone && (
-                  <p className="text-red-400 text-[10px] mt-1 ml-2">Telefone inválido (mín. 10 dígitos).</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Barbeiro</label>
-                  <Select
-                    value={novo.barbeiroId}
-                    onValueChange={(v) => {
-                      setNovo({ ...novo, barbeiroId: v, horario: "" });
-                      setErros((prev) => ({ ...prev, barbeiroId: false }));
-                    }}
-                  >
-                    <SelectTrigger
-                      className={cn(
-                        "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
-                        erros.barbeiroId && "border-red-500"
-                      )}
-                    >
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
-                      {barbeiros.filter((b) => b.ativo).map((b) => (
-                        <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Serviço</label>
-                  <Select
-                    value={novo.servicoId}
-                    onValueChange={(v) => {
-                      setNovo({ ...novo, servicoId: v });
-                      setErros((prev) => ({ ...prev, servicoId: false }));
-                    }}
-                  >
-                    <SelectTrigger
-                      className={cn(
-                        "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
-                        erros.servicoId && "border-red-500"
-                      )}
-                    >
-                      <SelectValue placeholder="Serviço" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
-                      {servicos.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
-                <Input
-                  type="date"
-                  className={cn(
-                    "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base color-scheme-dark backdrop-blur-sm",
-                    erros.data && "border-red-500"
-                  )}
-                  value={novo.data}
-                  onChange={(e) => {
-                    setNovo({ ...novo, data: e.target.value, horario: "" });
-                    setErros((prev) => ({ ...prev, data: false }));
-                  }}
-                />
-              </div>
-
-              <div className="space-y-2 border-t border-white/[0.08] pt-4 mt-2">
-                <label className="text-[10px] font-black text-zinc-500 tracking-widest ml-1 uppercase">
-                  Horários Disponíveis
-                </label>
-                <div className="grid grid-cols-4 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                  {horarios.map((h) => {
-                    const [hH, mH] = h.split(":").map(Number);
-                    const isHoje = novo.data === hojeLocal;
-                    const busy = slotsOcupados.includes(h);
-                    const disable = !novo.barbeiroId || busy || (isHoje && (hH < horaAtual || (hH === horaAtual && mH <= minAtual)));
-
-                    return (
-                      <MotionButton
-                        key={h}
-                        type="button"
-                        variant={novo.horario === h ? "default" : "outline"}
-                        disabled={disable}
-                        whileTap={!disable ? { scale: 0.95 } : undefined}
-                        onClick={() => {
-                          setNovo({ ...novo, horario: h });
-                          setErros((prev) => ({ ...prev, horario: false }));
-                        }}
-                        className={cn(
-                          "text-[12px] font-bold h-12 rounded-xl transition-colors",
-                          novo.horario === h ? "border-0 shadow-lg" : "text-white bg-black/30 border-white/[0.08]",
-                          disable && "opacity-20 cursor-not-allowed"
-                        )}
-                        style={novo.horario === h ? { backgroundColor: brand, color: ctaFg } : undefined}
-                      >
-                        {h}
-                      </MotionButton>
-                    );
-                  })}
-                </div>
-                {erros.horario && <p className="text-red-400 text-[10px] mt-1 ml-2">Selecione um horário.</p>}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado para o barbeiro (opcional)</label>
-                <Textarea
-                  placeholder="Ex: Quero igual da foto..."
-                  className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]"
-                  value={novo.observacao}
-                  onChange={(e) => setNovo({ ...novo, observacao: e.target.value })}
-                />
-              </div>
-
+            <DialogTrigger asChild>
               <MotionButton
-                className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl disabled:opacity-50"
+                className="rounded-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] gap-2 h-14 px-8 font-black uppercase text-xs border-0"
                 style={{ backgroundColor: brand, color: ctaFg }}
-                whileTap={{ scale: isFormValid && !isSubmitting ? 0.95 : 1 }}
-                onClick={handleAgendar}
-                disabled={!isFormValid || isSubmitting}
-                aria-label="Confirmar agendamento"
+                whileTap={{ scale: 0.95 }}
+                aria-label="Novo agendamento"
               >
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : "Confirmar Agendamento"}
+                <Plus className="h-5 w-5 stroke-[3px]" /> Novo Agendamento
               </MotionButton>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="dark border-white/[0.08] text-white w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar bg-zinc-950/95 backdrop-blur-xl">
+              <DialogHeader>
+                <DialogTitle className="text-white font-black uppercase italic text-2xl flex items-center gap-2">
+                  <Clock style={{ color: brand }} /> Novo Horário
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-5 pt-4">
+                {/* ... (restante do formulário mantido exatamente igual) ... */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
+                  <Input
+                    placeholder="Nome Completo"
+                    className={cn(
+                      "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
+                      erros.nome && "border-red-500"
+                    )}
+                    value={novo.nome}
+                    onChange={(e) => {
+                      setNovo({ ...novo, nome: e.target.value });
+                      setErros((prev) => ({ ...prev, nome: false }));
+                    }}
+                    onBlur={() => handleFieldBlur("nome")}
+                  />
+                  {erros.nome && <p className="text-red-400 text-[10px] mt-1 ml-2">Nome obrigatório.</p>}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
+                  <Input
+                    type="tel"
+                    placeholder="(11) 99999-9999"
+                    className={cn(
+                      "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
+                      erros.telefone && "border-red-500"
+                    )}
+                    value={novo.telefone}
+                    onChange={handleTelefoneChange}
+                    onBlur={() => handleFieldBlur("telefone")}
+                  />
+                  {erros.telefone && (
+                    <p className="text-red-400 text-[10px] mt-1 ml-2">Telefone inválido (mín. 10 dígitos).</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Barbeiro</label>
+                    <Select
+                      value={novo.barbeiroId}
+                      onValueChange={(v) => {
+                        setNovo({ ...novo, barbeiroId: v, horario: "" });
+                        setErros((prev) => ({ ...prev, barbeiroId: false }));
+                      }}
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
+                          erros.barbeiroId && "border-red-500"
+                        )}
+                      >
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
+                        {barbeiros.filter((b) => b.ativo).map((b) => (
+                          <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Serviço</label>
+                    <Select
+                      value={novo.servicoId}
+                      onValueChange={(v) => {
+                        setNovo({ ...novo, servicoId: v });
+                        setErros((prev) => ({ ...prev, servicoId: false }));
+                      }}
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm",
+                          erros.servicoId && "border-red-500"
+                        )}
+                      >
+                        <SelectValue placeholder="Serviço" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
+                        {servicos.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
+                  <Input
+                    type="date"
+                    className={cn(
+                      "rounded-xl border-white/[0.08] bg-black/35 h-14 text-base color-scheme-dark backdrop-blur-sm",
+                      erros.data && "border-red-500"
+                    )}
+                    value={novo.data}
+                    onChange={(e) => {
+                      setNovo({ ...novo, data: e.target.value, horario: "" });
+                      setErros((prev) => ({ ...prev, data: false }));
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-2 border-t border-white/[0.08] pt-4 mt-2">
+                  <label className="text-[10px] font-black text-zinc-500 tracking-widest ml-1 uppercase">
+                    Horários Disponíveis
+                  </label>
+                  <div className="grid grid-cols-4 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                    {horarios.map((h) => {
+                      const [hH, mH] = h.split(":").map(Number);
+                      const isHoje = novo.data === hojeLocal;
+                      const busy = slotsOcupados.includes(h);
+                      const disable = !novo.barbeiroId || busy || (isHoje && (hH < horaAtual || (hH === horaAtual && mH <= minAtual)));
+
+                      return (
+                        <MotionButton
+                          key={h}
+                          type="button"
+                          variant={novo.horario === h ? "default" : "outline"}
+                          disabled={disable}
+                          whileTap={!disable ? { scale: 0.95 } : undefined}
+                          onClick={() => {
+                            setNovo({ ...novo, horario: h });
+                            setErros((prev) => ({ ...prev, horario: false }));
+                          }}
+                          className={cn(
+                            "text-[12px] font-bold h-12 rounded-xl transition-colors",
+                            novo.horario === h ? "border-0 shadow-lg" : "text-white bg-black/30 border-white/[0.08]",
+                            disable && "opacity-20 cursor-not-allowed"
+                          )}
+                          style={novo.horario === h ? { backgroundColor: brand, color: ctaFg } : undefined}
+                        >
+                          {h}
+                        </MotionButton>
+                      );
+                    })}
+                  </div>
+                  {erros.horario && <p className="text-red-400 text-[10px] mt-1 ml-2">Selecione um horário.</p>}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado para o barbeiro (opcional)</label>
+                  <Textarea
+                    placeholder="Ex: Quero igual da foto..."
+                    className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]"
+                    value={novo.observacao}
+                    onChange={(e) => setNovo({ ...novo, observacao: e.target.value })}
+                  />
+                </div>
+
+                <MotionButton
+                  className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl disabled:opacity-50"
+                  style={{ backgroundColor: brand, color: ctaFg }}
+                  whileTap={{ scale: isFormValid && !isSubmitting ? 0.95 : 1 }}
+                  onClick={handleAgendar}
+                  disabled={!isFormValid || isSubmitting}
+                  aria-label="Confirmar agendamento"
+                >
+                  {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : "Confirmar Agendamento"}
+                </MotionButton>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
-    </div>
 
       {isDono && (
         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
@@ -729,7 +754,6 @@ export function VisaoBarbeiro({
         </div>
       )}
 
-      {/* FILTRO DE STATUS (MELHORIA #13) */}
       <div className="flex items-center gap-2 px-1">
         <Filter className="h-4 w-4 text-white/50" />
         <Select value={statusFiltro} onValueChange={(v) => setStatusFiltro(v as "Pendente" | "Todos")}>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Scissors, LayoutDashboard, ArrowLeft, Crown, Eye } from "lucide-react";
+import { Scissors, LayoutDashboard, ArrowLeft, Crown, Eye, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,23 +19,37 @@ export default function Demo() {
   const [view, setView] = useState<DemoView>("menu");
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState("");
 
-  // Funções mock que simulam ações (não salvam em lugar nenhum)
   const handleMockAction = (mensagem: string) => {
     alert(`[DEMONSTRAÇÃO] ${mensagem}\n\nNa versão real, esta ação seria salva no banco de dados.`);
   };
 
-  // Menu de seleção de visão
+  const handleExitDemo = () => {
+    if (confirm("Sair do modo demonstração e voltar para a página inicial?")) {
+      window.location.href = "/";
+    }
+  };
+
   if (view === "menu") {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
         {/* Banner de Demonstração */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-3 text-center">
-          <div className="flex items-center justify-center gap-2">
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <Eye className="h-5 w-5 animate-pulse" />
             <span className="font-black uppercase tracking-widest text-sm">
               Modo Demonstração - Dados Temporários
             </span>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleExitDemo}
+            className="text-white hover:bg-white/20 gap-2"
+            aria-label="Sair da demonstração"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Sair</span>
+          </Button>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center p-6 max-w-4xl mx-auto w-full">
@@ -49,14 +63,14 @@ export default function Demo() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl">
-            {/* Card Visão Dono */}
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Card
                 className="p-6 bg-zinc-900/50 border-zinc-800 cursor-pointer hover:border-emerald-500/50 transition-colors h-full"
                 onClick={() => setView("dono")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setView("dono")}
+                aria-label="Visão Dono - Painel Administrativo"
               >
                 <div className="flex items-center gap-4 mb-4">
                   <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
@@ -72,30 +86,22 @@ export default function Demo() {
                   </div>
                 </div>
                 <ul className="space-y-2 text-sm text-zinc-400">
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-emerald-500" /> Dashboard Financeiro
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-emerald-500" /> Gestão de Equipe
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-emerald-500" /> Agendamentos do Dia
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-emerald-500" /> Configurações
-                  </li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-emerald-500" /> Dashboard Financeiro</li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-emerald-500" /> Gestão de Equipe</li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-emerald-500" /> Agendamentos do Dia</li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-emerald-500" /> Configurações</li>
                 </ul>
               </Card>
             </motion.div>
 
-            {/* Card Visão Barbeiro */}
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Card
                 className="p-6 bg-zinc-900/50 border-zinc-800 cursor-pointer hover:border-blue-500/50 transition-colors h-full"
                 onClick={() => setView("barbeiro")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setView("barbeiro")}
+                aria-label="Visão Barbeiro - Agenda Profissional"
               >
                 <div className="flex items-center gap-4 mb-4">
                   <div className="h-14 w-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
@@ -111,18 +117,10 @@ export default function Demo() {
                   </div>
                 </div>
                 <ul className="space-y-2 text-sm text-zinc-400">
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-blue-500" /> Agenda do Dia
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-blue-500" /> Minhas Comissões
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-blue-500" /> Finalizar Atendimentos
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-blue-500" /> WhatsApp Rápido
-                  </li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-blue-500" /> Agenda do Dia</li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-blue-500" /> Minhas Comissões</li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-blue-500" /> Finalizar Atendimentos</li>
+                  <li className="flex items-center gap-2"><Crown className="h-4 w-4 text-blue-500" /> WhatsApp Rápido</li>
                 </ul>
               </Card>
             </motion.div>
@@ -138,11 +136,9 @@ export default function Demo() {
     );
   }
 
-  // Visão Dono
   if (view === "dono") {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
-        {/* Banner de Demonstração */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Eye className="h-5 w-5 animate-pulse" />
@@ -150,14 +146,26 @@ export default function Demo() {
               Demonstração - Visão Dono
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setView("menu")}
-            className="text-white hover:bg-white/20 gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" /> Voltar
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setView("menu")}
+              className="text-white hover:bg-white/20 gap-2"
+              aria-label="Voltar ao menu"
+            >
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExitDemo}
+              className="text-white hover:bg-white/20"
+              aria-label="Sair da demonstração"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -181,11 +189,9 @@ export default function Demo() {
     );
   }
 
-  // Visão Barbeiro
   if (view === "barbeiro") {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
-        {/* Banner de Demonstração */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Eye className="h-5 w-5 animate-pulse" />
@@ -193,14 +199,26 @@ export default function Demo() {
               Demonstração - Visão Barbeiro
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setView("menu")}
-            className="text-white hover:bg-white/20 gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" /> Voltar
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setView("menu")}
+              className="text-white hover:bg-white/20 gap-2"
+              aria-label="Voltar ao menu"
+            >
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExitDemo}
+              className="text-white hover:bg-white/20"
+              aria-label="Sair da demonstração"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -223,7 +241,10 @@ export default function Demo() {
               handleMockAction("Novo agendamento criado!");
               return Promise.resolve({});
             }}
-            onStatusChange={() => handleMockAction("Status do agendamento alterado!")}
+            onStatusChange={() => {
+              handleMockAction("Status do agendamento alterado!");
+              return Promise.resolve();
+            }}
           />
         </div>
       </div>

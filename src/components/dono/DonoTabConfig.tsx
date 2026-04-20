@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import {
   QrCode,
   Clock,
@@ -78,8 +79,23 @@ export function DonoTabConfig({
   onImagemFundoChange,
   onNovaDataFechadaChange,
 }: DonoTabConfigProps) {
-  const previewLogo = imagemLogo ? URL.createObjectURL(imagemLogo) : null;
-  const previewFundo = imagemFundo ? URL.createObjectURL(imagemFundo) : null;
+  // Gerenciar URLs de preview com limpeza automática
+  const previewLogo = useMemo(
+    () => (imagemLogo ? URL.createObjectURL(imagemLogo) : null),
+    [imagemLogo]
+  );
+  const previewFundo = useMemo(
+    () => (imagemFundo ? URL.createObjectURL(imagemFundo) : null),
+    [imagemFundo]
+  );
+
+  // Limpar URLs ao desmontar ou quando as imagens mudarem
+  useEffect(() => {
+    return () => {
+      if (previewLogo) URL.revokeObjectURL(previewLogo);
+      if (previewFundo) URL.revokeObjectURL(previewFundo);
+    };
+  }, [previewLogo, previewFundo]);
 
   return (
     <section className="space-y-10 animate-in fade-in duration-500 pb-10">
@@ -104,6 +120,8 @@ export function DonoTabConfig({
         onRemoveDataFechada={onRemoveDataFechada}
         onNovaDataFechadaChange={onNovaDataFechadaChange}
         onSaveHorarios={onSaveHorarios}
+        // ⚠️ NOTA: Os inputs de horário (abertura, fechamento, etc.) não têm onChange.
+        // O desenvolvedor deve adicionar callbacks no componente pai para permitir edição.
       />
 
       {/* GESTÃO DE EQUIPE */}
@@ -239,6 +257,7 @@ function HorariosSection({
                     isSelected ? "border-transparent shadow-lg" : "bg-black/30 border-white/[0.08] text-white/40"
                   )}
                   style={isSelected ? { backgroundColor: brand, color: ctaFg } : {}}
+                  aria-label={`${dia.fullName} ${isSelected ? "selecionado" : "não selecionado"}`}
                 >
                   {dia.label}
                 </button>
@@ -247,14 +266,15 @@ function HorariosSection({
           </div>
         </div>
 
+        {/* ⚠️ NOTA: Estes inputs de horário não possuem onChange. O desenvolvedor deve fornecer callbacks. */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 space-y-2">
             <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Abertura</label>
             <input
               type="time"
               value={horariosLoja.abertura}
-              onChange={(e) => {}} // controlado pelo pai
-              className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
+              readOnly // temporariamente somente leitura até implementar onChange
+              className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base cursor-not-allowed opacity-70"
               style={{ colorScheme: "dark" }}
             />
           </div>
@@ -263,8 +283,8 @@ function HorariosSection({
             <input
               type="time"
               value={horariosLoja.fechamento}
-              onChange={(e) => {}}
-              className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
+              readOnly
+              className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base cursor-not-allowed opacity-70"
               style={{ colorScheme: "dark" }}
             />
           </div>
@@ -278,8 +298,8 @@ function HorariosSection({
               <input
                 type="time"
                 value={horariosLoja.inicio_almoco}
-                onChange={(e) => {}}
-                className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
+                readOnly
+                className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base cursor-not-allowed opacity-70"
                 style={{ colorScheme: "dark" }}
               />
             </div>
@@ -288,8 +308,8 @@ function HorariosSection({
               <input
                 type="time"
                 value={horariosLoja.fim_almoco}
-                onChange={(e) => {}}
-                className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
+                readOnly
+                className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base cursor-not-allowed opacity-70"
                 style={{ colorScheme: "dark" }}
               />
             </div>
@@ -305,8 +325,14 @@ function HorariosSection({
               onChange={(e) => onNovaDataFechadaChange(e.target.value)}
               className="flex-1 rounded-xl border border-white/[0.08] bg-black/30 p-4 text-base text-white outline-none focus:border-white/20"
               style={{ colorScheme: "dark" }}
+              aria-label="Selecionar data fechada"
             />
-            <Button onClick={onAddDataFechada} className="h-14 w-14 shrink-0 rounded-xl" style={{ backgroundColor: brand, color: ctaFg }}>
+            <Button
+              onClick={onAddDataFechada}
+              className="h-14 w-14 shrink-0 rounded-xl"
+              style={{ backgroundColor: brand, color: ctaFg }}
+              aria-label="Adicionar data fechada"
+            >
               <Plus className="h-6 w-6 stroke-[3px]" />
             </Button>
           </div>
@@ -318,6 +344,7 @@ function HorariosSection({
                   <button
                     onClick={() => onRemoveDataFechada(data)}
                     className="h-8 w-8 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                    aria-label={`Remover data ${formatarDataBR(data)}`}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -331,6 +358,7 @@ function HorariosSection({
           onClick={onSaveHorarios}
           disabled={isSavingHorario}
           className="w-full bg-white/10 hover:bg-white/20 text-white h-14 rounded-xl font-black uppercase text-sm tracking-wider mt-4"
+          aria-label="Salvar horários de funcionamento"
         >
           {isSavingHorario ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Save className="h-5 w-5 mr-2" />}
           {isSavingHorario ? "Salvando..." : "Salvar Horários"}
@@ -379,6 +407,7 @@ function EquipeSection({
           className="bg-black/30 border-white/10 h-14 rounded-xl text-base px-4"
           value={nBarbeiro.nome}
           onChange={(e) => onNBarbeiroChange({ ...nBarbeiro, nome: e.target.value })}
+          aria-label="Nome do barbeiro"
         />
 
         <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-xs uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
@@ -399,6 +428,7 @@ function EquipeSection({
             className="flex-1 bg-black/30 border-white/10 h-14 rounded-xl text-base px-4"
             value={nBarbeiro.email}
             onChange={(e) => onNBarbeiroChange({ ...nBarbeiro, email: e.target.value })}
+            aria-label="E-mail do barbeiro"
           />
           <div className="relative w-full sm:w-32">
             <span className="absolute right-4 top-4 text-zinc-500 font-black">%</span>
@@ -408,6 +438,7 @@ function EquipeSection({
               className="w-full bg-black/30 border-white/10 h-14 rounded-xl text-base px-4 pr-10"
               value={nBarbeiro.comissao}
               onChange={(e) => onNBarbeiroChange({ ...nBarbeiro, comissao: e.target.value })}
+              aria-label="Percentual de comissão"
             />
           </div>
         </div>
@@ -417,12 +448,14 @@ function EquipeSection({
           className="bg-black/30 border-white/10 h-14 rounded-xl text-base px-4"
           value={nBarbeiro.senha}
           onChange={(e) => onNBarbeiroChange({ ...nBarbeiro, senha: e.target.value })}
+          aria-label="Senha do barbeiro"
         />
         <Button
           onClick={onAddBarbeiro}
           disabled={isUploadingBarbeiro}
           className="w-full h-14 rounded-xl font-black uppercase text-sm tracking-wider shadow-lg shadow-black/40"
           style={{ backgroundColor: brand, color: ctaFg }}
+          aria-label="Cadastrar profissional"
         >
           {isUploadingBarbeiro ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Plus className="h-5 w-5 mr-2" />}
           {isUploadingBarbeiro ? "Processando..." : "Cadastrar Profissional"}
@@ -462,6 +495,7 @@ function EquipeSection({
                 variant="ghost"
                 className="h-12 w-12 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl"
                 onClick={() => onToggleBarbeiroStatus(b.id, !b.ativo)}
+                aria-label={b.ativo ? "Desativar barbeiro" : "Ativar barbeiro"}
               >
                 {b.ativo ? <PowerOff className="h-6 w-6" /> : <Power className="h-6 w-6" />}
               </Button>
@@ -471,6 +505,7 @@ function EquipeSection({
                 className="h-12 w-12 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl"
                 disabled={b.ativo}
                 onClick={() => onRemoveBarbeiro(b.id)}
+                aria-label="Remover barbeiro"
               >
                 <Trash2 className="h-6 w-6" />
               </Button>
@@ -519,6 +554,7 @@ function ServicosSection({
           className="bg-black/30 border-white/10 h-14 rounded-xl text-base px-4"
           value={nServico.nome}
           onChange={(e) => onNServicoChange({ ...nServico, nome: e.target.value })}
+          aria-label="Nome do serviço"
         />
         <label className="flex items-center justify-center gap-2 h-14 rounded-xl border border-dashed border-white/20 bg-black/20 text-xs uppercase font-black cursor-pointer hover:bg-white/5 transition-colors">
           {imagemServico ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <ImagePlus className="h-5 w-5 opacity-50" />}
@@ -534,6 +570,7 @@ function ServicosSection({
               className="bg-black/30 border-white/10 h-14 pl-12 rounded-xl text-base"
               value={nServico.preco}
               onChange={(e) => onNServicoChange({ ...nServico, preco: e.target.value })}
+              aria-label="Preço do serviço"
             />
           </div>
           <div className="relative w-32 shrink-0">
@@ -544,6 +581,7 @@ function ServicosSection({
               className="bg-black/30 border-white/10 h-14 pr-12 pl-4 rounded-xl text-base"
               value={nServico.duracao_minutos}
               onChange={(e) => onNServicoChange({ ...nServico, duracao_minutos: e.target.value })}
+              aria-label="Duração em minutos"
             />
           </div>
           <Button
@@ -551,6 +589,7 @@ function ServicosSection({
             disabled={isUploadingServico}
             className="h-14 w-14 rounded-xl shrink-0 shadow-lg"
             style={{ backgroundColor: brand, color: ctaFg }}
+            aria-label="Adicionar serviço"
           >
             {isUploadingServico ? <Loader2 className="animate-spin h-6 w-6" /> : <Plus className="h-6 w-6" />}
           </Button>
@@ -575,7 +614,13 @@ function ServicosSection({
                 </p>
               </div>
             </div>
-            <Button size="icon" variant="ghost" className="h-12 w-12 text-zinc-600 hover:text-red-500 rounded-xl" onClick={() => onRemoveServico(s.id)}>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-12 w-12 text-zinc-600 hover:text-red-500 rounded-xl"
+              onClick={() => onRemoveServico(s.id)}
+              aria-label={`Remover serviço ${s.nome}`}
+            >
               <Trash2 className="h-6 w-6" />
             </Button>
           </div>
@@ -657,6 +702,7 @@ function BrandingSection({
           disabled={isUploadingBranding}
           className="w-full h-14 rounded-2xl font-black uppercase tracking-wider shadow-lg shadow-black/40 mt-2"
           style={{ backgroundColor: brand, color: ctaFg }}
+          aria-label="Salvar identidade visual"
         >
           {isUploadingBranding ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Save className="h-5 w-5 mr-2" />}
           {isUploadingBranding ? "Enviando imagens..." : "Salvar Identidade Visual"}

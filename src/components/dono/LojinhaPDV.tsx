@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ShoppingBag, Plus, X, Minus, Package, DollarSign, TrendingUp, Loader2, Search } from "lucide-react";
+import { ShoppingBag, Plus, X, Minus, Package, DollarSign, TrendingUp, Loader2, Search, Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Produto, VendaProduto } from "@/types/dono";
+import { usePlan } from "@/hooks/usePlan"; // ← NOVO IMPORT
 
 interface LojinhaPDVProps {
   slug: string;
@@ -17,6 +18,9 @@ interface LojinhaPDVProps {
 }
 
 export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
+  // ← CARREGA O PLANO
+  const { plan, hasProAccess, loading: planLoading } = usePlan(slug);
+
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [vendas, setVendas] = useState<VendaProduto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +28,54 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
   const [novoProduto, setNovoProduto] = useState({ nome: "", preco: "", estoque: "" });
   const [busca, setBusca] = useState("");
 
+  // ← BLOQUEIO: Se não for Pro/Elite, mostra tela de upgrade
+  if (planLoading || loading) {
+    return (
+      <Card className="p-8 rounded-2xl border border-white/[0.08] text-center" style={glass}>
+        <Loader2 className="animate-spin text-purple-500 h-8 w-8 mx-auto" />
+        <p className="text-zinc-400 text-sm mt-4">Carregando...</p>
+      </Card>
+    );
+  }
+
+  if (!hasProAccess) {
+    return (
+      <Card className="p-6 rounded-2xl border border-white/[0.08] text-center" style={glass}>
+        <div className="flex flex-col items-center">
+          <div className="h-16 w-16 rounded-2xl bg-purple-500/20 flex items-center justify-center mb-4">
+            <Lock className="h-8 w-8 text-purple-400" />
+          </div>
+          <h3 className="font-black text-white uppercase text-lg mb-2">Lojinha / PDV</h3>
+          <p className="text-zinc-400 text-sm mb-4 max-w-xs">
+            Controle de estoque, vendas e histórico é exclusivo do plano <strong className="text-purple-400">Pro</strong>.
+          </p>
+          
+          <div className="bg-black/30 rounded-xl p-4 mb-6 w-full text-left">
+            <p className="text-xs text-zinc-500 uppercase font-black mb-2">No plano Pro você tem:</p>
+            <ul className="text-xs text-zinc-300 space-y-1">
+              <li>✓ Controle de estoque em tempo real</li>
+              <li>✓ Registro de vendas com histórico</li>
+              <li>✓ Cálculo automático de comissões</li>
+              <li>✓ Lembretes de WhatsApp</li>
+            </ul>
+          </div>
+
+          <Button 
+            onClick={() => window.location.href = "/planos"} 
+            className="font-black uppercase w-full"
+            style={{ backgroundColor: brand }}
+          >
+            Upgrade para Pro — R$ 99,90/mês
+          </Button>
+          <p className="text-[10px] text-zinc-500 mt-2">
+            Plano atual: <strong className="text-zinc-300 uppercase">{plan}</strong>
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
+  // ← RENDERIZAÇÃO NORMAL PARA PRO/ELITE (código original preservado)
   useEffect(() => {
     carregarDados();
   }, [slug]);
@@ -92,7 +144,6 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
 
       if (errVenda) throw errVenda;
 
-      // Atualiza estoque
       const { error: errEstoque } = await supabase
         .from("produtos")
         .update({ estoque: produto.estoque - 1 })

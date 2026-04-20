@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Receipt, Plus, X, TrendingDown, DollarSign, Calendar, Search, Loader2, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,25 +24,30 @@ const CATEGORIAS = [
 ];
 
 export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDespesasProps) {
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroMes, setFiltroMes] = useState(new Date().toISOString().slice(0, 7));
-  const [novaDespesa, setNovaDespesa] = useState({ descricao: "", valor: "", categoria: "Outros", data: new Date().toISOString().slice(0, 10) });
+  const [novaDespesa, setNovaDespesa] = useState({
+    descricao: "",
+    valor: "",
+    categoria: "Outros",
+    data: new Date().toISOString().slice(0, 10),
+  });
 
-  useEffect(() => {
-    carregarDespesas();
-  }, [slug, filtroMes]);
+  const carregarDespesas = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-  const carregarDespesas = async () => {
     setLoading(true);
     try {
       const inicioMes = `${filtroMes}-01`;
-      
-      // Calcula o último dia real do mês selecionado
       const [ano, mes] = filtroMes.split('-').map(Number);
-      const ultimoDia = new Date(ano, mes, 0).getDate(); // Dia 0 do próximo mês = último dia do mês atual
+      const ultimoDia = new Date(ano, mes, 0).getDate();
       const fimMes = `${filtroMes}-${String(ultimoDia).padStart(2, '0')}`;
 
       const { data, error } = await supabase
@@ -51,38 +56,62 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
         .eq("barbearia_slug", slug)
         .gte("data", inicioMes)
         .lte("data", fimMes)
-        .order("data", { ascending: false });
+        .order("data", { ascending: false })
+        .abortSignal(controller.signal);
 
+      if (controller.signal.aborted) return;
       if (error) throw error;
       setDespesas(data || []);
     } catch (err: any) {
-      toast.error("Erro: " + err.message);
+      if (err.name === "AbortError") return;
+      toast.error("Erro ao carregar despesas: " + err.message);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
-  };
+  }, [slug, filtroMes]);
+
+  useEffect(() => {
+    carregarDespesas();
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, [carregarDespesas]);
 
   const handleAddDespesa = async () => {
-    if (!novaDespesa.descricao || !novaDespesa.valor) {
-      return toast.error("Preencha descrição e valor.");
+    if (!novaDespesa.descricao.trim()) {
+      return toast.error("Preencha a descrição.");
+    }
+    const valorNumerico = Number(novaDespesa.valor);
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      return toast.error("Valor inválido. Informe um número maior que zero.");
     }
 
+    setIsSubmitting(true);
     try {
       const { error } = await supabase.from("despesas").insert({
         barbearia_slug: slug,
-        descricao: novaDespesa.descricao,
-        valor: Number(novaDespesa.valor),
+        descricao: novaDespesa.descricao.trim(),
+        valor: valorNumerico,
         categoria: novaDespesa.categoria,
         data: novaDespesa.data,
       });
 
       if (error) throw error;
       toast.success("Despesa registrada!");
-      setNovaDespesa({ descricao: "", valor: "", categoria: "Outros", data: new Date().toISOString().slice(0, 10) });
+      setNovaDespesa({
+        descricao: "",
+        valor: "",
+        categoria: "Outros",
+        data: new Date().toISOString().slice(0, 10),
+      });
       setModalAberto(false);
       carregarDespesas();
     } catch (err: any) {
       toast.error("Erro: " + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -97,33 +126,44 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
     }
   };
 
-  const totalDespesas = despesas.reduce((sum, d) => sum + d.valor, 0);
+  const totalDespesas = useMemo(() => despesas.reduce((sum, d) => sum + d.valor, 0), [despesas]);
   const lucroLiquido = faturamentoMes - totalDespesas;
   const margem = faturamentoMes > 0 ? (lucroLiquido / faturamentoMes) * 100 : 0;
-  const despesasFiltradas = despesas.filter(d =>
-    d.descricao.toLowerCase().includes(busca.toLowerCase()) ||
-    d.categoria.toLowerCase().includes(busca.toLowerCase())
-  );
 
-  // Agrupar por categoria
-  const porCategoria = CATEGORIAS.map(cat => ({
-    categoria: cat,
-    total: despesas.filter(d => d.categoria === cat).reduce((s, d) => s + d.valor, 0),
-  })).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
+  const despesasFiltradas = useMemo(() => {
+    const termo = busca.toLowerCase();
+    return despesas.filter(d =>
+      d.descricao.toLowerCase().includes(termo) ||
+      d.categoria.toLowerCase().includes(termo) ||
+      d.valor.toString().includes(termo)
+    );
+  }, [despesas, busca]);
+
+  const porCategoria = useMemo(() => {
+    return CATEGORIAS.map(cat => ({
+      categoria: cat,
+      total: despesas.filter(d => d.categoria === cat).reduce((s, d) => s + d.valor, 0),
+    })).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
+  }, [despesas]);
 
   return (
     <section className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Receipt className="h-5 w-5 text-red-500" />
+          <Receipt className="h-5 w-5 text-red-500" aria-hidden="true" />
           <div>
             <h3 className="font-black text-white uppercase text-xl italic">Gestão de Despesas</h3>
             <p className="text-xs text-zinc-500">Controle seus custos e calcule o lucro real</p>
           </div>
         </div>
-        <Button onClick={() => setModalAberto(true)} className="h-10 px-4 font-black text-xs uppercase" style={{ backgroundColor: brand }}>
-          <Plus className="h-4 w-4 mr-1" /> Despesa
+        <Button
+          onClick={() => setModalAberto(true)}
+          className="h-10 px-4 font-black text-xs uppercase"
+          style={{ backgroundColor: brand }}
+          aria-label="Adicionar nova despesa"
+        >
+          <Plus className="h-4 w-4 mr-1" aria-hidden="true" /> Despesa
         </Button>
       </div>
 
@@ -151,16 +191,28 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
         </Card>
       </div>
 
-      {/* Filtro Mês */}
-      <div className="flex items-center gap-3">
+      {/* Filtro Mês e Busca */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-zinc-500" />
+          <Calendar className="h-4 w-4 text-zinc-500" aria-hidden="true" />
           <span className="text-[10px] font-black text-zinc-500 uppercase">Mês:</span>
-          <Input type="month" value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="bg-black/30 border-white/10 h-8 w-40 rounded-lg text-sm" />
+          <Input
+            type="month"
+            value={filtroMes}
+            onChange={e => setFiltroMes(e.target.value)}
+            className="bg-black/30 border-white/10 h-8 w-40 rounded-lg text-sm"
+            aria-label="Selecionar mês"
+          />
         </div>
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-          <Input placeholder="Buscar despesa..." value={busca} onChange={e => setBusca(e.target.value)} className="bg-black/30 border-white/10 pl-10 h-8 rounded-lg text-sm" />
+        <div className="relative w-full sm:flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" aria-hidden="true" />
+          <Input
+            placeholder="Buscar despesa..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            className="bg-black/30 border-white/10 pl-10 h-8 rounded-lg text-sm w-full"
+            aria-label="Buscar despesa"
+          />
         </div>
       </div>
 
@@ -172,7 +224,7 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
             {porCategoria.map(cat => (
               <Card key={cat.categoria} className="p-3 rounded-xl border border-white/[0.08] bg-zinc-950/80 flex items-center justify-between" style={glass}>
                 <div className="flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-red-400" />
+                  <TrendingDown className="h-4 w-4 text-red-400" aria-hidden="true" />
                   <span className="text-xs text-zinc-300 font-bold">{cat.categoria}</span>
                 </div>
                 <span className="text-sm font-black text-red-400">R$ {cat.total.toFixed(2)}</span>
@@ -184,10 +236,12 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
 
       {/* Lista de Despesas */}
       {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-red-500 h-8 w-8" /></div>
+        <div className="flex justify-center py-10">
+          <Loader2 className="animate-spin text-red-500 h-8 w-8" />
+        </div>
       ) : despesasFiltradas.length === 0 ? (
         <Card className="p-8 rounded-2xl border border-white/[0.08] text-center" style={glass}>
-          <Receipt className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
+          <Receipt className="h-12 w-12 text-zinc-600 mx-auto mb-4" aria-hidden="true" />
           <p className="text-white font-bold">Nenhuma despesa registrada</p>
           <p className="text-zinc-500 text-sm mt-1">Registre seus custos para calcular o lucro real.</p>
         </Card>
@@ -198,7 +252,7 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
               <Card className="p-3 rounded-xl border border-white/[0.08] bg-zinc-950/80 flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-8 w-8 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
-                    <DollarSign className="h-4 w-4 text-red-400" />
+                    <DollarSign className="h-4 w-4 text-red-400" aria-hidden="true" />
                   </div>
                   <div className="min-w-0">
                     <p className="font-bold text-white text-xs truncate">{despesa.descricao}</p>
@@ -210,7 +264,11 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-sm font-black text-red-400">R$ {despesa.valor.toFixed(2)}</span>
-                  <button onClick={() => handleRemover(despesa.id)} className="text-zinc-600 hover:text-red-500 p-1">
+                  <button
+                    onClick={() => handleRemover(despesa.id)}
+                    className="text-zinc-600 hover:text-red-500 p-1 transition-colors"
+                    aria-label={`Remover despesa ${despesa.descricao}`}
+                  >
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
@@ -227,23 +285,42 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
             <Card className="w-full max-w-sm p-6 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-white font-black uppercase text-lg">Nova Despesa</h3>
-                <button onClick={() => setModalAberto(false)} className="text-zinc-500 hover:text-white bg-zinc-800 h-8 w-8 rounded-full flex items-center justify-center">
+                <button
+                  onClick={() => setModalAberto(false)}
+                  className="text-zinc-500 hover:text-white bg-zinc-800 h-8 w-8 rounded-full flex items-center justify-center transition-colors"
+                  aria-label="Fechar modal"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <div className="space-y-3">
                 <div>
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Descrição</label>
-                  <Input value={novaDespesa.descricao} onChange={e => setNovaDespesa({ ...novaDespesa, descricao: e.target.value })} placeholder="Ex: Conta de luz" className="bg-black/30 border-white/10 h-12 rounded-xl" />
+                  <Input
+                    value={novaDespesa.descricao}
+                    onChange={e => setNovaDespesa({ ...novaDespesa, descricao: e.target.value })}
+                    placeholder="Ex: Conta de luz"
+                    className="bg-black/30 border-white/10 h-12 rounded-xl"
+                    aria-label="Descrição da despesa"
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Valor (R$)</label>
-                  <Input type="number" step="0.01" value={novaDespesa.valor} onChange={e => setNovaDespesa({ ...novaDespesa, valor: e.target.value })} placeholder="150.00" className="bg-black/30 border-white/10 h-12 rounded-xl" />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={novaDespesa.valor}
+                    onChange={e => setNovaDespesa({ ...novaDespesa, valor: e.target.value })}
+                    placeholder="150.00"
+                    className="bg-black/30 border-white/10 h-12 rounded-xl"
+                    aria-label="Valor da despesa"
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Categoria</label>
                   <Select value={novaDespesa.categoria} onValueChange={v => setNovaDespesa({ ...novaDespesa, categoria: v })}>
-                    <SelectTrigger className="bg-black/30 border-white/10 h-12 rounded-xl">
+                    <SelectTrigger className="bg-black/30 border-white/10 h-12 rounded-xl" aria-label="Categoria da despesa">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-900 border-zinc-800">
@@ -253,10 +330,23 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
-                  <Input type="date" value={novaDespesa.data} onChange={e => setNovaDespesa({ ...novaDespesa, data: e.target.value })} className="bg-black/30 border-white/10 h-12 rounded-xl" />
+                  <Input
+                    type="date"
+                    value={novaDespesa.data}
+                    onChange={e => setNovaDespesa({ ...novaDespesa, data: e.target.value })}
+                    className="bg-black/30 border-white/10 h-12 rounded-xl"
+                    aria-label="Data da despesa"
+                  />
                 </div>
               </div>
-              <Button onClick={handleAddDespesa} className="w-full h-12 font-black text-xs uppercase" style={{ backgroundColor: brand }}>
+              <Button
+                onClick={handleAddDespesa}
+                disabled={isSubmitting}
+                className="w-full h-12 font-black text-xs uppercase disabled:opacity-50"
+                style={{ backgroundColor: brand }}
+                aria-label="Registrar despesa"
+              >
+                {isSubmitting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                 Registrar Despesa
               </Button>
             </Card>

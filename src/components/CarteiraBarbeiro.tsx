@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check, X, Trophy, Crown, Medal } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useCountUp } from "@/hooks/useCountUp";
 
-interface Props {
+export interface CarteiraBarbeiroProps {
   comissaoTotalMes: number;
   totalCortesMes: number;
   nomeBarbeiro: string;
@@ -25,41 +25,51 @@ const formatarMoedaBR = (valor: number) => {
 };
 
 export function CarteiraBarbeiro({
-  comissaoTotalMes, totalCortesMes, nomeBarbeiro,
-  comissaoHoje = 0, cortesHoje = 0, metaDiaria = 150, clientesVIP = 0,
-  gorjetaHoje = 0, rankingHoje, totalBarbeiros,
+  comissaoTotalMes,
+  totalCortesMes,
+  nomeBarbeiro,
+  comissaoHoje = 0,
+  cortesHoje = 0,
+  metaDiaria = 150,
+  clientesVIP = 0,
+  gorjetaHoje = 0,
+  rankingHoje,
+  totalBarbeiros,
   onUpdateMeta
-}: Props) {
+}: CarteiraBarbeiroProps) {
   const [editandoMeta, setEditandoMeta] = useState(false);
   const [novaMetaValor, setNovaMetaValor] = useState(metaDiaria.toString());
 
   const progressoMeta = Math.min((comissaoHoje / metaDiaria) * 100, 100);
   const metaBatida = progressoMeta >= 100;
 
-  // Valores animados
   const comissaoAnimada = useCountUp(comissaoHoje);
   const totalMesAnimado = useCountUp(comissaoTotalMes);
   const gorjetaAnimada = useCountUp(gorjetaHoje);
 
-  const handleSalvarMeta = () => {
+  const handleSalvarMeta = useCallback(() => {
     const valorNum = Number(novaMetaValor);
     if (valorNum > 0 && onUpdateMeta) {
       onUpdateMeta(valorNum);
       setEditandoMeta(false);
     }
-  };
+  }, [novaMetaValor, onUpdateMeta]);
+
+  const handleCancelarEdicao = useCallback(() => {
+    setNovaMetaValor(metaDiaria.toString());
+    setEditandoMeta(false);
+  }, [metaDiaria]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32">
-      
       {/* HEADER PREMIUM */}
       <div className="bg-gradient-to-br from-zinc-900 to-black p-6 rounded-[28px] border border-white/[0.08] shadow-2xl relative overflow-hidden">
         <div className="absolute -right-4 -bottom-4 opacity-5">
-           <Wallet className="h-32 w-32 rotate-12" />
+          <Wallet className="h-32 w-32 rotate-12" />
         </div>
         <p className="text-[10px] font-black tracking-[0.2em] text-emerald-500 uppercase mb-1 flex items-center gap-2">
-           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-           Meu Desempenho
+          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Meu Desempenho
         </p>
         <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
           {nomeBarbeiro.split(' ')[0]} 💸
@@ -72,53 +82,77 @@ export function CarteiraBarbeiro({
           <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" /> Progresso Diário
           </p>
-          
+
           <div className="flex items-center gap-2">
             {editandoMeta ? (
               <div className="flex items-center gap-1 animate-in zoom-in-95">
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   inputMode="decimal"
-                  value={novaMetaValor} 
-                  onChange={e => setNovaMetaValor(e.target.value)}
+                  value={novaMetaValor}
+                  onChange={(e) => setNovaMetaValor(e.target.value)}
                   className="w-20 bg-zinc-800 border border-emerald-500/50 text-white text-xs font-bold px-3 py-1.5 rounded-xl outline-none"
                   autoFocus
+                  aria-label="Nova meta diária"
                 />
-                <button onClick={handleSalvarMeta} className="bg-emerald-500 text-black p-1.5 rounded-lg active:scale-90 transition-transform"><Check className="h-4 w-4 stroke-[3px]"/></button>
-                <button onClick={() => setEditandoMeta(false)} className="bg-zinc-800 text-zinc-400 p-1.5 rounded-lg"><X className="h-4 w-4"/></button>
+                <button
+                  onClick={handleSalvarMeta}
+                  className="bg-emerald-500 text-black p-1.5 rounded-lg active:scale-90 transition-transform"
+                  aria-label="Salvar meta"
+                >
+                  <Check className="h-4 w-4 stroke-[3px]" />
+                </button>
+                <button
+                  onClick={handleCancelarEdicao}
+                  className="bg-zinc-800 text-zinc-400 p-1.5 rounded-lg"
+                  aria-label="Cancelar edição"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full border border-white/5 transition-all" onClick={() => setEditandoMeta(true)}>
+              <div
+                className="flex items-center gap-2 cursor-pointer group bg-zinc-900/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full border border-white/5 transition-all"
+                onClick={() => setEditandoMeta(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setEditandoMeta(true)}
+                aria-label={`Meta diária: R$ ${metaDiaria}. Clique para editar.`}
+              >
                 <Target className={cn("h-3.5 w-3.5", metaBatida ? "text-yellow-500" : "text-emerald-500")} />
-                <span className="text-[10px] text-zinc-300 font-black uppercase tracking-widest">Meta: R$ {metaDiaria}</span>
+                <span className="text-[10px] text-zinc-300 font-black uppercase tracking-widest">
+                  Meta: R$ {metaDiaria}
+                </span>
                 <Edit2 className="h-3 w-3 text-zinc-600 group-hover:text-white transition-colors" />
               </div>
             )}
           </div>
         </div>
-        
+
         {/* BARRA DE PROGRESSO COM GLOW */}
         <div className="relative">
           <div className="w-full bg-zinc-900 rounded-full h-4 border border-zinc-800 p-0.5 overflow-hidden">
-            <motion.div 
+            <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${progressoMeta}%` }}
               transition={{ duration: 1.5, ease: "easeOut" }}
               className={cn(
                 "h-full rounded-full transition-all relative",
-                metaBatida ? "bg-gradient-to-r from-yellow-600 to-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.4)]" : "bg-emerald-500"
+                metaBatida
+                  ? "bg-gradient-to-r from-yellow-600 to-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.4)]"
+                  : "bg-emerald-500"
               )}
             >
-               {/* Efeito de brilho passando pela barra */}
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-20 animate-[shimmer_2s_infinite]" />
+              {/* Efeito de brilho passando pela barra */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-20 animate-[shimmer_2s_infinite]" />
             </motion.div>
           </div>
           {metaBatida && (
-             <div className="absolute -right-1 -top-6 animate-bounce">
-                <div className="bg-yellow-500 text-black text-[8px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg">
-                   <Trophy className="h-2.5 w-2.5" /> META BATIDA!
-                </div>
-             </div>
+            <div className="absolute -right-1 -top-6 animate-bounce">
+              <div className="bg-yellow-500 text-black text-[8px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg">
+                <Trophy className="h-2.5 w-2.5" /> META BATIDA!
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -155,7 +189,9 @@ export function CarteiraBarbeiro({
               </div>
               <div>
                 <p className="text-[10px] text-emerald-600/80 uppercase font-black tracking-widest">Gorjetas Hoje</p>
-                <p className="text-xl font-black text-emerald-300 italic tabular-nums">R$ {formatarMoedaBR(gorjetaAnimada)}</p>
+                <p className="text-xl font-black text-emerald-300 italic tabular-nums">
+                  R$ {formatarMoedaBR(gorjetaAnimada)}
+                </p>
               </div>
             </div>
             <div className="text-right text-[9px] text-emerald-600/60">
@@ -196,7 +232,9 @@ export function CarteiraBarbeiro({
                 </div>
                 <div>
                   <p className="text-[10px] text-yellow-600/80 uppercase font-black tracking-widest">Clientes VIP</p>
-                  <p className="text-xl font-black text-yellow-300 italic">{clientesVIP} cliente{clientesVIP !== 1 ? 's' : ''}</p>
+                  <p className="text-xl font-black text-yellow-300 italic">
+                    {clientesVIP} cliente{clientesVIP !== 1 ? 's' : ''}
+                  </p>
                 </div>
               </div>
               <div className="text-right text-[9px] text-yellow-600/60">
@@ -211,12 +249,12 @@ export function CarteiraBarbeiro({
       {/* RESUMO MENSAL (CRM) */}
       <div className="space-y-3 pt-2">
         <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] px-1 flex items-center gap-2">
-           <Calendar className="h-4 w-4 text-zinc-600" /> Acumulado do Mês
+          <Calendar className="h-4 w-4 text-zinc-600" /> Acumulado do Mês
         </p>
         <Card className="p-5 flex items-center justify-between gap-4 bg-gradient-to-r from-zinc-900/80 to-zinc-900/30 border border-zinc-800 rounded-[28px] shadow-xl">
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center shadow-inner">
-               <TrendingUp className="h-7 w-7 text-zinc-400" />
+              <TrendingUp className="h-7 w-7 text-zinc-400" />
             </div>
             <div>
               <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-0.5">Saldo Disponível</p>
@@ -224,19 +262,18 @@ export function CarteiraBarbeiro({
                 R$ {formatarMoedaBR(totalMesAnimado)}
               </p>
               <div className="flex items-center gap-1.5 mt-1">
-                 <div className="h-1 w-1 rounded-full bg-emerald-500" />
-                 <p className="text-[9px] text-zinc-400 font-bold uppercase">{totalCortesMes} cortes finalizados</p>
+                <div className="h-1 w-1 rounded-full bg-emerald-500" />
+                <p className="text-[9px] text-zinc-400 font-bold uppercase">{totalCortesMes} cortes finalizados</p>
               </div>
             </div>
           </div>
           <div className="h-12 w-px bg-zinc-800 mx-2" />
           <div className="text-center">
-             <p className="text-[10px] text-zinc-600 font-black uppercase">Média/Dia</p>
-             <p className="text-sm font-black text-zinc-300">R$ {formatarMoedaBR(comissaoTotalMes / 30)}</p>
+            <p className="text-[10px] text-zinc-600 font-black uppercase">Média/Dia</p>
+            <p className="text-sm font-black text-zinc-300">R$ {formatarMoedaBR(comissaoTotalMes / 30)}</p>
           </div>
         </Card>
       </div>
-
     </div>
   );
 }

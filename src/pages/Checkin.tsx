@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2, CheckCircle2, XCircle, Calendar, Clock, User, Scissors, Hash, MapPin } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Calendar, Clock, User, Scissors, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { contrastTextOnBrand } from "@/lib/branding";
 
 interface AgendamentoCheckinRaw {
   id: string;
@@ -34,6 +35,7 @@ interface AgendamentoCheckin {
 export default function Checkin() {
   const { slug, ticket } = useParams<{ slug: string; ticket: string }>();
   const navigate = useNavigate();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [agendamento, setAgendamento] = useState<AgendamentoCheckin | null>(null);
@@ -53,6 +55,9 @@ export default function Checkin() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     async function verificarTicket() {
       try {
         // 1. Verifica se a barbearia tem check-in habilitado
@@ -60,7 +65,10 @@ export default function Checkin() {
           .from("barbearias")
           .select("checkin_habilitado")
           .eq("slug", slug)
+          .abortSignal(controller.signal)
           .single();
+
+        if (controller.signal.aborted) return;
 
         if (barbeariaError || !barbeariaData) {
           setError("Barbearia não encontrada.");
@@ -85,7 +93,10 @@ export default function Checkin() {
           `)
           .eq("ticket_codigo", ticket)
           .eq("barbearia_slug", slug)
+          .abortSignal(controller.signal)
           .single();
+
+        if (controller.signal.aborted) return;
 
         if (error || !data) {
           setError("Ticket inválido ou agendamento não encontrado.");
@@ -105,7 +116,7 @@ export default function Checkin() {
           return;
         }
 
-        // Normaliza os dados
+        // Normaliza os dados (Supabase pode retornar array devido a relações)
         const raw = data as AgendamentoCheckinRaw;
         const agendamentoNormalizado: AgendamentoCheckin = {
           id: raw.id,
@@ -122,20 +133,30 @@ export default function Checkin() {
         setAgendamento(agendamentoNormalizado);
         setPin(gerarPin(agendamentoNormalizado.ticket_codigo));
       } catch (err) {
+        if (controller.signal.aborted) return;
         console.error(err);
         setError("Erro ao verificar o ticket. Tente novamente.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
     verificarTicket();
-  }, [slug, ticket, navigate]);
+
+    return () => {
+      controller.abort();
+      abortControllerRef.current = null;
+    };
+  }, [slug, ticket]);
 
   const handleConfirmarCheckin = async () => {
-    if (!agendamento) return;
+    if (!agendamento || isSubmitting) return;
 
     setIsSubmitting(true);
+    const toastId = toast.loading("Confirmando check-in...");
+
     try {
       const servico = agendamento.servico;
       const barbeiro = agendamento.barbeiro;
@@ -151,7 +172,6 @@ export default function Checkin() {
         comissaoGanha = (servico.preco * comissaoPct) / 100;
       }
 
-      // Atualiza para "Check-in" (você pode mudar para "Finalizado" se preferir)
       const { error } = await supabase
         .from("agendamentos")
         .update({ status: "Check-in", comissao_ganha: comissaoGanha })
@@ -161,9 +181,11 @@ export default function Checkin() {
 
       if (error) throw error;
 
+      toast.dismiss(toastId);
       setSuccess(true);
       toast.success("Check-in realizado! Aguarde seu atendimento.");
     } catch (err) {
+      toast.dismiss(toastId);
       console.error(err);
       toast.error("Erro ao confirmar check-in. Tente novamente.");
     } finally {
@@ -172,6 +194,7 @@ export default function Checkin() {
   };
 
   const brand = agendamento?.barbearia?.cor_primaria || "#D4AF37";
+  const buttonTextColor = contrastTextOnBrand(brand);
 
   if (loading) {
     return (
@@ -195,7 +218,11 @@ export default function Checkin() {
               </div>
               <h2 className="text-xl font-black uppercase tracking-tighter text-white">Ops!</h2>
               <p className="text-center text-zinc-400 text-sm">{error}</p>
-              <Button className="mt-4 bg-zinc-800 hover:bg-zinc-700 text-white" onClick={() => navigate("/")}>
+              <Button
+                className="mt-4 bg-zinc-800 hover:bg-zinc-700 text-white"
+                onClick={() => navigate("/")}
+                aria-label="Voltar ao início"
+              >
                 Voltar ao início
               </Button>
             </div>
@@ -225,7 +252,11 @@ export default function Checkin() {
                 </p>
                 <p className="text-[10px] text-zinc-500 mt-2">Mostre este código ao barbeiro se solicitado.</p>
               </div>
-              <Button className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white" onClick={() => navigate("/")}>
+              <Button
+                className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white"
+                onClick={() => navigate("/")}
+                aria-label="Fechar e voltar ao início"
+              >
                 Fechar
               </Button>
             </div>
@@ -291,10 +322,11 @@ export default function Checkin() {
             </div>
 
             <Button
-              className="w-full h-14 rounded-2xl font-black uppercase text-sm shadow-xl"
-              style={{ backgroundColor: brand, color: "#000" }}
+              className="w-full h-14 rounded-2xl font-black uppercase text-sm shadow-xl transition-transform active:scale-[0.98]"
+              style={{ backgroundColor: brand, color: buttonTextColor }}
               onClick={handleConfirmarCheckin}
               disabled={isSubmitting}
+              aria-label="Confirmar chegada"
             >
               {isSubmitting ? (
                 <Loader2 className="h-5 w-5 animate-spin mr-2" />
@@ -308,6 +340,7 @@ export default function Checkin() {
               variant="ghost"
               className="w-full text-zinc-500 hover:text-white uppercase font-black text-[10px] tracking-widest"
               onClick={() => navigate("/")}
+              aria-label="Cancelar e voltar"
             >
               Cancelar
             </Button>

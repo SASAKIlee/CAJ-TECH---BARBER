@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { LogOut, RefreshCw, WifiOff, AlertOctagon } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { LogOut, RefreshCw, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -18,12 +18,26 @@ export function DataLoadError({
   onSignOut,
 }: DataLoadErrorProps) {
   const [isRetrying, setIsRetrying] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Limpa o timeout ao desmontar
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleRetry = () => {
     setIsRetrying(true);
     onRetry();
-    // Simula um pequeno delay para o usuário ver o feedback visual
-    setTimeout(() => setIsRetrying(false), 1500);
+    
+    // Reseta o estado de loading após um delay
+    timeoutRef.current = setTimeout(() => {
+      setIsRetrying(false);
+      timeoutRef.current = null;
+    }, 1500);
   };
 
   return (

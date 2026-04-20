@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Filter, TrendingUp, Award, Activity, Users, BarChart3, PieChart as PieChartIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { hexToRgba } from "@/lib/branding";
@@ -8,17 +9,25 @@ const formatarMoedaBR = (valor: number) => {
   return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
 };
 
-export function DonoTabDashboard({ stats, barbeiros, barbeiroFiltroId, onFiltroChange, brand, glass }: DonoTabDashboardProps) {
-  const COLORS = [brand, hexToRgba(brand, 0.25)];
+export function DonoTabDashboard({
+  stats,
+  barbeiros,
+  barbeiroFiltroId,
+  onFiltroChange,
+  brand,
+  glass,
+}: DonoTabDashboardProps) {
+  const COLORS = useMemo(() => [brand, hexToRgba(brand, 0.25)], [brand]);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
-        <Filter className="h-4 w-4 text-white/50" />
+        <Filter className="h-4 w-4 text-white/50" aria-hidden="true" />
         <select
           value={barbeiroFiltroId}
           onChange={(e) => onFiltroChange(e.target.value)}
-          className="rounded-full border border-white/[0.12] bg-black/35 px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-white/30 color-scheme-dark text-white backdrop-blur-sm"
+          className="rounded-full border border-white/[0.12] bg-black/35 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-white/20 color-scheme-dark text-white backdrop-blur-sm transition-shadow"
+          aria-label="Filtrar por barbeiro"
         >
           <option value="">Todos os barbeiros</option>
           {barbeiros.map((b) => (
@@ -69,7 +78,7 @@ export function DonoTabDashboard({ stats, barbeiros, barbeiroFiltroId, onFiltroC
           </div>
         ) : (
           <div className="h-64 w-full">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.dataEquipe} margin={{ left: -30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                 <XAxis dataKey="name" stroke="#777" fontSize={10} axisLine={false} tickLine={false} dy={10} />
@@ -106,7 +115,7 @@ export function DonoTabDashboard({ stats, barbeiros, barbeiroFiltroId, onFiltroC
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={stats.dataFinanceiro} cx="50%" cy="45%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
-                  {stats.dataFinanceiro.map((entry, index) => (
+                  {stats.dataFinanceiro.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

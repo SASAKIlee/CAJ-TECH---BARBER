@@ -1,5 +1,4 @@
-import { lazy, Suspense } from "react";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar, RefreshCw, User, Loader2, Eye, X } from "lucide-react";
 import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackdrop";
@@ -19,13 +18,13 @@ import {
 } from "@/hooks/useQueries";
 import type { AgendamentoInsert } from "@/types/queries";
 
-// Lazy load de componentes pesados (Named Exports)
+// Lazy load de componentes pesados
 const VisaoDono = lazy(() => import("@/components/VisaoDono").then(m => ({ default: m.VisaoDono })));
 const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor").then(m => ({ default: m.VisaoVendedor })));
 const VisaoCEO = lazy(() => import("@/components/VisaoCEO").then(m => ({ default: m.VisaoCEO })));
 
 // ==========================================
-// TIPAGENS (substituindo any)
+// TIPAGENS
 // ==========================================
 interface Barbeiro {
   id: string;
@@ -70,6 +69,13 @@ interface Barbearia {
   checkin_habilitado?: boolean;
 }
 
+interface ImpersonateData {
+  barbearia: Barbearia & { isDono: true };
+  barbeiros: Barbeiro[];
+  servicos: Servico[];
+  agendamentos: Agendamento[];
+}
+
 // ==========================================
 // FUNÇÕES AUXILIARES
 // ==========================================
@@ -90,22 +96,56 @@ function mensagemDeErro(err: unknown): string {
   return "Não foi possível carregar os dados. Verifique sua conexão e tente novamente.";
 }
 
+// Componente do banner de impersonação movido para fora do Index
+function ImpersonationBanner({
+  isImpersonating,
+  impersonateName,
+  onExit
+}: {
+  isImpersonating: boolean;
+  impersonateName: string | null;
+  onExit: () => void;
+}) {
+  if (!isImpersonating) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="sticky top-0 z-30 bg-gradient-to-r from-yellow-600 to-amber-600 text-white px-4 py-2 flex items-center justify-between shadow-lg"
+    >
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <Eye className="h-4 w-4" />
+        <span>Vendo como dono de "{impersonateName}"</span>
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onExit}
+        className="text-white hover:bg-white/20 h-8 px-3 text-xs font-bold uppercase gap-1"
+      >
+        <X className="h-3 w-3" /> Sair
+      </Button>
+    </motion.div>
+  );
+}
+
 // ==========================================
 // COMPONENTE PRINCIPAL
 // ==========================================
 export default function Index() {
   const { signOut, userRole, user } = useAuth();
 
-  // ==========================================
-  // IMPERSONAÇÃO DO CEO
-  // ==========================================
-  const [impersonateSlug, setImpersonateSlug] = useState<string | null>(() => {
-    return localStorage.getItem("ceo_impersonate_slug");
-  });
-  const [impersonateName, setImpersonateName] = useState<string | null>(() => {
-    return localStorage.getItem("ceo_impersonate_name");
-  });
-  const [impersonateData, setImpersonateData] = useState<any>(null);
+  // Estado de logout para prevenir múltiplos cliques
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  // Impersonação
+  const [impersonateSlug, setImpersonateSlug] = useState<string | null>(() =>
+    localStorage.getItem("ceo_impersonate_slug")
+  );
+  const [impersonateName, setImpersonateName] = useState<string | null>(() =>
+    localStorage.getItem("ceo_impersonate_name")
+  );
+  const [impersonateData, setImpersonateData] = useState<ImpersonateData | null>(null);
   const [loadingImpersonate, setLoadingImpersonate] = useState(false);
 
   const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira" | "vendedor">("barbeiro");
@@ -125,19 +165,20 @@ export default function Index() {
     toast.info("Saindo do modo de visualização...");
   }, []);
 
-  // ==========================================
-  // CARREGAR DADOS DA BARBEARIA EM MODO IMPERSONAÇÃO
-  // ==========================================
+  // Carregar dados da barbearia em modo impersonação
   useEffect(() => {
     if (!isImpersonating || !impersonateSlug) return;
 
-    async function carregarDadosImpersonacao() {
-      setLoadingImpersonate(true);
+    const controller = new AbortController();
+    setLoadingImpersonate(true);
+
+    (async () => {
       try {
         const { data: barbearia } = await supabase
           .from("barbearias")
           .select("*")
           .eq("slug", impersonateSlug)
+          .abortSignal(controller.signal)
           .single();
 
         if (!barbearia) {
@@ -146,24 +187,17 @@ export default function Index() {
           return;
         }
 
-        const { data: barbs } = await supabase
-          .from("barbeiros")
-          .select("*")
-          .eq("barbearia_slug", impersonateSlug)
-          .eq("ativo", true);
-
-        const { data: servs } = await supabase
-          .from("servicos")
-          .select("*")
-          .eq("barbearia_slug", impersonateSlug);
-
-        const inicioMes = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
-        const { data: agends } = await supabase
-          .from("agendamentos")
-          .select("*")
-          .eq("barbearia_slug", impersonateSlug)
-          .gte("data", inicioMes)
-          .order("horario");
+        const [barbsRes, servsRes, agendsRes] = await Promise.all([
+          supabase.from("barbeiros").select("*").eq("barbearia_slug", impersonateSlug).eq("ativo", true).abortSignal(controller.signal),
+          supabase.from("servicos").select("*").eq("barbearia_slug", impersonateSlug).abortSignal(controller.signal),
+          supabase
+            .from("agendamentos")
+            .select("*")
+            .eq("barbearia_slug", impersonateSlug)
+            .gte("data", `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`)
+            .order("horario")
+            .abortSignal(controller.signal)
+        ]);
 
         setImpersonateData({
           barbearia: {
@@ -172,19 +206,20 @@ export default function Index() {
             cor_primaria: barbearia.cor_primaria?.trim() || "#D4AF37",
             cor_secundaria: barbearia.cor_secundaria?.trim() || "#18181B",
           },
-          barbeiros: barbs || [],
-          servicos: servs || [],
-          agendamentos: agends || [],
+          barbeiros: barbsRes.data || [],
+          servicos: servsRes.data || [],
+          agendamentos: agendsRes.data || [],
         });
-      } catch (err) {
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
         console.error("Erro ao carregar dados da barbearia:", err);
         toast.error("Erro ao carregar dados da barbearia.");
       } finally {
         setLoadingImpersonate(false);
       }
-    }
+    })();
 
-    carregarDadosImpersonacao();
+    return () => controller.abort();
   }, [impersonateSlug, isImpersonating, sairImpersonacao]);
 
   const barbeariaQueryEnabled = !isImpersonating && userRole !== "ceo" && userRole !== "vendedor";
@@ -196,25 +231,16 @@ export default function Index() {
     error: erroDetalheBarbearia,
     isFetching: fetchingBarbearia,
     refetch: refetchBarbearia,
-  } = useBarbearia({
-    enabled: barbeariaQueryEnabled,
-  });
+  } = useBarbearia({ enabled: barbeariaQueryEnabled });
 
-  // Valores padrão para quando CEO está impersonando
   const loadingBarbeariaSafe = isImpersonating ? loadingImpersonate : loadingBarbearia;
   const erroBarbeariaSafe = isImpersonating ? false : erroBarbearia;
   const erroDetalheBarbeariaSafe = isImpersonating ? null : erroDetalheBarbearia;
   const fetchingBarbeariaSafe = isImpersonating ? loadingImpersonate : fetchingBarbearia;
 
-  // ==========================================
-  // DETERMINAR SLUG CORRETO (impersonação ou normal)
-  // ==========================================
   const slug = isImpersonating ? impersonateSlug : barbearia?.slug;
   const isDono = isImpersonating ? true : barbearia?.isDono;
 
-  // ==========================================
-  // QUERIES (desabilitadas quando impersonando)
-  // ==========================================
   const barbeirosQuery = useBarbeiros(isImpersonating ? undefined : slug);
   const servicosQuery = useServicos(isImpersonating ? undefined : slug);
   const agendamentosQuery = useAgendamentos(isImpersonating ? undefined : slug);
@@ -225,19 +251,16 @@ export default function Index() {
   const { data: agendamentosNormal = [], refetch: refetchAgendamentos } = agendamentosQuery;
   const { data: clientesVIP = [] } = clientesVIPQuery;
 
-  // ==========================================
-  // USAR DADOS DE IMPERSONAÇÃO OU DADOS NORMAIS
-  // ==========================================
-  const barbeiros = useMemo(() =>
-    isImpersonating ? (impersonateData?.barbeiros || []) : barbeirosNormal,
+  const barbeiros = useMemo(
+    () => (isImpersonating ? impersonateData?.barbeiros || [] : barbeirosNormal),
     [isImpersonating, impersonateData?.barbeiros, barbeirosNormal]
   );
-  const servicos = useMemo(() =>
-    isImpersonating ? (impersonateData?.servicos || []) : servicosNormal,
+  const servicos = useMemo(
+    () => (isImpersonating ? impersonateData?.servicos || [] : servicosNormal),
     [isImpersonating, impersonateData?.servicos, servicosNormal]
   );
-  const agendamentos = useMemo(() =>
-    isImpersonating ? (impersonateData?.agendamentos || []) : agendamentosNormal,
+  const agendamentos = useMemo(
+    () => (isImpersonating ? impersonateData?.agendamentos || [] : agendamentosNormal),
     [isImpersonating, impersonateData?.agendamentos, agendamentosNormal]
   );
 
@@ -252,9 +275,6 @@ export default function Index() {
   const mutacoesServico = useMutacoesServico();
   const mutacoesAgendamento = useMutacoesAgendamento();
 
-  // ==========================================
-  // MEMOS E CALLBACKS ESTABILIZADOS
-  // ==========================================
   const refetchDadosPrincipais = useCallback(async () => {
     if (!isImpersonating) {
       await refetchBarbearia();
@@ -266,11 +286,13 @@ export default function Index() {
 
   const servicos_find = useCallback((id: string) => servicos.find((s) => s.id === id), [servicos]);
 
-  const horariosOcupados = useCallback((data: string, bId: string) => {
-    return agendamentos
-      .filter((ag: Agendamento) => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado")
-      .map((ag: Agendamento) => ag.horario);
-  }, [agendamentos]);
+  const horariosOcupados = useCallback(
+    (data: string, bId: string) =>
+      agendamentos
+        .filter((ag: Agendamento) => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado")
+        .map((ag: Agendamento) => ag.horario),
+    [agendamentos]
+  );
 
   const tituloErroCarregamento = useMemo(() => {
     const msg = erroBarbeariaSafe
@@ -285,7 +307,6 @@ export default function Index() {
   }, [erroBarbeariaSafe, erroDetalheBarbeariaSafe, barbeirosQuery.error, servicosQuery.error, agendamentosQuery.error]);
 
   const visibleTabs = useMemo(() => {
-    // Quando CEO está impersonando, mostrar abas de dono
     if (isImpersonating) {
       return [
         { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
@@ -353,15 +374,11 @@ export default function Index() {
     });
   }, [barbeiros, agendamentos, dataFiltro]);
 
-  // ==========================================
-  // CORREÇÃO: Ajuste da assinatura para compatibilidade com VisaoBarbeiro
-  // ==========================================
   const handleNovoAgendamento = useCallback(
     async (ag: Partial<Agendamento>): Promise<{ error?: unknown }> => {
       if (!slug) return { error: "Slug não definido" };
       try {
-        const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        // Cast seguro: o formulário valida os campos obrigatórios antes de chamar
+        const idempotencyKey = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         await mutacoesAgendamento.adicionarAgendamento.mutateAsync({
           ag: [ag as unknown as AgendamentoInsert],
           slug,
@@ -401,7 +418,7 @@ export default function Index() {
 
   const goTab = useCallback(
     (next: "barbeiro" | "dono" | "carteira") => {
-      const order: string[] = userRole === "barbeiro" ? ["barbeiro", "carteira"] : ["barbeiro", "dono"];
+      const order = userRole === "barbeiro" ? ["barbeiro", "carteira"] : ["barbeiro", "dono"];
       const oi = order.indexOf(tab);
       const ni = order.indexOf(next);
       if (oi !== -1 && ni !== -1 && oi !== ni) setTabSlideDir(ni > oi ? 1 : -1);
@@ -410,18 +427,17 @@ export default function Index() {
     [tab, userRole]
   );
 
-  // ==========================================
-  // CONFIRMAÇÃO DE LOGOUT
-  // ==========================================
-  const handleSignOut = useCallback(() => {
-    if (confirm("Deseja realmente sair?")) {
-      signOut();
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) return;
+    if (!confirm("Deseja realmente sair?")) return;
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
     }
-  }, [signOut]);
+  }, [signOut, isSigningOut]);
 
-  // ==========================================
-  // INDICADORES DE CARREGAMENTO NAS MUTAÇÕES (via wrapper)
-  // ==========================================
   const withLoadingToast = useCallback(
     async <T,>(promise: Promise<T>, messages: { loading: string; success: string; error: string }) => {
       const toastId = toast.loading(messages.loading);
@@ -493,38 +509,42 @@ export default function Index() {
     [mutacoesServico, slug, withLoadingToast]
   );
 
-  // ==========================================
-  // EFEITOS
-  // ==========================================
+  // Efeito para dados do CEO
   useEffect(() => {
     if (userRole !== "ceo" || isImpersonating) return;
-
-    async function buscarDadosHQ() {
-      const { data: vends } = await supabase.from("perfis_vendedores").select("*").eq("ativo", true);
-      const { data: lojas } = await supabase.from("barbearias").select("*");
-
-      const totalLojasReal = lojas?.length || 0;
-      const listaVendedores = vends?.map((v) => ({ id: v.id, nome: v.nome, total_lojas: 0 })) || [];
-
-      setDadosCEO({ lojas: totalLojasReal, faturamento: totalLojasReal * 50, vendedores: listaVendedores });
-    }
-
-    buscarDadosHQ();
+    const controller = new AbortController();
+    (async () => {
+      const [vendsRes, lojasRes] = await Promise.all([
+        supabase.from("perfis_vendedores").select("*").eq("ativo", true).abortSignal(controller.signal),
+        supabase.from("barbearias").select("*").abortSignal(controller.signal)
+      ]);
+      if (controller.signal.aborted) return;
+      setDadosCEO({
+        lojas: lojasRes.data?.length || 0,
+        faturamento: (lojasRes.data?.length || 0) * 50,
+        vendedores: vendsRes.data?.map((v) => ({ id: v.id, nome: v.nome, total_lojas: 0 })) || []
+      });
+    })();
+    return () => controller.abort();
   }, [userRole, isImpersonating]);
 
+  // Efeito para inicializar barbeiroSelecionadoId
   useEffect(() => {
     if (!barbeariaQueryEnabled) return;
     if (!isDono && user?.id) {
       setBarbeiroSelecionadoId(user.id);
-    } else if (isDono && barbeiros.length > 0 && !barbeiroSelecionadoId) {
-      setBarbeiroSelecionadoId("");
+    } else if (isDono) {
+      // Mantém o ID atual se ainda estiver na lista, senão reseta para "Todos"
+      setBarbeiroSelecionadoId(prev => {
+        if (prev && barbeiros.some(b => b.id === prev)) return prev;
+        return "";
+      });
     }
-  }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros, barbeiroSelecionadoId]);
+  }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
 
   // ==========================================
-  // RENDERIZAÇÕES CONDICIONAIS
+  // RENDERIZAÇÃO
   // ==========================================
-  // Se CEO está impersonando, NÃO mostrar VisaoCEO
   if (userRole === "ceo" && !isImpersonating) {
     return (
       <div className="dark min-h-screen bg-black text-white flex flex-col">
@@ -533,13 +553,23 @@ export default function Index() {
             <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
             <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="text-white/80 hover:text-white"
+          >
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
         <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
           <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
-            <VisaoCEO totalLojas={dadosCEO.lojas} faturamentoTotal={dadosCEO.faturamento} vendedores={dadosCEO.vendedores} />
+            <VisaoCEO
+              totalLojas={dadosCEO.lojas}
+              faturamentoTotal={dadosCEO.faturamento}
+              vendedores={dadosCEO.vendedores}
+            />
           </Suspense>
         </main>
         <div className="p-8 text-center bg-black mt-auto">
@@ -557,7 +587,13 @@ export default function Index() {
             <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
             <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-white/80 hover:text-white">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="text-white/80 hover:text-white"
+          >
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
@@ -573,10 +609,9 @@ export default function Index() {
 
   if (barbeariaQueryEnabled && exibirSkeleton) {
     const skeletonTab = tab === "dono" || tab === "carteira" || tab === "barbeiro" ? tab : "barbeiro";
-    return <IndexPageSkeleton tab={skeletonTab} />;
+    return <IndexPageSkeleton tab={skeletonTab} aria-busy="true" />;
   }
 
-  // Loading de impersonação
   if (isImpersonating && loadingImpersonate) {
     return <IndexPageSkeleton tab="dono" />;
   }
@@ -592,35 +627,11 @@ export default function Index() {
     );
   }
 
-  const heroImageUrl = ((isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo) && String(isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo).trim()) || APP_HERO_FALLBACK_BG;
+  const heroImageUrl =
+    ((isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo) &&
+      String(isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo).trim()) ||
+    APP_HERO_FALLBACK_BG;
   const marca = (isImpersonating ? impersonateData?.barbearia?.cor_primaria : barbearia?.cor_primaria)?.trim() || "#D4AF37";
-
-  // ==========================================
-  // BANNER DE IMPERSONAÇÃO
-  // ==========================================
-  const ImpersonationBanner = () => {
-    if (!isImpersonating) return null;
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-30 bg-gradient-to-r from-yellow-600 to-amber-600 text-white px-4 py-2 flex items-center justify-between shadow-lg"
-      >
-        <div className="flex items-center gap-2 text-sm font-bold">
-          <Eye className="h-4 w-4" />
-          <span>Vendo como dono de "{impersonateName}"</span>
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={sairImpersonacao}
-          className="text-white hover:bg-white/20 h-8 px-3 text-xs font-bold uppercase gap-1"
-        >
-          <X className="h-3 w-3" /> Sair
-        </Button>
-      </motion.div>
-    );
-  };
 
   const tabPanelVariants = {
     enter: (dir: number) => ({ x: dir * 52, opacity: 0 }),
@@ -655,19 +666,27 @@ export default function Index() {
               </Button>
             </motion.div>
             <motion.div whileTap={{ scale: 0.95 }}>
-              <Button variant="ghost" size="icon" className="text-white/80 hover:text-white" onClick={handleSignOut}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/80 hover:text-white"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+              >
                 <LogOut className="h-5 w-5" />
               </Button>
             </motion.div>
           </div>
         </header>
 
-        {/* BANNER DE IMPERSONAÇÃO */}
-        <ImpersonationBanner />
+        <ImpersonationBanner
+          isImpersonating={isImpersonating}
+          impersonateName={impersonateName}
+          onExit={sairImpersonacao}
+        />
 
         {tab !== "carteira" && (
           <div className="border-b border-white/[0.08] px-2 sm:px-4 py-2 flex items-center gap-2 sticky top-0 z-10 w-full shrink-0 bg-black/80 backdrop-blur-xl overflow-x-auto hide-scrollbar">
-            {/* Data - Compacta e bonita */}
             <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
               <Calendar className="h-4 w-4 text-zinc-400" />
               <input
@@ -679,19 +698,17 @@ export default function Index() {
               />
             </div>
 
-            {/* Botão Hoje */}
             <motion.div whileTap={{ scale: 0.95 }}>
               <Button
                 variant="secondary"
                 size="sm"
-                className="rounded-lg px-3 sm:px-4 h-9 sm:h-10 text-[9px] sm:text-[10px] font-bold uppercase border-white/[0.08] bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1] hover:text-white shrink-0"
+                className="rounded-lg px-3 sm:px-4 h-9 sm:h-10 text-[9px] sm:text-[10px] font-bold uppercase border-white/[0.08] bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1] hover:text-white shrink-0 cursor-pointer"
                 onClick={() => setDataFiltro(getLocalDate())}
               >
                 Hoje
               </Button>
             </motion.div>
 
-            {/* SELETOR DE BARBEIRO (só para donos) */}
             {isDono && barbeiros.length > 0 && (
               <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
                 <User className="h-4 w-4 text-zinc-400" />
@@ -791,7 +808,7 @@ export default function Index() {
                       onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
                       onAddServico={isImpersonating ? undefined : handleAddServico}
                       onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
-                      onAddDespesa={isImpersonating ? undefined : (despesa: any) => {
+                      onAddDespesa={isImpersonating ? undefined : (despesa: unknown) => {
                         console.log("Despesa a salvar:", despesa);
                         toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
                       }}

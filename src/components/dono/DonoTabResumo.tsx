@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { Scissors, Copy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,8 +7,17 @@ import { StatCard } from "./StatCard";
 import { DonoTabResumoProps } from "@/types/dono";
 
 export function DonoTabResumo({ slug, stats, brand, ctaFg, glass }: DonoTabResumoProps) {
-  const linkCompleto = `https://${window.location.host}/agendar/${slug}`;
-  const linkDisplay = `${window.location.host}/agendar/${slug}`;
+  const linkCompleto = slug ? `https://${window.location.host}/agendar/${slug}` : "";
+  const linkDisplay = slug ? `${window.location.host}/agendar/${slug}` : "Link não disponível";
+
+  const handleCopyLink = useCallback(() => {
+    if (!linkCompleto) {
+      toast.error("Slug não definido para esta barbearia.");
+      return;
+    }
+    navigator.clipboard.writeText(linkCompleto);
+    toast.success("Link copiado!");
+  }, [linkCompleto]);
 
   return (
     <>
@@ -23,14 +33,14 @@ export function DonoTabResumo({ slug, stats, brand, ctaFg, glass }: DonoTabResum
             <code className="text-[11px] text-zinc-300 font-mono truncate">{linkDisplay}</code>
             <Button
               size="sm"
-              className="h-10 px-6 rounded-xl font-black uppercase text-[10px] w-full sm:w-auto"
+              className="h-10 px-6 rounded-xl font-black uppercase text-[10px] w-full sm:w-auto disabled:opacity-50"
               style={{ backgroundColor: brand, color: ctaFg }}
-              onClick={() => {
-                navigator.clipboard.writeText(linkCompleto);
-                toast.success("Link copiado!");
-              }}
+              onClick={handleCopyLink}
+              aria-label="Copiar link de agendamento"
+              disabled={!slug}
             >
-              <Copy className="h-4 w-4 mr-2" /> Copiar Link
+              <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
+              Copiar Link
             </Button>
           </div>
         </Card>
