@@ -234,21 +234,32 @@ export function VisaoBarbeiro({
 
     const controller = new AbortController();
     async function fetchHorariosConfig() {
-      const { data } = await supabase
-        .from('barbearias')
-        .select('horario_abertura, horario_fechamento, nome, ativo, data_vencimento')
-        .eq('slug', slugBarbearia)
-        .abortSignal(controller.signal)
-        .single();
+      try {
+        const { data } = await supabase
+          .from('barbearias')
+          .select('horario_abertura, horario_fechamento, nome, ativo, data_vencimento')
+          .eq('slug', slugBarbearia)
+          .abortSignal(controller.signal)
+          .single();
 
-      if (data) {
-        setIsLojaAtiva(data.ativo !== false);
-        setInfoLoja({
-          abertura: data.horario_abertura || HORARIO_PADRAO_ABERTURA,
-          fechamento: data.horario_fechamento || HORARIO_PADRAO_FECHAMENTO,
-          nome: data.nome || HORARIO_PADRAO_NOME,
-          data_vencimento: data.data_vencimento,
-        });
+        if (data) {
+          console.log("[VisaoBarbeiro] Dados da barbearia carregados:", data);
+          setIsLojaAtiva(data.ativo !== false);
+          setInfoLoja({
+            abertura: data.horario_abertura || HORARIO_PADRAO_ABERTURA,
+            fechamento: data.horario_fechamento || HORARIO_PADRAO_FECHAMENTO,
+            nome: data.nome || HORARIO_PADRAO_NOME,
+            data_vencimento: data.data_vencimento,
+          });
+        } else {
+          console.warn("[VisaoBarbeiro] Barbearia não encontrada para slug:", slugBarbearia);
+          setIsLojaAtiva(false);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[VisaoBarbeiro] Erro ao carregar configurações:", error);
+          setIsLojaAtiva(false);
+        }
       }
     }
     fetchHorariosConfig();
@@ -474,17 +485,26 @@ export function VisaoBarbeiro({
   }, []);
 
   // ==========================================
-  // VERIFICAÇÃO DE BLOQUEIO (CORRIGIDA)
+  // VERIFICAÇÃO DE BLOQUEIO (DEFINITIVA)
   // ==========================================
+  if (isLojaAtiva === null) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black">
+        <Loader2 className="h-10 w-10 animate-spin text-white/40" />
+      </div>
+    );
+  }
+
   const hoje = new Date();
   const dataVenc = infoLoja.data_vencimento ? new Date(infoLoja.data_vencimento) : null;
   const isVencida = dataVenc && dataVenc < hoje;
   const lojaInativa = isLojaAtiva === false;
   const bloqueado = lojaInativa || isVencida;
 
-  // Se bloqueado, retorna tela de bloqueio e NADA MAIS é renderizado
+  console.log("[VisaoBarbeiro] BLOQUEIO?", { isLojaAtiva, dataVencimento: infoLoja.data_vencimento, isVencida, lojaInativa, bloqueado, isDono });
+
   if (bloqueado) {
-    // Se for dono e estiver vencido, mostra tela de pagamento completa
+    console.log("[VisaoBarbeiro] Renderizando tela de bloqueio. isDono:", isDono, "isVencida:", isVencida);
     if (isDono && isVencida) {
       return (
         <DonoBloqueio
@@ -501,7 +521,6 @@ export function VisaoBarbeiro({
       );
     }
 
-    // Para barbeiro, dono com bloqueio manual, ou dono inativo (não vencido)
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
         <div className="max-w-sm w-full space-y-6 text-center">
@@ -540,7 +559,6 @@ export function VisaoBarbeiro({
     );
   }
 
-  // Se barbeiro comum e loja ativa, mas perfil desativado
   if (!isDono && perfilLogado && perfilLogado.ativo === false) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-6 backdrop-blur-md">
@@ -571,7 +589,7 @@ export function VisaoBarbeiro({
   }
 
   // ==========================================
-  // RENDER NORMAL (AGENDA) - SÓ EXECUTA SE NÃO BLOQUEADO
+  // RENDER NORMAL (AGENDA)
   // ==========================================
   return (
     <div className="space-y-6 text-white pb-32">
@@ -620,7 +638,6 @@ export function VisaoBarbeiro({
               </MotionButton>
             </DialogTrigger>
             <DialogContent className="dark border-white/[0.08] text-white w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar bg-zinc-950/95 backdrop-blur-xl">
-              {/* Conteúdo do modal (mantido igual) */}
               <DialogHeader>
                 <DialogTitle className="text-white font-black uppercase italic text-2xl flex items-center gap-2">
                   <Clock style={{ color: brand }} /> Novo Horário

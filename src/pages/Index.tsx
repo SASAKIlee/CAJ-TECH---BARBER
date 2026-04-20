@@ -16,17 +16,18 @@ import {
   useBarbearia, useBarbeiros, useServicos, useAgendamentos,
   useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento, useClientesVIP
 } from "@/hooks/useQueries";
-import { useDonoData } from "@/hooks/useDonoData"; // ← NOVO
+import { useDonoData } from "@/hooks/useDonoData";
 import type { AgendamentoInsert } from "@/types/queries";
 import type { PlanoType } from "@/types/dono";
+import { DonoModalRenovacao } from "@/components/dono/DonoModalRenovacao";
 
-// Lazy load de componentes pesados
+// Lazy load
 const VisaoDono = lazy(() => import("@/components/VisaoDono").then(m => ({ default: m.VisaoDono })));
 const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor").then(m => ({ default: m.VisaoVendedor })));
 const VisaoCEO = lazy(() => import("@/components/VisaoCEO").then(m => ({ default: m.VisaoCEO })));
 
 // ==========================================
-// TIPAGENS
+// TIPAGENS (atualizadas)
 // ==========================================
 interface Barbeiro {
   id: string;
@@ -58,6 +59,7 @@ interface Agendamento {
   barbearia_slug: string;
 }
 
+// Interface usada pelo hook useBarbearia (já deve existir nos tipos globais, mas reforçamos)
 interface Barbearia {
   id: string;
   slug: string;
@@ -69,7 +71,7 @@ interface Barbearia {
   ativo?: boolean;
   plano?: string;
   checkin_habilitado?: boolean;
-  data_vencimento?: string | null; // ← adicionado
+  data_vencimento?: string | null; // ← ESSENCIAL
 }
 
 interface ImpersonateData {
@@ -137,7 +139,6 @@ function ImpersonationBanner({
 export default function Index() {
   const { signOut, userRole, user } = useAuth();
 
-  // Dados do dono (para obter plano, status de pagamento, etc.)
   const {
     data: donoData,
     pixGerado,
@@ -147,8 +148,10 @@ export default function Index() {
   } = useDonoData();
 
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [modalRenovacaoAberto, setModalRenovacaoAberto] = useState(false);
+  const [isGerandoPix, setIsGerandoPix] = useState(false);
+  const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("pro");
 
-  // Impersonação
   const [impersonateSlug, setImpersonateSlug] = useState<string | null>(() =>
     localStorage.getItem("ceo_impersonate_slug")
   );
@@ -518,15 +521,45 @@ export default function Index() {
     [mutacoesServico, slug, withLoadingToast]
   );
 
-  // Callbacks de pagamento (baseados na lógica do VisaoDono)
-  const handleGerarPix = useCallback(async (plano?: PlanoType) => {
-    const planoParaCobrar = plano || donoData.planoAtual;
+  // ==========================================
+  // CALLBACKS DE PAGAMENTO
+  // ==========================================
+  const handleGerarPix = useCallback(async () => {
+    if (!user?.id) return;
     setPixGerado(null);
-    // A lógica real de geração está dentro de um modal/componente; aqui apenas disparamos a abertura
-    // Como essa lógica é complexa e envolve estado interno, podemos delegar para o VisaoDono.
-    // Para manter a consistência, vamos apenas abrir o modal de renovação (que já está no VisaoDono).
-    // No Index, podemos simplesmente não fazer nada, pois o VisaoBarbeiro chamará onRenovacaoClick.
-  }, [donoData.planoAtual, setPixGerado]);
+    setIsGerandoPix(true);
+    try {
+      const plano = donoData.planoAtual || "pro";
+      const { data: barbeariaData } = await supabase
+        .from("barbearias")
+        .select("id")
+        .eq("dono_id", user.id)
+        .single();
+      if (!barbeariaData) throw new Error("Barbearia não encontrada");
+
+      const { data: fnData, error: fnError } = await supabase.functions.invoke("mercado-pago-pix", {
+        body: {
+          barbearia_id: barbeariaData.id,
+          plano,
+          email_dono: user.email || "financeiro@cajtech.net.br",
+        },
+      });
+
+      if (fnError) throw new Error(fnError.message);
+
+      const payload = fnData as any;
+      const brCode = payload.qr_code || payload.br_code || payload.copiaECola || payload.pix_copy_paste;
+      if (!brCode) throw new Error("Resposta sem código PIX");
+
+      setPixGerado(brCode);
+      setTempoPix(900);
+      toast.success("PIX gerado! Copie o código.");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsGerandoPix(false);
+    }
+  }, [user, donoData.planoAtual, setPixGerado, setTempoPix]);
 
   const handleCopiarPix = useCallback(() => {
     if (pixGerado) {
@@ -536,13 +569,13 @@ export default function Index() {
   }, [pixGerado]);
 
   const handleRenovacaoClick = useCallback(() => {
-    // Aqui normalmente abriria o modal de pagamento. Como o VisaoDono gerencia isso,
-    // podemos passar uma função vazia ou disparar um evento.
-    // O VisaoBarbeiro usará essa prop para o botão "Regularizar Pagamento".
-    // Vamos redirecionar para a visão dono? Ou melhor, recarregar a página?
-    // A abordagem mais simples: forçar a ida para a aba "dono" e abrir o modal.
-    setTab("dono");
-    toast.info("Use o botão 'Gerar PIX' no painel principal.");
+    setPlanoPagamento((donoData.planoAtual as PlanoType) || "pro");
+    setModalRenovacaoAberto(true);
+  }, [donoData.planoAtual]);
+
+  const getValorPlano = useCallback((plano: PlanoType) => {
+    const valores: Record<PlanoType, number> = { starter: 35, pro: 50, elite: 497 };
+    return valores[plano] || 50;
   }, []);
 
   // Efeito para dados do CEO
@@ -577,8 +610,20 @@ export default function Index() {
     }
   }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
 
-  // Verifica se a loja está bloqueada (para esconder a nav inferior)
-  const lojaBloqueada = donoData.isLojaAtiva === false || donoData.fasePagamento === 4;
+  // ==========================================
+  // VERIFICAÇÃO DE BLOQUEIO (SEM ERROS)
+  // ==========================================
+  const hoje = new Date();
+  let dataVenc: Date | null = null;
+  const vencRaw = (barbearia as any)?.data_vencimento; // fallback seguro
+  if (vencRaw) {
+    const parsed = new Date(String(vencRaw));
+    if (!isNaN(parsed.getTime())) {
+      dataVenc = parsed;
+    }
+  }
+  const vencida = dataVenc ? dataVenc < hoje : false;
+  const lojaBloqueada = donoData.isLojaAtiva === false || vencida || donoData.fasePagamento === 4;
 
   // ==========================================
   // RENDERIZAÇÃO
@@ -797,18 +842,14 @@ export default function Index() {
                   onNovoAgendamento={handleNovoAgendamento}
                   onStatusChange={handleStatusChange}
                   checkinHabilitado={barbearia?.checkin_habilitado || false}
-                  // Novas props para bloqueio por inadimplência
-                  planoAtual={donoData.planoAtual as PlanoType}
+                  planoAtual={(donoData.planoAtual as PlanoType) || "pro"}
                   pixGerado={pixGerado}
                   tempoPix={tempoPix}
-                  isGerandoPix={false} // será gerenciado internamente ou via modal
+                  isGerandoPix={isGerandoPix}
                   onGerarPix={handleGerarPix}
                   onCopiarPix={handleCopiarPix}
                   onRenovacaoClick={handleRenovacaoClick}
-                  getValorPlano={(plano: PlanoType) => {
-                    const valores: Record<PlanoType, number> = { starter: 35, pro: 50, elite: 497 };
-                    return valores[plano] || 50;
-                  }}
+                  getValorPlano={getValorPlano}
                 />
               )}
 
@@ -870,7 +911,6 @@ export default function Index() {
           </AnimatePresence>
         </main>
 
-        {/* Nav inferior só aparece se a loja NÃO estiver bloqueada */}
         {!lojaBloqueada && (
           <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/40 backdrop-blur-xl flex justify-around p-2 shadow-2xl z-20 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             {visibleTabs.map((t) => (
@@ -894,6 +934,17 @@ export default function Index() {
           </nav>
         )}
         <TermosDeUso />
+
+        <DonoModalRenovacao
+          open={modalRenovacaoAberto}
+          onClose={() => setModalRenovacaoAberto(false)}
+          planoAtual={planoPagamento}
+          pixGerado={pixGerado}
+          tempoPix={tempoPix}
+          isGerandoPix={isGerandoPix}
+          onGerarPix={handleGerarPix}
+          onCopiarPix={handleCopiarPix}
+        />
       </div>
     </div>
   );
