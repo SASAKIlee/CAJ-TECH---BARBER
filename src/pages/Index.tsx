@@ -534,7 +534,6 @@ export default function Index() {
     if (!isDono && user?.id) {
       setBarbeiroSelecionadoId(user.id);
     } else if (isDono) {
-      // Mantém o ID atual se ainda estiver na lista, senão reseta para "Todos"
       setBarbeiroSelecionadoId(prev => {
         if (prev && barbeiros.some(b => b.id === prev)) return prev;
         return "";
@@ -548,10 +547,10 @@ export default function Index() {
   if (userRole === "ceo" && !isImpersonating) {
     return (
       <div className="dark min-h-screen bg-black text-white flex flex-col">
-        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
+        <header className="p-3 sm:p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-8 sm:h-9 w-auto" />
+            <h1 className="font-bold text-base sm:text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
           </div>
           <Button
             variant="ghost"
@@ -563,7 +562,7 @@ export default function Index() {
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
-        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-6">
           <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
             <VisaoCEO
               totalLojas={dadosCEO.lojas}
@@ -572,7 +571,7 @@ export default function Index() {
             />
           </Suspense>
         </main>
-        <div className="p-8 text-center bg-black mt-auto">
+        <div className="p-6 sm:p-8 text-center bg-black mt-auto">
           <p className="text-zinc-800 text-[8px] font-black uppercase tracking-[0.5em]">Sistema Criptografado</p>
         </div>
       </div>
@@ -582,10 +581,10 @@ export default function Index() {
   if (userRole === "vendedor") {
     return (
       <div className="dark min-h-screen bg-black text-white flex flex-col">
-        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
+        <header className="p-3 sm:p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/40 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-8 sm:h-9 w-auto" />
+            <h1 className="font-bold text-base sm:text-lg tracking-tight italic text-white">CAJ TECH</h1>
           </div>
           <Button
             variant="ghost"
@@ -597,7 +596,7 @@ export default function Index() {
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
-        <main className="flex-1 max-w-7xl mx-auto w-full px-0 sm:px-4 md:px-8">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-6">
           <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
             <VisaoVendedor />
           </Suspense>
@@ -643,17 +642,17 @@ export default function Index() {
     <div className="dark min-h-screen relative isolate text-foreground flex flex-col overflow-x-hidden">
       <AppHeroBackdrop imageUrl={heroImageUrl} />
       <div className="relative z-10 flex flex-col min-h-screen">
-        <header className="p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/35 backdrop-blur-xl shrink-0">
-          <div className="flex items-center gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-9 w-auto" />
-            <h1 className="font-bold text-lg tracking-tight italic text-white">CAJ TECH</h1>
+        <header className="p-3 sm:p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/35 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-8 sm:h-9 w-auto" />
+            <h1 className="font-bold text-base sm:text-lg tracking-tight italic text-white">CAJ TECH</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <motion.div whileTap={{ scale: 0.95 }}>
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-white/80 hover:text-white"
+                className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
                 onClick={() => {
                   toast.promise(refetchDadosPrincipais(), {
                     loading: "Atualizando dados...",
@@ -662,18 +661,18 @@ export default function Index() {
                   });
                 }}
               >
-                <RefreshCw className="h-5 w-5" />
+                <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </motion.div>
             <motion.div whileTap={{ scale: 0.95 }}>
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-white/80 hover:text-white"
+                className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
                 onClick={handleSignOut}
                 disabled={isSigningOut}
               >
-                <LogOut className="h-5 w-5" />
+                <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </motion.div>
           </div>
@@ -732,7 +731,7 @@ export default function Index() {
           </div>
         )}
 
-        <main className="flex-1 p-4 pb-28 max-w-7xl mx-auto w-full md:px-8 flex flex-col min-h-0">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 pb-28 max-w-7xl mx-auto w-full flex flex-col min-h-0">
           <AnimatePresence mode="wait" initial={false} custom={tabSlideDir}>
             <motion.div
               key={tab}
@@ -828,15 +827,15 @@ export default function Index() {
               whileTap={{ scale: 0.95 }}
               onClick={() => goTab(t.id)}
               className={cn(
-                "flex flex-col items-center p-2 transition-colors duration-300 outline-none rounded-xl",
-                tab === t.id ? "font-bold scale-110" : "text-white/45"
+                "flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl",
+                tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45"
               )}
               style={tab === t.id ? { color: marca } : undefined}
               aria-label={t.label}
               role="tab"
             >
-              <t.icon className="h-6 w-6" />
-              <span className="text-[10px] mt-1 uppercase tracking-tighter">{t.label}</span>
+              <t.icon className="h-6 w-6 sm:h-7 sm:w-7" />
+              <span className="text-[9px] sm:text-[11px] mt-1 uppercase tracking-tighter">{t.label}</span>
             </motion.button>
           ))}
         </nav>

@@ -171,14 +171,15 @@ function VisaoDonoComponent({
   // ==========================================
   const switchSub = useCallback(
     (next: DonoSubTab) => {
-      const order: DonoSubTab[] = ["resumo", "dashboard", "vip", "config"];
-      setSubDir(order.indexOf(next) > order.indexOf(subTab) ? 1 : -1);
+      // Ordem dinâmica baseada no plano
+      const ordemAtiva = abasVisiveis.map(a => a.id);
+      setSubDir(ordemAtiva.indexOf(next) > ordemAtiva.indexOf(subTab) ? 1 : -1);
       setSubTab(next);
       if (next === "vip") {
         setVipSubTab("automacoes");
       }
     },
-    [subTab]
+    [subTab, data.planoAtual]
   );
 
   const persistCheckin = useCallback(
@@ -430,6 +431,28 @@ function VisaoDonoComponent({
   }, []);
 
   // ==========================================
+  // LISTA DE ABAS VISÍVEIS (VIP oculta para Starter)
+  // ==========================================
+  const abasVisiveis = useMemo(() => {
+    const baseAbas: Array<{ id: DonoSubTab; label: string; Icon: React.ElementType }> = [
+      { id: "resumo", label: "Resumo", Icon: FileText },
+      { id: "dashboard", label: "Métricas", Icon: BarChart3 },
+    ];
+    if (data.planoAtual === "pro" || data.planoAtual === "elite") {
+      baseAbas.push({ id: "vip", label: "VIP", Icon: Zap });
+    }
+    baseAbas.push({ id: "config", label: "Ajustes", Icon: Settings2 });
+    return baseAbas;
+  }, [data.planoAtual]);
+
+  // Garante que subTab atual seja válida (caso plano mude)
+  useEffect(() => {
+    if (!abasVisiveis.some(aba => aba.id === subTab)) {
+      setSubTab("resumo");
+    }
+  }, [abasVisiveis, subTab]);
+
+  // ==========================================
   // RENDER CONDICIONAL DE BLOQUEIO
   // ==========================================
   if (data.isLojaAtiva === false) {
@@ -498,18 +521,13 @@ function VisaoDonoComponent({
 
       <div className="px-2 sm:px-4 sticky top-0 z-40 bg-gradient-to-b from-black via-black/95 to-transparent backdrop-blur-xl pb-2 pt-2">
         <div className="flex rounded-2xl border border-white/[0.08] p-1 gap-1 shadow-2xl bg-zinc-900/50">
-          {([
-            { id: "resumo", label: "Resumo", Icon: FileText },
-            { id: "dashboard", label: "Métricas", Icon: BarChart3 },
-            { id: "vip", label: "VIP", Icon: Zap },
-            { id: "config", label: "Ajustes", Icon: Settings2 },
-          ] as const).map(({ id, label, Icon }) => (
+          {abasVisiveis.map(({ id, label, Icon }) => (
             <MotionButton
               key={id}
               type="button"
               variant="ghost"
               whileTap={{ scale: 0.95 }}
-              onClick={() => switchSub(id as DonoSubTab)}
+              onClick={() => switchSub(id)}
               className={cn(
                 "flex-1 min-w-0 h-11 sm:h-12 rounded-xl text-[9px] sm:text-[10px] font-bold uppercase tracking-wide px-1 sm:px-2 transition-all duration-200",
                 subTab === id
@@ -554,74 +572,66 @@ function VisaoDonoComponent({
                 glass={glass}
               />
             )}
-            {subTab === "vip" &&
-              (data.planoAtual === "pro" || data.planoAtual === "elite" ? (
-                <div className="space-y-4">
-                  <div className="flex rounded-xl border border-white/[0.08] p-1 gap-0.5 bg-zinc-900/50 overflow-x-auto hide-scrollbar">
-                    {([
-                      { id: "automacoes" as const, label: "Automações", Icon: Zap },
-                      { id: "radar" as const, label: "Radar", Icon: AlertTriangle },
-                      { id: "fila" as const, label: "Fila", Icon: ListOrdered },
-                      { id: "lojinha" as const, label: "Lojinha", Icon: ShoppingBag },
-                      { id: "despesas" as const, label: "Despesas", Icon: Receipt },
-                    ]).map(({ id, label, Icon }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setVipSubTab(id)}
-                        className={cn(
-                          "flex-shrink-0 flex items-center gap-1.5 py-2 px-3 sm:px-4 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-200",
-                          vipSubTab === id
-                            ? "bg-white/10 text-white shadow-sm"
-                            : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
-                        )}
-                        aria-label={`Aba ${label}`}
-                      >
-                        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        <span className="whitespace-nowrap">{label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={vipSubTab}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.15 }}
+            {subTab === "vip" && (
+              <div className="space-y-4">
+                <div className="flex rounded-xl border border-white/[0.08] p-1 gap-0.5 bg-zinc-900/50 overflow-x-auto hide-scrollbar">
+                  {([
+                    { id: "automacoes" as const, label: "Automações", Icon: Zap },
+                    { id: "radar" as const, label: "Radar", Icon: AlertTriangle },
+                    { id: "fila" as const, label: "Fila", Icon: ListOrdered },
+                    { id: "lojinha" as const, label: "Lojinha", Icon: ShoppingBag },
+                    { id: "despesas" as const, label: "Despesas", Icon: Receipt },
+                  ]).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setVipSubTab(id)}
+                      className={cn(
+                        "flex-shrink-0 flex items-center gap-1.5 py-2 px-3 sm:px-4 rounded-lg text-[8px] sm:text-[9px] font-bold uppercase tracking-wide transition-all duration-200",
+                        vipSubTab === id
+                          ? "bg-white/10 text-white shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+                      )}
+                      aria-label={`Aba ${label}`}
                     >
-                      {vipSubTab === "radar" && (
-                        <RadarVendas slug={data.slug} brand={brand} glass={glass} />
-                      )}
-                      {vipSubTab === "fila" && (
-                        <FilaEsperaInteligente slug={data.slug} barbeiros={barbeiros} brand={brand} glass={glass} />
-                      )}
-                      {vipSubTab === "lojinha" && (
-                        <LojinhaPDV slug={data.slug} brand={brand} glass={glass} />
-                      )}
-                      {vipSubTab === "despesas" && (
-                        <GestaoDespesas slug={data.slug} brand={brand} glass={glass} faturamentoMes={faturamentoMensalProp} />
-                      )}
-                      {vipSubTab === "automacoes" && (
-                        <DonoTabVIP
-                          planoAtual={data.planoAtual}
-                          onUpgradeClick={() => setModalUpgradeAberto(true)}
-                          brand={brand}
-                          glass={glass}
-                        />
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
+                      <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="whitespace-nowrap">{label}</span>
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <DonoTabVIP
-                  planoAtual={data.planoAtual}
-                  onUpgradeClick={() => setModalUpgradeAberto(true)}
-                  brand={brand}
-                  glass={glass}
-                />
-              ))}
+
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={vipSubTab}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    {vipSubTab === "radar" && (
+                      <RadarVendas slug={data.slug} brand={brand} glass={glass} />
+                    )}
+                    {vipSubTab === "fila" && (
+                      <FilaEsperaInteligente slug={data.slug} barbeiros={barbeiros} brand={brand} glass={glass} />
+                    )}
+                    {vipSubTab === "lojinha" && (
+                      <LojinhaPDV slug={data.slug} brand={brand} glass={glass} />
+                    )}
+                    {vipSubTab === "despesas" && (
+                      <GestaoDespesas slug={data.slug} brand={brand} glass={glass} faturamentoMes={faturamentoMensalProp} />
+                    )}
+                    {vipSubTab === "automacoes" && (
+                      <DonoTabVIP
+                        planoAtual={data.planoAtual}
+                        onUpgradeClick={() => setModalUpgradeAberto(true)}
+                        brand={brand}
+                        glass={glass}
+                      />
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            )}
             {subTab === "config" && (
               <DonoTabConfig
                 barbeiros={barbeiros}

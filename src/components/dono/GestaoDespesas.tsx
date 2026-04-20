@@ -222,10 +222,14 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
           <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Por Categoria</h4>
           <div className="grid gap-2 sm:grid-cols-2">
             {porCategoria.map(cat => (
-              <Card key={cat.categoria} className="p-3 rounded-xl border border-white/[0.08] bg-zinc-950/80 flex items-center justify-between" style={glass}>
+              <Card
+                key={cat.categoria}
+                className="p-3 rounded-xl border border-white/[0.08] bg-zinc-900/60 flex items-center justify-between"
+                style={glass}
+              >
                 <div className="flex items-center gap-2">
                   <TrendingDown className="h-4 w-4 text-red-400" aria-hidden="true" />
-                  <span className="text-xs text-zinc-300 font-bold">{cat.categoria}</span>
+                  <span className="text-xs text-white font-bold">{cat.categoria}</span>
                 </div>
                 <span className="text-sm font-black text-red-400">R$ {cat.total.toFixed(2)}</span>
               </Card>
