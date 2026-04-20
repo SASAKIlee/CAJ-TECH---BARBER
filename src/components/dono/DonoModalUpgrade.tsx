@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { DonoModalUpgradeProps, PlanoType } from "@/types/dono";
 
 const VALORES_PLANO: Record<PlanoType, number> = {
-  starter: 50.0,
-  pro: 99.9,
+  starter: 35.0,
+  pro: 50.0,
   elite: 497.0,
 };
 
@@ -48,7 +48,7 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
             <div>
               <h3 className="text-zinc-400 font-black uppercase text-xs tracking-widest">Starter</h3>
               <p className="text-4xl font-black text-white my-4 italic">
-                R$ 50<span className="text-xs opacity-30">/mês</span>
+                R$ {valorStarter}<span className="text-xs opacity-30">/mês</span>
               </p>
               <ul className="text-[11px] text-zinc-400 space-y-3 mb-6">
                 <li className="flex gap-2 font-bold uppercase">
@@ -96,11 +96,11 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
               </span>
               <h3 className="text-emerald-500 font-black uppercase text-xs tracking-widest">PRO</h3>
               <p className="text-5xl font-black text-white my-4 italic">
-                R$ 99<span className="text-xs opacity-50">,90/mês</span>
+                R$ {valorPro}<span className="text-xs opacity-50">/mês</span>
               </p>
               <ul className="text-[11px] text-zinc-300 space-y-3 mb-6">
                 <li className="flex gap-2 font-bold uppercase">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Profissionais ILIMITADOS
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Barbeiros Ilimitados
                 </li>
                 <li className="flex gap-2 font-bold uppercase">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Dashboard Completo (Lucro Real)
@@ -156,7 +156,7 @@ export function DonoModalUpgrade({ open, onClose, planoAtual, onUpgrade }: DonoM
                 </span>
               </div>
               <p className="text-4xl font-black text-white my-4 italic">
-                R$ 497<span className="text-xs opacity-30">/mês</span>
+                R$ {valorElite}<span className="text-xs opacity-30">/mês</span>
               </p>
               <ul className="text-[11px] text-zinc-500 space-y-3 mb-6">
                 <li className="flex gap-2 font-bold uppercase">

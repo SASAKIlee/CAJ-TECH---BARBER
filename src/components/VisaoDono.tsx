@@ -91,6 +91,9 @@ function VisaoDonoComponent({
   const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter");
   const [isGerandoPix, setIsGerandoPix] = useState(false);
 
+  // Novo estado para data de vencimento
+  const [dataVencimento, setDataVencimento] = useState<string | null>(null);
+
   // Formulários
   const [nBarbeiro, setNBarbeiro] = useState<BarbeiroForm>({ nome: "", comissao: "50", email: "", senha: "" });
   const [nServico, setNServico] = useState<ServicoForm>({ nome: "", preco: "", duracao_minutos: "30" });
@@ -147,6 +150,23 @@ function VisaoDonoComponent({
     return () => {
       if (dismissTimer) clearTimeout(dismissTimer);
     };
+  }, []);
+
+  // Buscar data de vencimento da barbearia
+  useEffect(() => {
+    async function buscarVencimento() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return;
+      const { data: barbearia } = await supabase
+        .from("barbearias")
+        .select("data_vencimento")
+        .eq("dono_id", authData.user.id)
+        .single();
+      if (barbearia) {
+        setDataVencimento(barbearia.data_vencimento);
+      }
+    }
+    buscarVencimento();
   }, []);
 
   // ==========================================
@@ -453,9 +473,30 @@ function VisaoDonoComponent({
   }, [abasVisiveis, subTab]);
 
   // ==========================================
-  // RENDER CONDICIONAL DE BLOQUEIO
+  // RENDER CONDICIONAL DE BLOQUEIO (CORRIGIDO)
   // ==========================================
+  const hoje = new Date();
+  const vencimentoDate = dataVencimento ? new Date(dataVencimento) : null;
+  const isVencida = vencimentoDate && vencimentoDate < hoje;
+
   if (data.isLojaAtiva === false) {
+    // Se está inativa E vencida, é inadimplência → tela de pagamento
+    if (isVencida) {
+      return (
+        <DonoBloqueio
+          motivo="inadimplencia"
+          planoAtual={data.planoAtual}
+          pixGerado={pixGerado}
+          tempoPix={tempoPix}
+          isGerandoPix={isGerandoPix}
+          onGerarPix={() => void handleGerarPixDinâmico(data.planoAtual)}
+          onCopiarPix={copiarPix}
+          onRenovacaoClick={() => void handleGerarPixDinâmico(data.planoAtual)}
+          getValorPlano={getValorPlano}
+        />
+      );
+    }
+    // Inativa mas não vencida → bloqueio manual (suporte)
     return (
       <DonoBloqueio
         motivo="manual"
@@ -470,6 +511,7 @@ function VisaoDonoComponent({
       />
     );
   }
+
   if (data.fasePagamento === 4) {
     return (
       <DonoBloqueio
