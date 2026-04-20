@@ -675,7 +675,7 @@ function VisaoDonoComponent({
               </div>
             )}
             {subTab === "config" && (
-              <DonoTabConfig
+              <DonoTabConfig  
                 barbeiros={barbeiros}
                 servicos={servicos}
                 horariosLoja={data.horariosLoja}
@@ -713,6 +713,7 @@ function VisaoDonoComponent({
                 onToggleBarbeiroStatus={onToggleBarbeiroStatus ?? (() => {})}
                 onRemoveBarbeiro={onRemoveBarbeiro ?? (() => {})}
                 onRemoveServico={onRemoveServico ?? (() => {})}
+                onHorarioChange={(campo, valor) => updateData({ horariosLoja: { ...data.horariosLoja, [campo]: valor } })}
               />
             )}
           </motion.div>
