@@ -18,35 +18,38 @@ export function VisaoBarbeiro() {
   const { data: servicos = [] } = useServicos(slug);
   const { adicionarAgendamento, atualizarStatusAgendamento } = useMutacoesAgendamento();
 
-  // 🛡️ LÓGICA DE DATA SEM ERRO DE FUSO HORÁRIO
-  const getDataLocalString = () => {
+  // 🛡️ DATA LOCAL SEM ERRO DE FUSO: Garante YYYY-MM-DD
+  const getHojeFormatado = () => {
     const d = new Date();
-    const ano = d.getFullYear();
-    const mes = String(d.getMonth() + 1).padStart(2, '0');
-    const dia = String(d.getDate()).padStart(2, '0');
-    return `${ano}-${mes}-${dia}`;
+    const z = d.getTimezoneOffset() * 60 * 1000;
+    const local = new Date(d.getTime() - z);
+    return local.toISOString().split('T')[0];
   };
 
-  const [dataSelecionada, setDataSelecionada] = useState(getDataLocalString());
+  const [dataSelecionada, setDataSelecionada] = useState(getHojeFormatado());
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Forçar atualização do banco quando mudar a data no seletor
+  // 🔄 REFRESH AUTOMÁTICO: Invalida o cache toda vez que mudar a data ou slug
   useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
-  }, [dataSelecionada, slug]);
+    if (slug) {
+      queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
+    }
+  }, [dataSelecionada, slug, queryClient]);
 
-  // 🔍 O FILTRO DEFINITIVO
+  // 🔍 FILTRO REFORÇADO (Normalizando strings e datas)
   const agendamentosFiltrados = useMemo(() => {
     return agendamentos.filter((ag) => {
-      // Normaliza as datas para o formato YYYY-MM-DD para comparar texto com texto
-      const dataFormatadaBanco = String(ag.data).split('T')[0];
-      const dataFormatadaSeletor = String(dataSelecionada).split('T')[0];
-      
-      const dataBate = dataFormatadaBanco === dataFormatadaSeletor;
-      const barbeiroBate = barbeiroSelecionadoId ? String(ag.barbeiro_id) === String(barbeiroSelecionadoId) : true;
-      
-      return dataBate && barbeiroBate;
+      // 1. Normaliza data (remove o T00:00:00.000Z se existir)
+      const dataAgStr = String(ag.data).substring(0, 10);
+      const bateData = dataAgStr === dataSelecionada;
+
+      // 2. Normaliza ID do barbeiro para string (evita erro de comparação UUID vs String)
+      const idFiltro = String(barbeiroSelecionadoId || "").trim();
+      const idAg = String(ag.barbeiro_id || "").trim();
+      const bateBarbeiro = idFiltro === "" || idAg === idFiltro;
+
+      return bateData && bateBarbeiro;
     });
   }, [agendamentos, dataSelecionada, barbeiroSelecionadoId]);
 
@@ -55,8 +58,10 @@ export function VisaoBarbeiro() {
       const res = await adicionarAgendamento.mutateAsync({
         ag: [dados],
         slug: slug || "",
-        idempotencyKey: crypto.randomUUID()
+        idempotencyKey: window.crypto.randomUUID()
       });
+      // Força a atualização imediata após agendar
+      queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
       return res;
     } catch (err: any) {
       return { error: err.message };
@@ -89,18 +94,18 @@ export function VisaoBarbeiro() {
         onOpenModal={() => setIsModalOpen(true)}
       />
 
-      {/* SELETOR DE DATA PARA NAVEGAR NA AGENDA */}
+      {/* SELETOR DE DATA OBRIGATÓRIO */}
       <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-4 rounded-2xl shadow-xl">
         <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-white/5">
           <CalendarDays className="h-6 w-6" style={{ color: brand }} />
         </div>
         <div className="flex flex-col flex-1">
-          <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">Exibindo Agenda de:</label>
+          <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">Navegar na Agenda:</label>
           <input
             type="date"
             value={dataSelecionada}
             onChange={(e) => setDataSelecionada(e.target.value)}
-            className="bg-transparent border-0 text-lg font-black text-white outline-none p-0 appearance-none"
+            className="bg-transparent border-0 text-lg font-black text-white outline-none p-0 appearance-none cursor-pointer"
             style={{ colorScheme: 'dark' }}
           />
         </div>
@@ -109,10 +114,13 @@ export function VisaoBarbeiro() {
       <AgendaBarbeiro
         agendamentos={agendamentosFiltrados}
         barbeiros={barbeiros}
-        servicos_find={(id) => servicos.find(s => s.id === id)}
+        servicos_find={(id) => servicos.find(s => String(s.id) === String(id))}
         brand={brand}
         infoLojaNome={loja?.nome || "Barbearia"}
-        onStatusChange={(id, status) => atualizarStatusAgendamento.mutateAsync({ id, status, slug: slug || "" })}
+        onStatusChange={(id, status) => {
+          return atualizarStatusAgendamento.mutateAsync({ id, status, slug: slug || "" })
+            .then(() => queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] }));
+        }}
       />
 
       <ModalNovoAgendamento
@@ -124,8 +132,12 @@ export function VisaoBarbeiro() {
         servicos={servicos}
         barbeiroSelecionadoId={barbeiroSelecionadoId}
         onNovoAgendamento={handleNovoAgendamento}
-        horariosOcupados={(d, b) => agendamentos.filter(a => String(a.data).split('T')[0] === d && String(a.barbeiro_id) === b).map(a => a.horario)}
-        infoLoja={{ abertura: "09:00", fechamento: "21:00" }}
+        horariosOcupados={(d, b) => 
+          agendamentos
+            .filter(a => String(a.data).substring(0, 10) === d && String(a.barbeiro_id) === String(b))
+            .map(a => a.horario)
+        }
+        infoLoja={{ abertura: "08:00", fechamento: "22:00" }}
       />
     </div>
   );

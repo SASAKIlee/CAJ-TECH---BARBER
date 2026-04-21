@@ -21,13 +21,6 @@ import { getErrorMessage, logError } from "@/lib/error-handler";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Função para buscar agendamentos retroativos (desde o mês passado para garantir histórico na tela)
-const getDataLimiteBusca = () => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1); // Busca desde o mês anterior para evitar bugs de virada de mês
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-};
-
 // ==========================================
 // 1. BARBEARIA
 // ==========================================
@@ -81,8 +74,14 @@ export function useAgendamentos(slug?: string) {
   useEffect(() => {
     if (!safeSlug) return;
     const canal = supabase.channel(`agenda-${safeSlug}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos', filter: `barbearia_slug=eq.${safeSlug}` }, 
-      () => { queryClient.invalidateQueries({ queryKey: ["agendamentos", safeSlug] }); })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'agendamentos', 
+        filter: `barbearia_slug=eq.${safeSlug}` 
+      }, () => { 
+        queryClient.invalidateQueries({ queryKey: ["agendamentos", safeSlug] }); 
+      })
       .subscribe();
     return () => { supabase.removeChannel(canal); };
   }, [safeSlug, queryClient]);
@@ -91,11 +90,14 @@ export function useAgendamentos(slug?: string) {
     queryKey: ["agendamentos", safeSlug],
     queryFn: async () => {
       if (!safeSlug) return [];
-      const { data, error } = await supabase.from("agendamentos")
+      // Removemos o filtro GTE de data para garantir que QUALQUER agendamento no banco apareça.
+      // O filtro de data agora é feito no Front-end (VisaoBarbeiro) para evitar erros de fuso.
+      const { data, error } = await supabase
+        .from("agendamentos")
         .select("*")
         .eq("barbearia_slug", safeSlug)
-        .gte("data", getDataLimiteBusca()) // Busca ampliada para garantir que agendamentos futuros apareçam
-        .order("horario");
+        .order("horario", { ascending: true });
+
       if (error) throw error;
       return data || [];
     },
@@ -272,7 +274,7 @@ export function useDespesas(slug?: string) {
     queryKey: ["despesas", safeSlug],
     queryFn: async () => {
       if (!safeSlug) return [];
-      const { data, error } = await supabase.from("despesas").select("*").eq("barbearia_slug", safeSlug).gte("data", getDataLimiteBusca());
+      const { data, error } = await supabase.from("despesas").select("*").eq("barbearia_slug", safeSlug);
       if (error) throw error;
       return data || [];
     },
