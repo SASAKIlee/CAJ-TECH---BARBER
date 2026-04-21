@@ -1,9 +1,8 @@
-import React, { useRef } from "react";
-import { Camera, Loader2, Plus } from "lucide-react";
 import { motion } from "framer-motion";
+import { Plus, LayoutDashboard, Scissors, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { hexToRgba } from "@/lib/branding";
 
 const MotionButton = motion.create(Button);
 
@@ -14,81 +13,71 @@ interface BarbeiroAcoesProps {
   setBarbeiroSelecionadoId: (id: string) => void;
   brand: string;
   ctaFg: string;
-  isScanning: boolean;
-  onOpenScanner: () => void;
-  onScannerChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  scannerRef: React.RefObject<HTMLInputElement>;
-  onOpenModal: () => void;
+  onOpenModal: () => void; // A peça que estava faltando!
 }
 
 export function BarbeiroAcoes({
-  isDono, barbeiros, barbeiroSelecionadoId, setBarbeiroSelecionadoId,
-  brand, ctaFg, isScanning, onOpenScanner, onScannerChange, scannerRef, onOpenModal
+  isDono,
+  barbeiros,
+  barbeiroSelecionadoId,
+  setBarbeiroSelecionadoId,
+  brand,
+  ctaFg,
+  onOpenModal,
 }: BarbeiroAcoesProps) {
   return (
-    <div className="flex flex-col gap-4 mb-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-        <div>
-          <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Agenda do Dia</h2>
-          {isDono && (
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-1" style={{ color: brand }}>
-              Visão Administrativa
-            </p>
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <input ref={scannerRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} onChange={onScannerChange} aria-hidden />
-          <MotionButton
-            type="button"
-            variant="outline"
-            className="rounded-[20px] border-white/10 bg-white/5 h-14 px-6 font-black uppercase text-xs text-white hover:bg-white/10 disabled:opacity-50"
-            whileTap={{ scale: 0.95 }}
-            onClick={onOpenScanner}
-            disabled={isScanning}
-          >
-            {isScanning ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Camera className="h-5 w-5 mr-2" />}
-            Scanner
-          </MotionButton>
-
-          <MotionButton
-            className="rounded-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] gap-2 h-14 px-8 font-black uppercase text-xs border-0"
-            style={{ backgroundColor: brand, color: ctaFg }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onOpenModal}
-          >
-            <Plus className="h-5 w-5 stroke-[3px]" /> Novo Agendamento
-          </MotionButton>
-        </div>
+    <div className="flex flex-col gap-4">
+      {/* Linha de Título e Botão de Novo Agendamento */}
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white">
+          Agenda <span style={{ color: brand }}>Digital</span>
+        </h2>
+        
+        <MotionButton
+          whileTap={{ scale: 0.95 }}
+          onClick={onOpenModal}
+          className="h-12 px-6 rounded-xl font-black uppercase text-xs tracking-widest border-0 shadow-lg"
+          style={{ backgroundColor: brand, color: ctaFg }}
+        >
+          <Plus className="h-5 w-5 mr-1.5 stroke-[3px]" />
+          Novo Horário
+        </MotionButton>
       </div>
 
-      {isDono && (
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
-          <MotionButton
-            variant={barbeiroSelecionadoId === "" ? "default" : "outline"}
-            size="sm"
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setBarbeiroSelecionadoId("")}
-            className={cn("rounded-xl text-[10px] font-black uppercase h-10 px-5 border-white/[0.08] transition-colors", barbeiroSelecionadoId === "" && "border-0 shadow-lg")}
-            style={barbeiroSelecionadoId === "" ? { backgroundColor: brand, color: ctaFg } : { backgroundColor: hexToRgba(brand, 0.05) }}
-          >
-            Todos
-          </MotionButton>
-          {barbeiros.map((b) => (
-            <MotionButton
-              key={b.id}
-              variant={barbeiroSelecionadoId === b.id ? "default" : "outline"}
-              size="sm"
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setBarbeiroSelecionadoId(b.id)}
-              className={cn("rounded-xl text-[10px] font-black uppercase h-10 px-5 whitespace-nowrap border-white/[0.08] transition-colors", barbeiroSelecionadoId === b.id && "border-0 shadow-lg", !b.ativo && "opacity-40 grayscale")}
-              style={barbeiroSelecionadoId === b.id ? { backgroundColor: brand, color: ctaFg } : { backgroundColor: hexToRgba(brand, 0.05) }}
-            >
-              {b.nome} {!b.ativo && "(INATIVO)"}
-            </MotionButton>
-          ))}
+      {/* Filtro de Barbeiros */}
+      <div className="flex items-center gap-2 bg-white/5 border border-white/10 p-2 rounded-2xl">
+        <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-white/5 shrink-0">
+          <Scissors className="h-5 w-5 text-zinc-500" />
         </div>
-      )}
+        
+        <Select 
+          value={barbeiroSelecionadoId} 
+          onValueChange={setBarbeiroSelecionadoId}
+        >
+          <SelectTrigger className="flex-1 bg-transparent border-0 text-white font-bold h-10 focus:ring-0">
+            <SelectValue placeholder="Filtrar por Profissional" />
+          </SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
+            <SelectItem value="all">Todos os Profissionais</SelectItem>
+            {barbeiros.map((b) => (
+              <SelectItem key={b.id} value={b.id}>
+                {b.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {isDono && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5"
+            onClick={() => window.location.href = '/admin'}
+          >
+            <LayoutDashboard className="h-5 w-5" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

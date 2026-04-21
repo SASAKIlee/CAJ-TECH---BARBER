@@ -70,7 +70,7 @@ interface Barbearia {
   ativo?: boolean;
   plano?: string;
   checkin_habilitado?: boolean;
-  data_vencimento?: string | null; // ← ESSENCIAL
+  data_vencimento?: string | null;
 }
 
 interface ImpersonateData {
@@ -295,12 +295,13 @@ export default function Index() {
     }
   }, [slug, isImpersonating, refetchBarbearia, refetchBarbeiros, refetchServicos, refetchAgendamentos]);
 
-  const servicos_find = useCallback((id: string) => servicos.find((s) => s.id === id), [servicos]);
+  const servicos_find = useCallback((id: string) => servicos.find((s) => String(s.id) === String(id)), [servicos]);
 
+  // 🔥 O ERRO 1 ESTAVA AQUI: Blindado com substring(0,10)
   const horariosOcupados = useCallback(
     (data: string, bId: string) =>
       agendamentos
-        .filter((ag: Agendamento) => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado")
+        .filter((ag: Agendamento) => String(ag.data).substring(0, 10) === data && String(ag.barbeiro_id) === String(bId) && ag.status !== "Cancelado")
         .map((ag: Agendamento) => ag.horario),
     [agendamentos]
   );
@@ -335,14 +336,18 @@ export default function Index() {
         ];
   }, [userRole, isImpersonating]);
 
+  // 🔥 O ERRO 2 ESTAVA AQUI NAS STATS: Tudo blindado com substring(0,10)
   const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
-    const noDia = agendamentos.filter((ag: Agendamento) => ag.data === dataFiltro);
+    
+    // Agora aceita a data mesmo vindo como T00:00:00 do banco
+    const noDia = agendamentos.filter((ag: Agendamento) => String(ag.data).substring(0, 10) === dataFiltro);
+    
     const idParaFiltrar = isDono ? barbeiroSelecionadoId : user?.id;
 
     const agParaExibir = idParaFiltrar
-      ? noDia.filter((ag: Agendamento) => ag.barbeiro_id === idParaFiltrar)
+      ? noDia.filter((ag: Agendamento) => String(ag.barbeiro_id) === String(idParaFiltrar))
       : noDia;
 
     const fatHoje = noDia
@@ -350,7 +355,7 @@ export default function Index() {
       .reduce((sum, ag) => sum + Number(servicos_find(ag.servico_id)?.preco || 0), 0);
 
     const fatMensal = agendamentos
-      .filter((ag: Agendamento) => ag.data.startsWith(prefixoMes) && ag.status === "Finalizado")
+      .filter((ag: Agendamento) => String(ag.data).substring(0, 10).startsWith(prefixoMes) && ag.status === "Finalizado")
       .reduce((sum, ag) => sum + Number(servicos_find(ag.servico_id)?.preco || 0), 0);
 
     const comissoesHoje = noDia
@@ -359,7 +364,9 @@ export default function Index() {
 
     const agMesMeuBarbeiro = agendamentos.filter(
       (ag: Agendamento) =>
-        ag.barbeiro_id === user?.id && ag.data.startsWith(prefixoMes) && ag.status === "Finalizado"
+        String(ag.barbeiro_id) === String(user?.id) && 
+        String(ag.data).substring(0, 10).startsWith(prefixoMes) && 
+        ag.status === "Finalizado"
     );
 
     return {
@@ -371,11 +378,14 @@ export default function Index() {
     };
   }, [agendamentos, servicos_find, dataFiltro, isDono, user?.id, barbeiroSelecionadoId]);
 
+  // 🔥 O ERRO 3 ESTAVA AQUI: Filtro do barbeiro
   const comissaoPorBarbeiroHoje = useMemo(() => {
     return barbeiros.map((b: Barbeiro) => {
       const cortes = agendamentos.filter(
         (ag: Agendamento) =>
-          ag.data === dataFiltro && ag.barbeiro_id === b.id && ag.status === "Finalizado"
+          String(ag.data).substring(0, 10) === dataFiltro && 
+          String(ag.barbeiro_id) === String(b.id) && 
+          ag.status === "Finalizado"
       );
       return {
         barbeiro: b,
@@ -407,9 +417,9 @@ export default function Index() {
     (id: string, status: string) => {
       if (!slug) return Promise.reject("Slug não definido");
       if (status === "Finalizado") {
-        const agAtual = agendamentos.find((a) => a.id === id);
-        const servico = servicos_find(agAtual?.servico_id);
-        const barbeiro = barbeiros.find((b) => b.id === agAtual?.barbeiro_id);
+        const agAtual = agendamentos.find((a) => String(a.id) === String(id));
+        const servico = servicos_find(agAtual?.servico_id || "");
+        const barbeiro = barbeiros.find((b) => String(b.id) === String(agAtual?.barbeiro_id));
         const valorComissao = (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
         return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({
           id,
@@ -478,7 +488,7 @@ export default function Index() {
   const handleRemoveBarbeiro = useCallback(
     (id: string) => {
       if (!slug) return Promise.reject("Slug não definido");
-      const b = barbeiros.find((x) => x.id === id);
+      const b = barbeiros.find((x) => String(x.id) === String(id));
       return withLoadingToast(
         mutacoesBarbeiro.removerBarbeiro.mutateAsync({ id, estaAtivo: b?.ativo, slug }),
         { loading: "Removendo barbeiro...", success: "Barbeiro removido!", error: "Erro ao remover." }
@@ -577,7 +587,6 @@ export default function Index() {
     return valores[plano] || 50;
   }, []);
 
-  // Efeito para dados do CEO
   useEffect(() => {
     if (userRole !== "ceo" || isImpersonating) return;
     const controller = new AbortController();
@@ -596,32 +605,31 @@ export default function Index() {
     return () => controller.abort();
   }, [userRole, isImpersonating]);
 
-  // Efeito para inicializar barbeiroSelecionadoId
   useEffect(() => {
     if (!barbeariaQueryEnabled) return;
     if (!isDono && user?.id) {
       setBarbeiroSelecionadoId(user.id);
     } else if (isDono) {
       setBarbeiroSelecionadoId(prev => {
-        if (prev && barbeiros.some(b => b.id === prev)) return prev;
+        if (prev && barbeiros.some(b => String(b.id) === String(prev))) return prev;
         return "";
       });
     }
   }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
 
   // ==========================================
-  // VERIFICAÇÃO DE BLOQUEIO (CORRIGIDA)
+  // VERIFICAÇÃO DE BLOQUEIO
   // ==========================================
-  const hoje = new Date();
+  const hojeDate = new Date();
   let dataVenc: Date | null = null;
-  const vencRaw = (barbearia as any)?.data_vencimento; // fallback seguro
+  const vencRaw = (barbearia as any)?.data_vencimento; 
   if (vencRaw) {
     const parsed = new Date(String(vencRaw));
     if (!isNaN(parsed.getTime())) {
       dataVenc = parsed;
     }
   }
-  const vencida = dataVenc ? dataVenc < hoje : false;
+  const vencida = dataVenc ? dataVenc < hojeDate : false;
   const lojaBloqueada = donoData.isLojaAtiva === false || vencida || donoData.fasePagamento === 4;
 
   // ==========================================
@@ -873,12 +881,12 @@ export default function Index() {
                   <CarteiraBarbeiro
                     comissaoTotalMes={stats.agMesBarbeiro.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
                     totalCortesMes={stats.agMesBarbeiro.length}
-                    nomeBarbeiro={barbeiros.find((b) => b.id === user?.id)?.nome || "Barbeiro"}
+                    nomeBarbeiro={barbeiros.find((b) => String(b.id) === String(user?.id))?.nome || "Barbeiro"}
                     comissaoHoje={stats.agendamentosParaExibir
-                      .filter((ag) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id)
+                      .filter((ag) => ag.status === "Finalizado" && String(ag.barbeiro_id) === String(user?.id))
                       .reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
-                    cortesHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && ag.barbeiro_id === user?.id).length}
-                    metaDiaria={barbeiros.find((b) => b.id === user?.id)?.meta_diaria || 150}
+                    cortesHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && String(ag.barbeiro_id) === String(user?.id)).length}
+                    metaDiaria={barbeiros.find((b) => String(b.id) === String(user?.id))?.meta_diaria || 150}
                     clientesVIP={clientesVIP.length}
                     onUpdateMeta={(novaMeta: number) => {
                       if (user?.id && slug) {

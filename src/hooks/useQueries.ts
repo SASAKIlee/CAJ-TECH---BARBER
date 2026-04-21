@@ -21,6 +21,12 @@ import { getErrorMessage, logError } from "@/lib/error-handler";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+const getInicioBusca = () => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+};
+
 // ==========================================
 // 1. BARBEARIA
 // ==========================================
@@ -32,7 +38,6 @@ export function useBarbearia(options?: { enabled?: boolean }) {
       if (!user) throw new Error("Usuário não logado");
 
       const { data: lojaDono } = await supabase.from("barbearias").select("*").eq("dono_id", user.id).maybeSingle();
-      
       let lojaData = lojaDono;
       const isDono = !!lojaDono;
 
@@ -47,7 +52,7 @@ export function useBarbearia(options?: { enabled?: boolean }) {
       if (!lojaData) throw new Error("Nenhuma barbearia vinculada.");
 
       return {
-        slug: lojaData.slug.toLowerCase(),
+        slug: String(lojaData.slug).trim().toLowerCase(),
         isDono,
         userId: user.id,
         nome: lojaData.nome,
@@ -69,19 +74,13 @@ export function useBarbearia(options?: { enabled?: boolean }) {
 // ==========================================
 export function useAgendamentos(slug?: string) {
   const queryClient = useQueryClient();
-  const safeSlug = slug?.toLowerCase();
+  const safeSlug = String(slug || "").trim().toLowerCase();
 
   useEffect(() => {
     if (!safeSlug) return;
     const canal = supabase.channel(`agenda-${safeSlug}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'agendamentos', 
-        filter: `barbearia_slug=eq.${safeSlug}` 
-      }, () => { 
-        queryClient.invalidateQueries({ queryKey: ["agendamentos", safeSlug] }); 
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos', filter: `barbearia_slug=eq.${safeSlug}` }, 
+      () => { queryClient.invalidateQueries({ queryKey: ["agendamentos", safeSlug] }); })
       .subscribe();
     return () => { supabase.removeChannel(canal); };
   }, [safeSlug, queryClient]);
@@ -90,14 +89,11 @@ export function useAgendamentos(slug?: string) {
     queryKey: ["agendamentos", safeSlug],
     queryFn: async () => {
       if (!safeSlug) return [];
-      // Removemos o filtro GTE de data para garantir que QUALQUER agendamento no banco apareça.
-      // O filtro de data agora é feito no Front-end (VisaoBarbeiro) para evitar erros de fuso.
-      const { data, error } = await supabase
-        .from("agendamentos")
+      const { data, error } = await supabase.from("agendamentos")
         .select("*")
-        .eq("barbearia_slug", safeSlug)
-        .order("horario", { ascending: true });
-
+        .ilike("barbearia_slug", safeSlug)
+        .gte("data", getInicioBusca())
+        .order("horario");
       if (error) throw error;
       return data || [];
     },
@@ -125,7 +121,7 @@ export function useMutacoesAgendamento() {
         const agendamentosComChave = ag.map(item => ({
           ...item,
           idempotency_key: idempotencyKey,
-          barbearia_slug: slug.toLowerCase(),
+          barbearia_slug: slug.trim().toLowerCase(),
         }));
 
         const { error } = await supabase.from("agendamentos").insert(agendamentosComChave);
@@ -149,10 +145,6 @@ export function useMutacoesAgendamento() {
       },
       onSuccess: (_, vars) => {
         queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug.toLowerCase()] });
-      },
-      onError: (err: SupabaseError) => {
-        logError(err, "atualizarStatusAgendamento");
-        toast.error(getErrorMessage(err));
       }
     })
   };
@@ -162,12 +154,11 @@ export function useMutacoesAgendamento() {
 // 3. BARBEIROS
 // ==========================================
 export function useBarbeiros(slug?: string) {
-  const safeSlug = slug?.toLowerCase();
+  const safeSlug = String(slug || "").trim().toLowerCase();
   return useQuery({
     queryKey: ["barbeiros", safeSlug],
     queryFn: async () => {
-      if (!safeSlug) return [];
-      const { data, error } = await supabase.from("barbeiros").select("*").eq("barbearia_slug", safeSlug).order("nome");
+      const { data, error } = await supabase.from("barbeiros").select("*").ilike("barbearia_slug", safeSlug).order("nome");
       if (error) throw error;
       return data || [];
     },
@@ -193,14 +184,9 @@ export function useMutacoesBarbeiro() {
       },
       onSuccess: (_, vars) => {
         queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] });
-        toast.success("Barbeiro contratado com sucesso!");
-      },
-      onError: (err: SupabaseError) => {
-        logError(err, "adicionarBarbeiro");
-        toast.error(getErrorMessage(err));
+        toast.success("Barbeiro contratado!");
       }
     }),
-
     alternarStatusBarbeiro: useMutation({
       mutationFn: async ({ id, novoStatus, slug }: BarbeiroStatusUpdate) => {
         const { error } = await supabase.from("barbeiros").update({ ativo: novoStatus }).eq("id", id);
@@ -208,17 +194,24 @@ export function useMutacoesBarbeiro() {
       },
       onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] }); }
     }),
-
+    // 🔥 AQUI ESTÁ A FUNÇÃO QUE FALTAVA (RESOLVE O SEGUNDO ERRO)
+    atualizarMetaBarbeiro: useMutation({
+      mutationFn: async ({ id, meta, slug }: BarbeiroMetaUpdate) => {
+        const { error } = await supabase.from("barbeiros").update({ meta_diaria: meta }).eq("id", id);
+        if (error) throw error;
+      },
+      onSuccess: (_, vars) => { 
+        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] }); 
+        toast.success("Meta atualizada!");
+      }
+    }),
     removerBarbeiro: useMutation({
       mutationFn: async ({ id, estaAtivo, slug }: BarbeiroRemove) => {
         if (estaAtivo) throw new Error("Desative o barbeiro primeiro.");
         const { error } = await supabase.from("barbeiros").delete().eq("id", id);
         if (error) throw error;
       },
-      onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] });
-        toast.success("Barbeiro removido.");
-      }
+      onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] }); }
     })
   };
 }
@@ -227,12 +220,11 @@ export function useMutacoesBarbeiro() {
 // 4. SERVIÇOS
 // ==========================================
 export function useServicos(slug?: string) {
-  const safeSlug = slug?.toLowerCase();
+  const safeSlug = String(slug || "").trim().toLowerCase();
   return useQuery({
     queryKey: ["servicos", safeSlug],
     queryFn: async () => {
-      if (!safeSlug) return [];
-      const { data, error } = await supabase.from("servicos").select("*").eq("barbearia_slug", safeSlug).order("nome");
+      const { data, error } = await supabase.from("servicos").select("*").ilike("barbearia_slug", safeSlug).order("nome");
       if (error) throw error;
       return data || [];
     },
@@ -250,10 +242,7 @@ export function useMutacoesServico() {
         });
         if (error) throw error;
       },
-      onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["servicos", vars.slug.toLowerCase()] });
-        toast.success("Serviço na vitrine!");
-      }
+      onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["servicos", vars.slug.toLowerCase()] }); }
     }),
     removerServico: useMutation({
       mutationFn: async ({ id, slug }: ServicoRemove) => {
@@ -269,12 +258,11 @@ export function useMutacoesServico() {
 // 5. DESPESAS
 // ==========================================
 export function useDespesas(slug?: string) {
-  const safeSlug = slug?.toLowerCase();
+  const safeSlug = String(slug || "").trim().toLowerCase();
   return useQuery({
     queryKey: ["despesas", safeSlug],
     queryFn: async () => {
-      if (!safeSlug) return [];
-      const { data, error } = await supabase.from("despesas").select("*").eq("barbearia_slug", safeSlug);
+      const { data, error } = await supabase.from("despesas").select("*").ilike("barbearia_slug", safeSlug).gte("data", getInicioBusca());
       if (error) throw error;
       return data || [];
     },
@@ -292,10 +280,7 @@ export function useMutacoesDespesa() {
         });
         if (error) throw error;
       },
-      onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["despesas", vars.slug.toLowerCase()] });
-        toast.success("Despesa registrada no caixa.");
-      }
+      onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["despesas", vars.slug.toLowerCase()] }); }
     })
   };
 }
@@ -308,12 +293,7 @@ export function useClientesVIP(vendedorId?: string) {
     queryKey: ["clientesVIP", vendedorId],
     queryFn: async () => {
       if (!vendedorId) return [];
-      const { data, error } = await supabase
-        .from("leads")
-        .select("*")
-        .eq("vendedor_id", vendedorId)
-        .neq("status", "deleted");
-
+      const { data, error } = await supabase.from("leads").select("*").eq("vendedor_id", vendedorId).neq("status", "deleted");
       if (error) throw error;
       return (data || []).filter((lead: any) => lead.dados_adicionais?.vip === true);
     },
