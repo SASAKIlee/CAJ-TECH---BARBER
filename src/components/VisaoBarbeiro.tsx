@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { BarbeiroAcoes } from "./barbeiro/BarbeiroAcoes";
 import { AgendaBarbeiro } from "./barbeiro/AgendaBarbeiro";
@@ -18,30 +18,35 @@ export function VisaoBarbeiro() {
   const { data: servicos = [] } = useServicos(slug);
   const { adicionarAgendamento, atualizarStatusAgendamento } = useMutacoesAgendamento();
 
-  // Data atual formatada corretamente para o input
-  const hojeLocal = useMemo(() => {
+  // 🛡️ LÓGICA DE DATA SEM ERRO DE FUSO HORÁRIO
+  const getDataLocalString = () => {
     const d = new Date();
-    const offset = d.getTimezoneOffset();
-    const local = new Date(d.getTime() - (offset * 60 * 1000));
-    return local.toISOString().split('T')[0];
-  }, []);
+    const ano = d.getFullYear();
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+  };
 
-  const [dataSelecionada, setDataSelecionada] = useState(hojeLocal);
+  const [dataSelecionada, setDataSelecionada] = useState(getDataLocalString());
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Forçar atualização do cache quando mudar a data
+  // Forçar atualização do banco quando mudar a data no seletor
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
-  }, [dataSelecionada, slug, queryClient]);
+  }, [dataSelecionada, slug]);
 
-  // FILTRO SEM ERRO DE FUSO: Compara strings limpas
+  // 🔍 O FILTRO DEFINITIVO
   const agendamentosFiltrados = useMemo(() => {
     return agendamentos.filter((ag) => {
-      const dataAg = String(ag.data).split('T')[0];
-      const bateData = dataAg === dataSelecionada;
-      const bateBarbeiro = barbeiroSelecionadoId ? String(ag.barbeiro_id) === String(barbeiroSelecionadoId) : true;
-      return bateData && bateBarbeiro;
+      // Normaliza as datas para o formato YYYY-MM-DD para comparar texto com texto
+      const dataFormatadaBanco = String(ag.data).split('T')[0];
+      const dataFormatadaSeletor = String(dataSelecionada).split('T')[0];
+      
+      const dataBate = dataFormatadaBanco === dataFormatadaSeletor;
+      const barbeiroBate = barbeiroSelecionadoId ? String(ag.barbeiro_id) === String(barbeiroSelecionadoId) : true;
+      
+      return dataBate && barbeiroBate;
     });
   }, [agendamentos, dataSelecionada, barbeiroSelecionadoId]);
 
@@ -84,15 +89,18 @@ export function VisaoBarbeiro() {
         onOpenModal={() => setIsModalOpen(true)}
       />
 
-      <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-3 rounded-2xl shadow-lg">
-        <CalendarDays className="h-6 w-6" style={{ color: brand }} />
+      {/* SELETOR DE DATA PARA NAVEGAR NA AGENDA */}
+      <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-4 rounded-2xl shadow-xl">
+        <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-white/5">
+          <CalendarDays className="h-6 w-6" style={{ color: brand }} />
+        </div>
         <div className="flex flex-col flex-1">
-          <label className="text-[10px] font-black uppercase text-white/40">Data Selecionada:</label>
+          <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">Exibindo Agenda de:</label>
           <input
             type="date"
             value={dataSelecionada}
             onChange={(e) => setDataSelecionada(e.target.value)}
-            className="bg-transparent border-0 text-base font-bold text-white outline-none p-0"
+            className="bg-transparent border-0 text-lg font-black text-white outline-none p-0 appearance-none"
             style={{ colorScheme: 'dark' }}
           />
         </div>
