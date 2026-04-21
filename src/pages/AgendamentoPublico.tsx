@@ -359,12 +359,14 @@ export default function AgendamentoPublico() {
       return toast.error("Selecione serviço e profissional.");
     }
 
-    // Verificar disponibilidade real considerando a duração do serviço
     if (!verificarDisponibilidadeHorario(selecao.horario, selecao.servico.duracao_minutos, ocupados, horariosDoDia)) {
       return toast.error("Este horário não está mais disponível. Escolha outro.");
     }
 
     const generatedTicket = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    // AQUI ESTÁ A CHAVE DE IDEMPOTÊNCIA QUE FALTAVA
+    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
+    
     const toastId = toast.loading("Confirmando reserva...");
 
     const { error } = await supabase.from("agendamentos").insert({
@@ -377,6 +379,7 @@ export default function AgendamentoPublico() {
       barbearia_slug: slug,
       status: "Pendente",
       ticket_codigo: generatedTicket,
+      idempotency_key: idempotencyKey // O BANCO EXIGIA ISSO!
     });
 
     toast.dismiss(toastId);
@@ -389,7 +392,6 @@ export default function AgendamentoPublico() {
     setEtapa(5);
   };
 
-  // Renderização condicional para loading, erro ou bloqueio
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 space-y-4 text-white">
