@@ -21,14 +21,10 @@ import type { AgendamentoInsert } from "@/types/queries";
 import type { PlanoType } from "@/types/dono";
 import { DonoModalRenovacao } from "@/components/dono/DonoModalRenovacao";
 
-// Lazy load
 const VisaoDono = lazy(() => import("@/components/VisaoDono").then(m => ({ default: m.VisaoDono })));
 const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor").then(m => ({ default: m.VisaoVendedor })));
 const VisaoCEO = lazy(() => import("@/components/VisaoCEO").then(m => ({ default: m.VisaoCEO })));
 
-// ==========================================
-// TIPAGENS (atualizadas)
-// ==========================================
 interface Barbeiro {
   id: string;
   nome: string;
@@ -80,9 +76,6 @@ interface ImpersonateData {
   agendamentos: Agendamento[];
 }
 
-// ==========================================
-// FUNÇÕES AUXILIARES
-// ==========================================
 const getLocalDate = (): string => {
   const agora = new Date();
   const y = agora.getFullYear();
@@ -132,9 +125,6 @@ function ImpersonationBanner({
   );
 }
 
-// ==========================================
-// COMPONENTE PRINCIPAL
-// ==========================================
 export default function Index() {
   const { signOut, userRole, user } = useAuth();
 
@@ -205,7 +195,6 @@ export default function Index() {
             .from("agendamentos")
             .select("*")
             .eq("barbearia_slug", impersonateSlug)
-            .gte("data", `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`)
             .order("horario")
             .abortSignal(controller.signal)
         ]);
@@ -223,7 +212,6 @@ export default function Index() {
         });
       } catch (err: any) {
         if (err.name === "AbortError") return;
-        console.error("Erro ao carregar dados da barbearia:", err);
         toast.error("Erro ao carregar dados da barbearia.");
       } finally {
         setLoadingImpersonate(false);
@@ -262,18 +250,9 @@ export default function Index() {
   const { data: agendamentosNormal = [], refetch: refetchAgendamentos } = agendamentosQuery;
   const { data: clientesVIP = [] } = clientesVIPQuery;
 
-  const barbeiros = useMemo(
-    () => (isImpersonating ? impersonateData?.barbeiros || [] : barbeirosNormal),
-    [isImpersonating, impersonateData?.barbeiros, barbeirosNormal]
-  );
-  const servicos = useMemo(
-    () => (isImpersonating ? impersonateData?.servicos || [] : servicosNormal),
-    [isImpersonating, impersonateData?.servicos, servicosNormal]
-  );
-  const agendamentos = useMemo(
-    () => (isImpersonating ? impersonateData?.agendamentos || [] : agendamentosNormal),
-    [isImpersonating, impersonateData?.agendamentos, agendamentosNormal]
-  );
+  const barbeiros = useMemo(() => (isImpersonating ? impersonateData?.barbeiros || [] : barbeirosNormal), [isImpersonating, impersonateData?.barbeiros, barbeirosNormal]);
+  const servicos = useMemo(() => (isImpersonating ? impersonateData?.servicos || [] : servicosNormal), [isImpersonating, impersonateData?.servicos, servicosNormal]);
+  const agendamentos = useMemo(() => (isImpersonating ? impersonateData?.agendamentos || [] : agendamentosNormal), [isImpersonating, impersonateData?.agendamentos, agendamentosNormal]);
 
   const carregandoDependentes = !!slug && (barbeirosQuery.isLoading || servicosQuery.isLoading || agendamentosQuery.isLoading);
   const buscandoDependentes = !!slug && (barbeirosQuery.isFetching || servicosQuery.isFetching || agendamentosQuery.isFetching);
@@ -287,29 +266,26 @@ export default function Index() {
   const mutacoesAgendamento = useMutacoesAgendamento();
 
   const refetchDadosPrincipais = useCallback(async () => {
-    if (!isImpersonating) {
-      await refetchBarbearia();
-    }
-    if (slug && !isImpersonating) {
-      await Promise.all([refetchBarbeiros(), refetchServicos(), refetchAgendamentos()]);
-    }
+    if (!isImpersonating) await refetchBarbearia();
+    if (slug && !isImpersonating) await Promise.all([refetchBarbeiros(), refetchServicos(), refetchAgendamentos()]);
   }, [slug, isImpersonating, refetchBarbearia, refetchBarbeiros, refetchServicos, refetchAgendamentos]);
 
   const servicos_find = useCallback((id: string) => servicos.find((s) => String(s.id) === String(id)), [servicos]);
 
-  // 🔥 O ERRO 1 ESTAVA AQUI: Blindado com substring(0,10)
   const horariosOcupados = useCallback(
     (data: string, bId: string) =>
       agendamentos
-        .filter((ag: Agendamento) => String(ag.data).substring(0, 10) === data && String(ag.barbeiro_id) === String(bId) && ag.status !== "Cancelado")
+        .filter((ag: Agendamento) => {
+          if (!ag.data) return false;
+          const dataBanco = String(ag.data).split('T')[0];
+          return dataBanco === data && String(ag.barbeiro_id) === String(bId) && ag.status !== "Cancelado";
+        })
         .map((ag: Agendamento) => ag.horario),
     [agendamentos]
   );
 
   const tituloErroCarregamento = useMemo(() => {
-    const msg = erroBarbeariaSafe
-      ? mensagemDeErro(erroDetalheBarbeariaSafe)
-      : mensagemDeErro(barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error);
+    const msg = erroBarbeariaSafe ? mensagemDeErro(erroDetalheBarbeariaSafe) : mensagemDeErro(barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error);
     return msg.includes("Nenhuma barbearia") ? "Nenhuma barbearia vinculada" : "Erro de conexão";
   }, [erroBarbeariaSafe, erroDetalheBarbeariaSafe, barbeirosQuery.error, servicosQuery.error, agendamentosQuery.error]);
 
@@ -319,34 +295,29 @@ export default function Index() {
   }, [erroBarbeariaSafe, erroDetalheBarbeariaSafe, barbeirosQuery.error, servicosQuery.error, agendamentosQuery.error]);
 
   const visibleTabs = useMemo(() => {
-    if (isImpersonating) {
-      return [
-        { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
-        { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard },
-      ];
-    }
+    if (isImpersonating) return [{ id: "barbeiro" as const, label: "Agenda", icon: Scissors }, { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard }];
     return userRole === "barbeiro"
-      ? [
-          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
-          { id: "carteira" as const, label: "Carteira", icon: Wallet },
-        ]
-      : [
-          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
-          { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard },
-        ];
+      ? [{ id: "barbeiro" as const, label: "Agenda", icon: Scissors }, { id: "carteira" as const, label: "Carteira", icon: Wallet }]
+      : [{ id: "barbeiro" as const, label: "Agenda", icon: Scissors }, { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard }];
   }, [userRole, isImpersonating]);
 
-  // 🔥 O ERRO 2 ESTAVA AQUI NAS STATS: Tudo blindado com substring(0,10)
+  // 🔥 O BENDITO FILTRO BLINDADO AQUI
   const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
     
-    // Agora aceita a data mesmo vindo como T00:00:00 do banco
-    const noDia = agendamentos.filter((ag: Agendamento) => String(ag.data).substring(0, 10) === dataFiltro);
+    // Filtra independente do fuso (Corta a string no T)
+    const noDia = agendamentos.filter((ag: Agendamento) => {
+      if (!ag.data) return false;
+      const dataBanco = String(ag.data).split('T')[0];
+      const dataBuscada = String(dataFiltro).split('T')[0];
+      return dataBanco === dataBuscada;
+    });
     
     const idParaFiltrar = isDono ? barbeiroSelecionadoId : user?.id;
 
-    const agParaExibir = idParaFiltrar
+    // 🔥 O FDP DO ERRO: Se for "", null, ou "all", ELE IGNORA O FILTRO!
+    const agParaExibir = (idParaFiltrar && idParaFiltrar !== "" && idParaFiltrar !== "all")
       ? noDia.filter((ag: Agendamento) => String(ag.barbeiro_id) === String(idParaFiltrar))
       : noDia;
 
@@ -355,7 +326,10 @@ export default function Index() {
       .reduce((sum, ag) => sum + Number(servicos_find(ag.servico_id)?.preco || 0), 0);
 
     const fatMensal = agendamentos
-      .filter((ag: Agendamento) => String(ag.data).substring(0, 10).startsWith(prefixoMes) && ag.status === "Finalizado")
+      .filter((ag: Agendamento) => {
+        if (!ag.data) return false;
+        return String(ag.data).split('T')[0].startsWith(prefixoMes) && ag.status === "Finalizado";
+      })
       .reduce((sum, ag) => sum + Number(servicos_find(ag.servico_id)?.preco || 0), 0);
 
     const comissoesHoje = noDia
@@ -363,29 +337,28 @@ export default function Index() {
       .reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0);
 
     const agMesMeuBarbeiro = agendamentos.filter(
-      (ag: Agendamento) =>
-        String(ag.barbeiro_id) === String(user?.id) && 
-        String(ag.data).substring(0, 10).startsWith(prefixoMes) && 
-        ag.status === "Finalizado"
+      (ag: Agendamento) => {
+        if (!ag.data) return false;
+        return String(ag.barbeiro_id) === String(user?.id) && String(ag.data).split('T')[0].startsWith(prefixoMes) && ag.status === "Finalizado";
+      }
     );
 
     return {
       faturamentoHoje: fatHoje,
       faturamentoMensal: fatMensal,
       comissoesAPagarHoje: comissoesHoje,
-      agendamentosParaExibir: agParaExibir,
+      agendamentosParaExibir: agParaExibir, // Agora chega na tela perfeitamente!
       agMesBarbeiro: agMesMeuBarbeiro,
     };
   }, [agendamentos, servicos_find, dataFiltro, isDono, user?.id, barbeiroSelecionadoId]);
 
-  // 🔥 O ERRO 3 ESTAVA AQUI: Filtro do barbeiro
   const comissaoPorBarbeiroHoje = useMemo(() => {
     return barbeiros.map((b: Barbeiro) => {
       const cortes = agendamentos.filter(
-        (ag: Agendamento) =>
-          String(ag.data).substring(0, 10) === dataFiltro && 
-          String(ag.barbeiro_id) === String(b.id) && 
-          ag.status === "Finalizado"
+        (ag: Agendamento) => {
+          if (!ag.data) return false;
+          return String(ag.data).split('T')[0] === String(dataFiltro).split('T')[0] && String(ag.barbeiro_id) === String(b.id) && ag.status === "Finalizado";
+        }
       );
       return {
         barbeiro: b,
@@ -530,9 +503,6 @@ export default function Index() {
     [mutacoesServico, slug, withLoadingToast]
   );
 
-  // ==========================================
-  // CALLBACKS DE PAGAMENTO
-  // ==========================================
   const handleGerarPix = useCallback(async () => {
     if (!user?.id) return;
     setPixGerado(null);
@@ -617,9 +587,6 @@ export default function Index() {
     }
   }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
 
-  // ==========================================
-  // VERIFICAÇÃO DE BLOQUEIO
-  // ==========================================
   const hojeDate = new Date();
   let dataVenc: Date | null = null;
   const vencRaw = (barbearia as any)?.data_vencimento; 
@@ -632,9 +599,6 @@ export default function Index() {
   const vencida = dataVenc ? dataVenc < hojeDate : false;
   const lojaBloqueada = donoData.isLojaAtiva === false || vencida || donoData.fasePagamento === 4;
 
-  // ==========================================
-  // RENDERIZAÇÃO
-  // ==========================================
   if (userRole === "ceo" && !isImpersonating) {
     return (
       <div className="dark min-h-screen bg-black text-white flex flex-col">
@@ -643,23 +607,13 @@ export default function Index() {
             <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-8 sm:h-9 w-auto" />
             <h1 className="font-bold text-base sm:text-lg tracking-tight italic text-white">CAJ TECH HQ</h1>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSignOut}
-            disabled={isSigningOut}
-            className="text-white/80 hover:text-white"
-          >
+          <Button variant="ghost" size="icon" onClick={handleSignOut} disabled={isSigningOut} className="text-white/80 hover:text-white">
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
         <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-6">
           <Suspense fallback={<IndexPageSkeleton tab="dono" />}>
-            <VisaoCEO
-              totalLojas={dadosCEO.lojas}
-              faturamentoTotal={dadosCEO.faturamento}
-              vendedores={dadosCEO.vendedores}
-            />
+            <VisaoCEO totalLojas={dadosCEO.lojas} faturamentoTotal={dadosCEO.faturamento} vendedores={dadosCEO.vendedores} />
           </Suspense>
         </main>
         <div className="p-6 sm:p-8 text-center bg-black mt-auto">
@@ -677,13 +631,7 @@ export default function Index() {
             <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-8 sm:h-9 w-auto" />
             <h1 className="font-bold text-base sm:text-lg tracking-tight italic text-white">CAJ TECH</h1>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSignOut}
-            disabled={isSigningOut}
-            className="text-white/80 hover:text-white"
-          >
+          <Button variant="ghost" size="icon" onClick={handleSignOut} disabled={isSigningOut} className="text-white/80 hover:text-white">
             <LogOut className="h-5 w-5" />
           </Button>
         </header>
@@ -702,25 +650,13 @@ export default function Index() {
     return <IndexPageSkeleton tab={skeletonTab} aria-busy="true" />;
   }
 
-  if (isImpersonating && loadingImpersonate) {
-    return <IndexPageSkeleton tab="dono" />;
-  }
+  if (isImpersonating && loadingImpersonate) return <IndexPageSkeleton tab="dono" />;
 
   if (barbeariaQueryEnabled && temErroDados) {
-    return (
-      <DataLoadError
-        title={tituloErroCarregamento}
-        message={mensagemErroCarregamento}
-        onRetry={() => void refetchDadosPrincipais()}
-        onSignOut={handleSignOut}
-      />
-    );
+    return <DataLoadError title={tituloErroCarregamento} message={mensagemErroCarregamento} onRetry={() => void refetchDadosPrincipais()} onSignOut={handleSignOut} />;
   }
 
-  const heroImageUrl =
-    ((isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo) &&
-      String(isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo).trim()) ||
-    APP_HERO_FALLBACK_BG;
+  const heroImageUrl = ((isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo) && String(isImpersonating ? impersonateData?.barbearia?.url_fundo : barbearia?.url_fundo).trim()) || APP_HERO_FALLBACK_BG;
   const marca = (isImpersonating ? impersonateData?.barbearia?.cor_primaria : barbearia?.cor_primaria)?.trim() || "#D4AF37";
 
   const tabPanelVariants = {
@@ -740,61 +676,29 @@ export default function Index() {
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <motion.div whileTap={{ scale: 0.95 }}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
-                onClick={() => {
-                  toast.promise(refetchDadosPrincipais(), {
-                    loading: "Atualizando dados...",
-                    success: "Dados atualizados!",
-                    error: "Erro ao atualizar.",
-                  });
-                }}
-              >
+              <Button variant="ghost" size="icon" className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10" onClick={() => toast.promise(refetchDadosPrincipais(), { loading: "Atualizando dados...", success: "Dados atualizados!", error: "Erro ao atualizar." })}>
                 <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </motion.div>
             <motion.div whileTap={{ scale: 0.95 }}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
-                onClick={handleSignOut}
-                disabled={isSigningOut}
-              >
+              <Button variant="ghost" size="icon" className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10" onClick={handleSignOut} disabled={isSigningOut}>
                 <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </motion.div>
           </div>
         </header>
 
-        <ImpersonationBanner
-          isImpersonating={isImpersonating}
-          impersonateName={impersonateName}
-          onExit={sairImpersonacao}
-        />
+        <ImpersonationBanner isImpersonating={isImpersonating} impersonateName={impersonateName} onExit={sairImpersonacao} />
 
         {tab !== "carteira" && (
           <div className="border-b border-white/[0.08] px-2 sm:px-4 py-2 flex items-center gap-2 sticky top-0 z-10 w-full shrink-0 bg-black/80 backdrop-blur-xl overflow-x-auto hide-scrollbar">
             <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
               <Calendar className="h-4 w-4 text-zinc-400" />
-              <input
-                type="date"
-                value={dataFiltro}
-                onChange={(e) => setDataFiltro(e.target.value)}
-                className="bg-transparent text-[11px] sm:text-sm outline-none text-white font-medium w-[115px] sm:w-auto"
-                style={{ colorScheme: 'dark' }}
-              />
+              <input type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)} className="bg-transparent text-[11px] sm:text-sm outline-none text-white font-medium w-[115px] sm:w-auto" style={{ colorScheme: 'dark' }} />
             </div>
 
             <motion.div whileTap={{ scale: 0.95 }}>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="rounded-lg px-3 sm:px-4 h-9 sm:h-10 text-[9px] sm:text-[10px] font-bold uppercase border-white/[0.08] bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1] hover:text-white shrink-0 cursor-pointer"
-                onClick={() => setDataFiltro(getLocalDate())}
-              >
+              <Button variant="secondary" size="sm" className="rounded-lg px-3 sm:px-4 h-9 sm:h-10 text-[9px] sm:text-[10px] font-bold uppercase border-white/[0.08] bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1] hover:text-white shrink-0 cursor-pointer" onClick={() => setDataFiltro(getLocalDate())}>
                 Hoje
               </Button>
             </motion.div>
@@ -802,18 +706,9 @@ export default function Index() {
             {isDono && barbeiros.length > 0 && (
               <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
                 <User className="h-4 w-4 text-zinc-400" />
-                <select
-                  value={barbeiroSelecionadoId}
-                  onChange={(e) => setBarbeiroSelecionadoId(e.target.value)}
-                  className="bg-transparent text-[11px] sm:text-sm outline-none text-zinc-300 min-w-[100px] sm:min-w-[130px] appearance-none pr-5 font-medium"
-                  style={{ colorScheme: 'dark' }}
-                >
+                <select value={barbeiroSelecionadoId} onChange={(e) => setBarbeiroSelecionadoId(e.target.value)} className="bg-transparent text-[11px] sm:text-sm outline-none text-zinc-300 min-w-[100px] sm:min-w-[130px] appearance-none pr-5 font-medium" style={{ colorScheme: 'dark' }}>
                   <option value="" className="bg-zinc-900 text-zinc-300">Todos</option>
-                  {barbeiros.map((b) => (
-                    <option key={b.id} value={b.id} className="bg-zinc-900 text-zinc-300">
-                      {b.nome}
-                    </option>
-                  ))}
+                  {barbeiros.map((b) => <option key={b.id} value={b.id} className="bg-zinc-900 text-zinc-300">{b.nome}</option>)}
                 </select>
               </div>
             )}
@@ -822,35 +717,25 @@ export default function Index() {
           </div>
         )}
 
+        {/* MENSAGEM DE DEBUG PRA VOCÊ VER SE O BANCO PUXOU */}
+        <div className="w-full bg-emerald-600/20 text-emerald-400 font-black text-[9px] text-center py-1 uppercase tracking-widest border-b border-emerald-600/30">
+          DEBUG: {agendamentos.length} TOTAL NO BANCO | {stats.agendamentosParaExibir.length} NA TELA AGORA
+        </div>
+
         <main className="flex-1 p-3 sm:p-4 md:p-6 pb-28 max-w-7xl mx-auto w-full flex flex-col min-h-0">
           {lojaBloqueada ? (
             <div className="flex flex-col items-center justify-center flex-1 h-full text-center px-4">
               <div className="bg-zinc-900 border border-red-500/30 p-8 rounded-2xl max-w-md w-full shadow-2xl">
                 <Wallet className="h-16 w-16 text-red-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-black text-white mb-2 uppercase italic tracking-tight">Assinatura Vencida</h2>
-                <p className="text-zinc-400 text-sm mb-6">
-                  O acesso ao painel da barbearia foi suspenso. Para continuar utilizando a plataforma e liberar o acesso aos seus barbeiros, renove sua assinatura.
-                </p>
-                <Button 
-                  onClick={handleRenovacaoClick}
-                  className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold h-12 uppercase tracking-tight hover:brightness-110"
-                >
+                <Button onClick={handleRenovacaoClick} className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold h-12 uppercase tracking-tight hover:brightness-110">
                   Renovar Assinatura Agora
                 </Button>
               </div>
             </div>
           ) : (
             <AnimatePresence mode="wait" initial={false} custom={tabSlideDir}>
-              <motion.div
-                key={tab}
-                custom={tabSlideDir}
-                variants={tabPanelVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ type: "spring", stiffness: 400, damping: 36 }}
-                className="flex-1 w-full"
-              >
+              <motion.div key={tab} custom={tabSlideDir} variants={tabPanelVariants} initial="enter" animate="center" exit="exit" transition={{ type: "spring", stiffness: 400, damping: 36 }} className="flex-1 w-full">
                 {tab === "barbeiro" && (
                   <VisaoBarbeiro
                     barbeiros={barbeiros}
@@ -882,20 +767,11 @@ export default function Index() {
                     comissaoTotalMes={stats.agMesBarbeiro.reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
                     totalCortesMes={stats.agMesBarbeiro.length}
                     nomeBarbeiro={barbeiros.find((b) => String(b.id) === String(user?.id))?.nome || "Barbeiro"}
-                    comissaoHoje={stats.agendamentosParaExibir
-                      .filter((ag) => ag.status === "Finalizado" && String(ag.barbeiro_id) === String(user?.id))
-                      .reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
+                    comissaoHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && String(ag.barbeiro_id) === String(user?.id)).reduce((sum, ag) => sum + Number(ag.comissao_ganha || 0), 0)}
                     cortesHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && String(ag.barbeiro_id) === String(user?.id)).length}
                     metaDiaria={barbeiros.find((b) => String(b.id) === String(user?.id))?.meta_diaria || 150}
                     clientesVIP={clientesVIP.length}
-                    onUpdateMeta={(novaMeta: number) => {
-                      if (user?.id && slug) {
-                        withLoadingToast(
-                          mutacoesBarbeiro.atualizarMetaBarbeiro.mutateAsync({ id: user.id, meta: novaMeta, slug }),
-                          { loading: "Salvando meta...", success: "Meta atualizada!", error: "Erro ao salvar." }
-                        );
-                      }
-                    }}
+                    onUpdateMeta={(novaMeta: number) => { if (user?.id && slug) { withLoadingToast(mutacoesBarbeiro.atualizarMetaBarbeiro.mutateAsync({ id: user.id, meta: novaMeta, slug }), { loading: "Salvando...", success: "Salvo!", error: "Erro." }); } }}
                   />
                 )}
 
@@ -923,10 +799,7 @@ export default function Index() {
                         onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
                         onAddServico={isImpersonating ? undefined : handleAddServico}
                         onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
-                        onAddDespesa={isImpersonating ? undefined : (despesa: unknown) => {
-                          console.log("Despesa a salvar:", despesa);
-                          toast.info("Conecte a tabela 'despesas' no seu Supabase e no arquivo de hooks para salvar!");
-                        }}
+                        onAddDespesa={isImpersonating ? undefined : () => {}}
                       />
                     </>
                   </Suspense>
@@ -939,19 +812,7 @@ export default function Index() {
         {!lojaBloqueada && (
           <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/40 backdrop-blur-xl flex justify-around p-2 shadow-2xl z-20 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             {visibleTabs.map((t) => (
-              <motion.button
-                key={t.id}
-                type="button"
-                whileTap={{ scale: 0.95 }}
-                onClick={() => goTab(t.id)}
-                className={cn(
-                  "flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl",
-                  tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45"
-                )}
-                style={tab === t.id ? { color: marca } : undefined}
-                aria-label={t.label}
-                role="tab"
-              >
+              <motion.button key={t.id} whileTap={{ scale: 0.95 }} onClick={() => goTab(t.id)} className={cn("flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl", tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45")} style={tab === t.id ? { color: marca } : undefined} aria-label={t.label} role="tab">
                 <t.icon className="h-6 w-6 sm:h-7 sm:w-7" />
                 <span className="text-[9px] sm:text-[11px] mt-1 uppercase tracking-tighter">{t.label}</span>
               </motion.button>
@@ -960,16 +821,7 @@ export default function Index() {
         )}
         <TermosDeUso />
 
-        <DonoModalRenovacao
-          open={modalRenovacaoAberto}
-          onClose={() => setModalRenovacaoAberto(false)}
-          planoAtual={planoPagamento}
-          pixGerado={pixGerado}
-          tempoPix={tempoPix}
-          isGerandoPix={isGerandoPix}
-          onGerarPix={handleGerarPix}
-          onCopiarPix={handleCopiarPix}
-        />
+        <DonoModalRenovacao open={modalRenovacaoAberto} onClose={() => setModalRenovacaoAberto(false)} planoAtual={planoPagamento} pixGerado={pixGerado} tempoPix={tempoPix} isGerandoPix={isGerandoPix} onGerarPix={handleGerarPix} onCopiarPix={handleCopiarPix} />
       </div>
     </div>
   );
