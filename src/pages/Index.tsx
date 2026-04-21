@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useMemo, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Scissors, LayoutDashboard, LogOut, Wallet, Calendar, RefreshCw, User, Loader2, Eye, X } from "lucide-react";
+import { Scissors, LayoutDashboard, LogOut, Wallet, RefreshCw, Eye, X } from "lucide-react";
 import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackdrop";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,8 +13,14 @@ import { TermosDeUso } from "@/components/TermosDeUso";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  useBarbearia, useBarbeiros, useServicos, useAgendamentos,
-  useMutacoesBarbeiro, useMutacoesServico, useMutacoesAgendamento, useClientesVIP
+  useBarbearia, 
+  useBarbeiros, 
+  useServicos, 
+  useAgendamentos,
+  useMutacoesBarbeiro, 
+  useMutacoesServico, 
+  useMutacoesAgendamento, 
+  useClientesVIP
 } from "@/hooks/useQueries";
 import { useDonoData } from "@/hooks/useDonoData";
 import type { AgendamentoInsert } from "@/types/queries";
@@ -27,7 +33,7 @@ const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor").then(m => 
 const VisaoCEO = lazy(() => import("@/components/VisaoCEO").then(m => ({ default: m.VisaoCEO })));
 
 // ==========================================
-// TIPAGENS (atualizadas)
+// TIPAGENS
 // ==========================================
 interface Barbeiro {
   id: string;
@@ -261,9 +267,20 @@ export default function Index() {
   const { data: agendamentosNormal = [], refetch: refetchAgendamentos } = agendamentosQuery;
   const { data: clientesVIP = [] } = clientesVIPQuery;
 
-  const barbeiros = useMemo(() => (isImpersonating ? impersonateData?.barbeiros || [] : barbeirosNormal), [isImpersonating, impersonateData?.barbeiros, barbeirosNormal]);
-  const servicos = useMemo(() => (isImpersonating ? impersonateData?.servicos || [] : servicosNormal), [isImpersonating, impersonateData?.servicos, servicosNormal]);
-  const agendamentos = useMemo(() => (isImpersonating ? impersonateData?.agendamentos || [] : agendamentosNormal), [isImpersonating, impersonateData?.agendamentos, agendamentosNormal]);
+  const barbeiros = useMemo(
+    () => (isImpersonating ? impersonateData?.barbeiros || [] : barbeirosNormal),
+    [isImpersonating, impersonateData?.barbeiros, barbeirosNormal]
+  );
+  
+  const servicos = useMemo(
+    () => (isImpersonating ? impersonateData?.servicos || [] : servicosNormal),
+    [isImpersonating, impersonateData?.servicos, servicosNormal]
+  );
+  
+  const agendamentos = useMemo(
+    () => (isImpersonating ? impersonateData?.agendamentos || [] : agendamentosNormal),
+    [isImpersonating, impersonateData?.agendamentos, agendamentosNormal]
+  );
 
   const carregandoDependentes = !!slug && (barbeirosQuery.isLoading || servicosQuery.isLoading || agendamentosQuery.isLoading);
   const buscandoDependentes = !!slug && (barbeirosQuery.isFetching || servicosQuery.isFetching || agendamentosQuery.isFetching);
@@ -277,8 +294,12 @@ export default function Index() {
   const mutacoesAgendamento = useMutacoesAgendamento();
 
   const refetchDadosPrincipais = useCallback(async () => {
-    if (!isImpersonating) await refetchBarbearia();
-    if (slug && !isImpersonating) await Promise.all([refetchBarbeiros(), refetchServicos(), refetchAgendamentos()]);
+    if (!isImpersonating) {
+      await refetchBarbearia();
+    }
+    if (slug && !isImpersonating) {
+      await Promise.all([refetchBarbeiros(), refetchServicos(), refetchAgendamentos()]);
+    }
   }, [slug, isImpersonating, refetchBarbearia, refetchBarbeiros, refetchServicos, refetchAgendamentos]);
 
   const servicos_find = useCallback((id: string) => servicos.find((s) => String(s.id) === String(id)), [servicos]);
@@ -295,7 +316,9 @@ export default function Index() {
   );
 
   const tituloErroCarregamento = useMemo(() => {
-    const msg = erroBarbeariaSafe ? mensagemDeErro(erroDetalheBarbeariaSafe) : mensagemDeErro(barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error);
+    const msg = erroBarbeariaSafe
+      ? mensagemDeErro(erroDetalheBarbeariaSafe)
+      : mensagemDeErro(barbeirosQuery.error ?? servicosQuery.error ?? agendamentosQuery.error);
     return msg.includes("Nenhuma barbearia") ? "Nenhuma barbearia vinculada" : "Erro de conexão";
   }, [erroBarbeariaSafe, erroDetalheBarbeariaSafe, barbeirosQuery.error, servicosQuery.error, agendamentosQuery.error]);
 
@@ -305,20 +328,30 @@ export default function Index() {
   }, [erroBarbeariaSafe, erroDetalheBarbeariaSafe, barbeirosQuery.error, servicosQuery.error, agendamentosQuery.error]);
 
   const visibleTabs = useMemo(() => {
-    if (isImpersonating) return [{ id: "barbeiro" as const, label: "Agenda", icon: Scissors }, { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard }];
+    if (isImpersonating) {
+      return [
+        { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
+        { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard },
+      ];
+    }
     return userRole === "barbeiro"
-      ? [{ id: "barbeiro" as const, label: "Agenda", icon: Scissors }, { id: "carteira" as const, label: "Carteira", icon: Wallet }]
-      : [{ id: "barbeiro" as const, label: "Agenda", icon: Scissors }, { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard }];
+      ? [
+          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
+          { id: "carteira" as const, label: "Carteira", icon: Wallet },
+        ]
+      : [
+          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
+          { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard },
+        ];
   }, [userRole, isImpersonating]);
 
   // ==========================================
-  // O MOTOR CONSERTADO
+  // O MOTOR CONSERTADO: Filtro Blindado
   // ==========================================
   const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
     
-    // Normalização bruta de datas (ignora o T00:00:00)
     const noDia = agendamentos.filter((ag: Agendamento) => {
       if (!ag.data) return false;
       return String(ag.data).substring(0, 10) === String(dataFiltro).substring(0, 10);
@@ -326,7 +359,6 @@ export default function Index() {
     
     const idParaFiltrar = isDono ? barbeiroSelecionadoId : user?.id;
 
-    // Filtra barbeiro ("all", vazio, ou nulo mostram todos)
     const agParaExibir = (idParaFiltrar && idParaFiltrar !== "" && idParaFiltrar !== "all")
       ? noDia.filter((ag: Agendamento) => String(ag.barbeiro_id) === String(idParaFiltrar))
       : noDia;
@@ -349,7 +381,9 @@ export default function Index() {
     const agMesMeuBarbeiro = agendamentos.filter(
       (ag: Agendamento) => {
         if (!ag.data) return false;
-        return String(ag.barbeiro_id) === String(user?.id) && String(ag.data).substring(0, 10).startsWith(prefixoMes) && ag.status === "Finalizado";
+        return String(ag.barbeiro_id) === String(user?.id) && 
+               String(ag.data).substring(0, 10).startsWith(prefixoMes) && 
+               ag.status === "Finalizado";
       }
     );
 
@@ -367,7 +401,9 @@ export default function Index() {
       const cortes = agendamentos.filter(
         (ag: Agendamento) => {
           if (!ag.data) return false;
-          return String(ag.data).substring(0, 10) === String(dataFiltro).substring(0, 10) && String(ag.barbeiro_id) === String(b.id) && ag.status === "Finalizado";
+          return String(ag.data).substring(0, 10) === String(dataFiltro).substring(0, 10) && 
+                 String(ag.barbeiro_id) === String(b.id) && 
+                 ag.status === "Finalizado";
         }
       );
       return {
@@ -404,6 +440,7 @@ export default function Index() {
         const servico = servicos_find(agAtual?.servico_id || "");
         const barbeiro = barbeiros.find((b) => String(b.id) === String(agAtual?.barbeiro_id));
         const valorComissao = (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
+        
         return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({
           id,
           status: "Finalizado",
@@ -588,15 +625,17 @@ export default function Index() {
     }
   }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
 
-  const hojeDate = new Date();
-  let dataVenc: Date | null = null;
+  const hojeDate = new Date(); 
+  let dataVenc: Date | null = null; 
   const vencRaw = (barbearia as any)?.data_vencimento; 
+  
   if (vencRaw) {
     const parsed = new Date(String(vencRaw));
     if (!isNaN(parsed.getTime())) {
       dataVenc = parsed;
     }
   }
+  
   const vencida = dataVenc ? dataVenc < hojeDate : false;
   const lojaBloqueada = donoData.isLojaAtiva === false || vencida || donoData.fasePagamento === 4;
 
@@ -651,7 +690,9 @@ export default function Index() {
     return <IndexPageSkeleton tab={skeletonTab} aria-busy="true" />;
   }
 
-  if (isImpersonating && loadingImpersonate) return <IndexPageSkeleton tab="dono" />;
+  if (isImpersonating && loadingImpersonate) {
+    return <IndexPageSkeleton tab="dono" />;
+  }
 
   if (barbeariaQueryEnabled && temErroDados) {
     return <DataLoadError title={tituloErroCarregamento} message={mensagemErroCarregamento} onRetry={() => void refetchDadosPrincipais()} onSignOut={handleSignOut} />;
@@ -672,12 +713,11 @@ export default function Index() {
       <div className="relative z-10 flex flex-col min-h-screen">
         <header className="p-3 sm:p-4 border-b border-white/[0.08] flex justify-between items-center bg-black/35 backdrop-blur-xl shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
-            <img src="/safeimagekit-resized-logoempresaCAJsemfundo.png" alt="Logo" className="h-8 sm:h-9 w-auto" />
             <h1 className="font-bold text-base sm:text-lg tracking-tight italic text-white">CAJ TECH</h1>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <motion.div whileTap={{ scale: 0.95 }}>
-              <Button variant="ghost" size="icon" className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10" onClick={() => toast.promise(refetchDadosPrincipais(), { loading: "Atualizando dados...", success: "Dados atualizados!", error: "Erro ao atualizar." })}>
+              <Button variant="ghost" size="icon" className="text-white/80 hover:text-white h-9 w-9 sm:h-10 sm:w-10" onClick={() => toast.promise(refetchDadosPrincipais(), { loading: "Atualizando...", success: "Atualizados!", error: "Erro." })}>
                 <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </motion.div>
@@ -691,32 +731,9 @@ export default function Index() {
 
         <ImpersonationBanner isImpersonating={isImpersonating} impersonateName={impersonateName} onExit={sairImpersonacao} />
 
-        {tab !== "carteira" && (
-          <div className="border-b border-white/[0.08] px-2 sm:px-4 py-2 flex items-center gap-2 sticky top-0 z-10 w-full shrink-0 bg-black/80 backdrop-blur-xl overflow-x-auto hide-scrollbar">
-            <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
-              <Calendar className="h-4 w-4 text-zinc-400" />
-              <input type="date" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value)} className="bg-transparent text-[11px] sm:text-sm outline-none text-white font-medium w-[115px] sm:w-auto" style={{ colorScheme: 'dark' }} />
-            </div>
-
-            <motion.div whileTap={{ scale: 0.95 }}>
-              <Button variant="secondary" size="sm" className="rounded-lg px-3 sm:px-4 h-9 sm:h-10 text-[9px] sm:text-[10px] font-bold uppercase border-white/[0.08] bg-white/[0.06] text-zinc-300 hover:bg-white/[0.1] hover:text-white shrink-0 cursor-pointer" onClick={() => setDataFiltro(getLocalDate())}>
-                Hoje
-              </Button>
-            </motion.div>
-
-            {isDono && barbeiros.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-zinc-800/70 rounded-lg border border-white/[0.08] px-2.5 py-2 backdrop-blur-sm shrink-0">
-                <User className="h-4 w-4 text-zinc-400" />
-                <select value={barbeiroSelecionadoId} onChange={(e) => setBarbeiroSelecionadoId(e.target.value)} className="bg-transparent text-[11px] sm:text-sm outline-none text-zinc-300 min-w-[100px] sm:min-w-[130px] appearance-none pr-5 font-medium" style={{ colorScheme: 'dark' }}>
-                  <option value="all" className="bg-zinc-900 text-zinc-300">Todos</option>
-                  {barbeiros.map((b) => <option key={b.id} value={b.id} className="bg-zinc-900 text-zinc-300">{b.nome}</option>)}
-                </select>
-              </div>
-            )}
-
-            {agendamentosQuery.isFetching && <Loader2 className="h-4 w-4 animate-spin text-zinc-500 shrink-0" />}
-          </div>
-        )}
+        {/* O AVISO ESTÁ AQUI: O filtro de cima com os calendários duplos 
+          foi totalmente REMOVIDO para a tela ficar limpa! 
+        */}
 
         <main className="flex-1 p-3 sm:p-4 md:p-6 pb-28 max-w-7xl mx-auto w-full flex flex-col min-h-0">
           {lojaBloqueada ? (
@@ -740,6 +757,8 @@ export default function Index() {
                     agendamentos={stats.agendamentosParaExibir}
                     barbeiroSelecionadoId={barbeiroSelecionadoId}
                     setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
+                    dataFiltro={dataFiltro}
+                    setDataFiltro={setDataFiltro}
                     horariosOcupados={horariosOcupados}
                     servicos_find={servicos_find}
                     isDono={isDono || false}
@@ -768,7 +787,11 @@ export default function Index() {
                     cortesHoje={stats.agendamentosParaExibir.filter((ag) => ag.status === "Finalizado" && String(ag.barbeiro_id) === String(user?.id)).length}
                     metaDiaria={barbeiros.find((b) => String(b.id) === String(user?.id))?.meta_diaria || 150}
                     clientesVIP={clientesVIP.length}
-                    onUpdateMeta={(novaMeta: number) => { if (user?.id && slug) { withLoadingToast(mutacoesBarbeiro.atualizarMetaBarbeiro.mutateAsync({ id: user.id, meta: novaMeta, slug }), { loading: "Salvando...", success: "Salvo!", error: "Erro." }); } }}
+                    onUpdateMeta={(novaMeta: number) => {
+                      if (user?.id && slug) {
+                        withLoadingToast(mutacoesBarbeiro.atualizarMetaBarbeiro.mutateAsync({ id: user.id, meta: novaMeta, slug }), { loading: "Salvando...", success: "Salvo!", error: "Erro." });
+                      }
+                    }}
                   />
                 )}
 
@@ -809,7 +832,15 @@ export default function Index() {
         {!lojaBloqueada && (
           <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/40 backdrop-blur-xl flex justify-around p-2 shadow-2xl z-20 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             {visibleTabs.map((t) => (
-              <motion.button key={t.id} whileTap={{ scale: 0.95 }} onClick={() => goTab(t.id)} className={cn("flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl", tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45")} style={tab === t.id ? { color: marca } : undefined} aria-label={t.label} role="tab">
+              <motion.button
+                key={t.id}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => goTab(t.id)}
+                className={cn("flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl", tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45")}
+                style={tab === t.id ? { color: marca } : undefined}
+                aria-label={t.label}
+                role="tab"
+              >
                 <t.icon className="h-6 w-6 sm:h-7 sm:w-7" />
                 <span className="text-[9px] sm:text-[11px] mt-1 uppercase tracking-tighter">{t.label}</span>
               </motion.button>
@@ -818,7 +849,16 @@ export default function Index() {
         )}
         <TermosDeUso />
 
-        <DonoModalRenovacao open={modalRenovacaoAberto} onClose={() => setModalRenovacaoAberto(false)} planoAtual={planoPagamento} pixGerado={pixGerado} tempoPix={tempoPix} isGerandoPix={isGerandoPix} onGerarPix={handleGerarPix} onCopiarPix={handleCopiarPix} />
+        <DonoModalRenovacao
+          open={modalRenovacaoAberto}
+          onClose={() => setModalRenovacaoAberto(false)}
+          planoAtual={planoPagamento}
+          pixGerado={pixGerado}
+          tempoPix={tempoPix}
+          isGerandoPix={isGerandoPix}
+          onGerarPix={handleGerarPix}
+          onCopiarPix={handleCopiarPix}
+        />
       </div>
     </div>
   );

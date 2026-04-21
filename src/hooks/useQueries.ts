@@ -194,7 +194,7 @@ export function useMutacoesBarbeiro() {
       },
       onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] }); }
     }),
-    // 🔥 AQUI ESTÁ A FUNÇÃO QUE FALTAVA (RESOLVE O SEGUNDO ERRO)
+    // 👇 A FUNÇÃO QUE ESTAVA FALTANDO AQUI!
     atualizarMetaBarbeiro: useMutation({
       mutationFn: async ({ id, meta, slug }: BarbeiroMetaUpdate) => {
         const { error } = await supabase.from("barbeiros").update({ meta_diaria: meta }).eq("id", id);

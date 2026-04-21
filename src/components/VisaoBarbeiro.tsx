@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BarbeiroAcoes } from "./barbeiro/BarbeiroAcoes";
 import { AgendaBarbeiro } from "./barbeiro/AgendaBarbeiro";
 import { ModalNovoAgendamento } from "./barbeiro/ModalNovoAgendamento";
+import { CalendarDays } from "lucide-react";
 
 export interface VisaoBarbeiroProps {
   barbeiros: any[];
@@ -9,6 +10,8 @@ export interface VisaoBarbeiroProps {
   agendamentos: any[];
   barbeiroSelecionadoId: string;
   setBarbeiroSelecionadoId: (id: string) => void;
+  dataFiltro: string;
+  setDataFiltro: (data: string) => void;
   horariosOcupados: (data: string, bId: string) => string[];
   servicos_find: (id: string) => any;
   isDono: boolean;
@@ -33,6 +36,8 @@ export function VisaoBarbeiro({
   agendamentos,
   barbeiroSelecionadoId,
   setBarbeiroSelecionadoId,
+  dataFiltro,
+  setDataFiltro,
   horariosOcupados,
   servicos_find,
   isDono,
@@ -53,6 +58,22 @@ export function VisaoBarbeiro({
         ctaFg="#000000"
         onOpenModal={() => setIsModalOpen(true)}
       />
+
+      <div className="flex flex-col gap-2 bg-white/5 border border-white/10 p-4 rounded-2xl shadow-xl">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="h-6 w-6" style={{ color: corPrimaria }} />
+          <div className="flex flex-col flex-1">
+            <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">Data da Agenda</label>
+            <input
+              type="date"
+              value={dataFiltro}
+              onChange={(e) => setDataFiltro(e.target.value)}
+              className="bg-transparent border-0 text-lg font-black text-white outline-none p-0 cursor-pointer"
+              style={{ colorScheme: 'dark' }}
+            />
+          </div>
+        </div>
+      </div>
 
       <AgendaBarbeiro
         agendamentos={agendamentos}
