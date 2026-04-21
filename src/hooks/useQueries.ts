@@ -18,17 +18,18 @@ import type {
 } from "@/types/queries";
 import { getErrorMessage, logError } from "@/lib/error-handler";
 
-// Variáveis de ambiente (necessárias para criar contas de barbeiro sem deslogar o dono)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const getInicioDoMes = () => {
+// Função para buscar agendamentos retroativos (desde o mês passado para garantir histórico na tela)
+const getDataLimiteBusca = () => {
   const d = new Date();
+  d.setMonth(d.getMonth() - 1); // Busca desde o mês anterior para evitar bugs de virada de mês
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 };
 
 // ==========================================
-// 1. BARBEARIA (O coração do SaaS)
+// 1. BARBEARIA
 // ==========================================
 export function useBarbearia(options?: { enabled?: boolean }) {
   return useQuery({
@@ -37,13 +38,11 @@ export function useBarbearia(options?: { enabled?: boolean }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não logado");
 
-      // Checa se o usuário é o DONO de alguma barbearia
       const { data: lojaDono } = await supabase.from("barbearias").select("*").eq("dono_id", user.id).maybeSingle();
       
       let lojaData = lojaDono;
       const isDono = !!lojaDono;
 
-      // Se não for dono, checa se é BARBEIRO
       if (!isDono) {
         const { data: barbeiroRef } = await supabase.from("barbeiros").select("barbearia_slug").eq("id", user.id).maybeSingle();
         if (barbeiroRef) {
@@ -52,10 +51,10 @@ export function useBarbearia(options?: { enabled?: boolean }) {
         }
       }
 
-      if (!lojaData) throw new Error("Nenhuma barbearia vinculada a esta conta.");
+      if (!lojaData) throw new Error("Nenhuma barbearia vinculada.");
 
       return {
-        slug: lojaData.slug,
+        slug: lojaData.slug.toLowerCase(),
         isDono,
         userId: user.id,
         nome: lojaData.nome,
@@ -77,25 +76,30 @@ export function useBarbearia(options?: { enabled?: boolean }) {
 // ==========================================
 export function useAgendamentos(slug?: string) {
   const queryClient = useQueryClient();
+  const safeSlug = slug?.toLowerCase();
 
   useEffect(() => {
-    if (!slug) return;
-    const canal = supabase.channel(`agenda-${slug}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos', filter: `barbearia_slug=eq.${slug}` }, 
-      () => { queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] }); })
+    if (!safeSlug) return;
+    const canal = supabase.channel(`agenda-${safeSlug}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos', filter: `barbearia_slug=eq.${safeSlug}` }, 
+      () => { queryClient.invalidateQueries({ queryKey: ["agendamentos", safeSlug] }); })
       .subscribe();
     return () => { supabase.removeChannel(canal); };
-  }, [slug, queryClient]);
+  }, [safeSlug, queryClient]);
 
   return useQuery({
-    queryKey: ["agendamentos", slug],
+    queryKey: ["agendamentos", safeSlug],
     queryFn: async () => {
-      const { data, error } = await supabase.from("agendamentos").select("*")
-        .eq("barbearia_slug", slug).gte("data", getInicioDoMes()).order("horario");
+      if (!safeSlug) return [];
+      const { data, error } = await supabase.from("agendamentos")
+        .select("*")
+        .eq("barbearia_slug", safeSlug)
+        .gte("data", getDataLimiteBusca()) // Busca ampliada para garantir que agendamentos futuros apareçam
+        .order("horario");
       if (error) throw error;
       return data || [];
     },
-    enabled: !!slug,
+    enabled: !!safeSlug,
   });
 }
 
@@ -108,22 +112,18 @@ export function useMutacoesAgendamento() {
         slug: string;
         idempotencyKey: string;
       }) => {
-        // Verifica duplicidade usando a chave
         const { data: existing } = await supabase
           .from("agendamentos")
           .select("id")
           .eq("idempotency_key", idempotencyKey)
           .maybeSingle();
 
-        if (existing) {
-          return { alreadyExists: true };
-        }
+        if (existing) return { alreadyExists: true };
 
-        // Adiciona a chave e slug a cada agendamento
         const agendamentosComChave = ag.map(item => ({
           ...item,
           idempotency_key: idempotencyKey,
-          barbearia_slug: slug,
+          barbearia_slug: slug.toLowerCase(),
         }));
 
         const { error } = await supabase.from("agendamentos").insert(agendamentosComChave);
@@ -131,7 +131,7 @@ export function useMutacoesAgendamento() {
         return { success: true };
       },
       onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
+        queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug.toLowerCase()] });
         toast.success("Agendado com sucesso! ✂️");
       },
       onError: (err: SupabaseError) => {
@@ -145,30 +145,12 @@ export function useMutacoesAgendamento() {
         const { error } = await supabase.from("agendamentos").update({ status, comissao_ganha: comissaoGanha }).eq("id", id);
         if (error) throw error;
       },
-      // Cache Otimista para UX Instantânea
-      onMutate: async (novoStatus) => {
-        await queryClient.cancelQueries({ queryKey: ["agendamentos", novoStatus.slug] });
-        const anterior = queryClient.getQueryData(["agendamentos", novoStatus.slug]);
-        queryClient.setQueryData(
-          ["agendamentos", novoStatus.slug],
-          (velhos: AgendamentoInsert[] | undefined) =>
-            velhos?.map((ag) =>
-              (ag as unknown as { id: string }).id === novoStatus.id
-                ? { ...(ag as object), status: novoStatus.status }
-                : ag
-            )
-        );
-        return { anterior };
+      onSuccess: (_, vars) => {
+        queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug.toLowerCase()] });
       },
-      onError: (err: SupabaseError, vars: AgendamentoUpdate, context?: QueryCacheContext) => {
+      onError: (err: SupabaseError) => {
         logError(err, "atualizarStatusAgendamento");
-        queryClient.setQueryData(["agendamentos", vars.slug], (context as QueryCacheContext)?.anterior);
         toast.error(getErrorMessage(err));
-      },
-      onSettled: (_data, _error, vars) => {
-        if (vars?.slug) {
-          queryClient.invalidateQueries({ queryKey: ["agendamentos", vars.slug] });
-        }
       }
     })
   };
@@ -178,14 +160,16 @@ export function useMutacoesAgendamento() {
 // 3. BARBEIROS
 // ==========================================
 export function useBarbeiros(slug?: string) {
+  const safeSlug = slug?.toLowerCase();
   return useQuery({
-    queryKey: ["barbeiros", slug],
+    queryKey: ["barbeiros", safeSlug],
     queryFn: async () => {
-      const { data, error } = await supabase.from("barbeiros").select("*").eq("barbearia_slug", slug).order("nome");
+      if (!safeSlug) return [];
+      const { data, error } = await supabase.from("barbeiros").select("*").eq("barbearia_slug", safeSlug).order("nome");
       if (error) throw error;
       return data || [];
     },
-    enabled: !!slug,
+    enabled: !!safeSlug,
   });
 }
 
@@ -201,12 +185,12 @@ export function useMutacoesBarbeiro() {
         const userId = authData.user!.id;
         await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
         const { error: barbError } = await supabase.from("barbeiros").insert({
-          id: userId, nome, comissao_pct, barbearia_slug: slug, ativo: true, url_foto
+          id: userId, nome, comissao_pct, barbearia_slug: slug.toLowerCase(), ativo: true, url_foto
         });
         if (barbError) throw barbError;
       },
       onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
+        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] });
         toast.success("Barbeiro contratado com sucesso!");
       },
       onError: (err: SupabaseError) => {
@@ -220,18 +204,7 @@ export function useMutacoesBarbeiro() {
         const { error } = await supabase.from("barbeiros").update({ ativo: novoStatus }).eq("id", id);
         if (error) throw error;
       },
-      onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] }); }
-    }),
-
-    atualizarMetaBarbeiro: useMutation({
-      mutationFn: async ({ id, meta, slug }: BarbeiroMetaUpdate) => {
-        const { error } = await supabase.from("barbeiros").update({ meta_diaria: meta }).eq("id", id);
-        if (error) throw error;
-      },
-      onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
-        toast.success("Meta diária atualizada! 🎯");
-      }
+      onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] }); }
     }),
 
     removerBarbeiro: useMutation({
@@ -241,12 +214,8 @@ export function useMutacoesBarbeiro() {
         if (error) throw error;
       },
       onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug] });
+        queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] });
         toast.success("Barbeiro removido.");
-      },
-      onError: (err: SupabaseError) => {
-        logError(err, "removerBarbeiro");
-        toast.error(getErrorMessage(err));
       }
     })
   };
@@ -256,14 +225,16 @@ export function useMutacoesBarbeiro() {
 // 4. SERVIÇOS
 // ==========================================
 export function useServicos(slug?: string) {
+  const safeSlug = slug?.toLowerCase();
   return useQuery({
-    queryKey: ["servicos", slug],
+    queryKey: ["servicos", safeSlug],
     queryFn: async () => {
-      const { data, error } = await supabase.from("servicos").select("*").eq("barbearia_slug", slug).order("nome");
+      if (!safeSlug) return [];
+      const { data, error } = await supabase.from("servicos").select("*").eq("barbearia_slug", safeSlug).order("nome");
       if (error) throw error;
       return data || [];
     },
-    enabled: !!slug,
+    enabled: !!safeSlug,
   });
 }
 
@@ -273,12 +244,12 @@ export function useMutacoesServico() {
     adicionarServico: useMutation({
       mutationFn: async ({ nome, preco, duracao_minutos, url_imagem, slug }: ServicoInsert) => {
         const { error } = await supabase.from("servicos").insert({
-          nome, preco, duracao_minutos, url_imagem, barbearia_slug: slug
+          nome, preco, duracao_minutos, url_imagem, barbearia_slug: slug.toLowerCase()
         });
         if (error) throw error;
       },
       onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["servicos", vars.slug] });
+        queryClient.invalidateQueries({ queryKey: ["servicos", vars.slug.toLowerCase()] });
         toast.success("Serviço na vitrine!");
       }
     }),
@@ -287,23 +258,25 @@ export function useMutacoesServico() {
         const { error } = await supabase.from("servicos").delete().eq("id", id);
         if (error) throw error;
       },
-      onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["servicos", vars.slug] }); }
+      onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["servicos", vars.slug.toLowerCase()] }); }
     })
   };
 }
 
 // ==========================================
-// 5. DESPESAS (Fluxo de Caixa) 🚀 NOVO
+// 5. DESPESAS
 // ==========================================
 export function useDespesas(slug?: string) {
+  const safeSlug = slug?.toLowerCase();
   return useQuery({
-    queryKey: ["despesas", slug],
+    queryKey: ["despesas", safeSlug],
     queryFn: async () => {
-      const { data, error } = await supabase.from("despesas").select("*").eq("barbearia_slug", slug).gte("data", getInicioDoMes());
+      if (!safeSlug) return [];
+      const { data, error } = await supabase.from("despesas").select("*").eq("barbearia_slug", safeSlug).gte("data", getDataLimiteBusca());
       if (error) throw error;
       return data || [];
     },
-    enabled: !!slug,
+    enabled: !!safeSlug,
   });
 }
 
@@ -313,12 +286,12 @@ export function useMutacoesDespesa() {
     adicionarDespesa: useMutation({
       mutationFn: async ({ descricao, valor, data, slug }: DespesaInsert) => {
         const { error } = await supabase.from("despesas").insert({
-          descricao, valor, data, barbearia_slug: slug
+          descricao, valor, data, barbearia_slug: slug.toLowerCase()
         });
         if (error) throw error;
       },
       onSuccess: (_, vars) => {
-        queryClient.invalidateQueries({ queryKey: ["despesas", vars.slug] });
+        queryClient.invalidateQueries({ queryKey: ["despesas", vars.slug.toLowerCase()] });
         toast.success("Despesa registrada no caixa.");
       }
     })
@@ -328,13 +301,6 @@ export function useMutacoesDespesa() {
 // ==========================================
 // 6. CLIENTES VIP
 // ==========================================
-interface LeadRow {
-  id?: string;
-  vendedor_id?: string;
-  status?: string;
-  dados_adicionais?: Record<string, unknown> | null;
-}
-
 export function useClientesVIP(vendedorId?: string) {
   return useQuery({
     queryKey: ["clientesVIP", vendedorId],
@@ -347,9 +313,7 @@ export function useClientesVIP(vendedorId?: string) {
         .neq("status", "deleted");
 
       if (error) throw error;
-
-      // Filtra apenas leads marcados como VIP
-      return (data as LeadRow[] || []).filter((lead) => lead.dados_adicionais?.vip === true);
+      return (data || []).filter((lead: any) => lead.dados_adicionais?.vip === true);
     },
     enabled: !!vendedorId,
   });
