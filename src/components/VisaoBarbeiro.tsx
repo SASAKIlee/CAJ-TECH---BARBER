@@ -1,76 +1,67 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { BarbeiroAcoes } from "./barbeiro/BarbeiroAcoes";
 import { AgendaBarbeiro } from "./barbeiro/AgendaBarbeiro";
 import { ModalNovoAgendamento } from "./barbeiro/ModalNovoAgendamento";
 import { useBarbearia, useAgendamentos, useMutacoesAgendamento, useBarbeiros, useServicos } from "@/hooks/useQueries";
 import { Loader2, CalendarDays } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function VisaoBarbeiro() {
   const { slug } = useParams<{ slug: string }>();
+  const queryClient = useQueryClient();
   
-  // Conexões com o Banco
-  const { data: loja, isLoading: loadLoja } = useBarbearia();
+  // Conexões
+  const { data: loja } = useBarbearia();
   const { data: agendamentos = [], isLoading: loadAg } = useAgendamentos(slug);
   const { data: barbeiros = [] } = useBarbeiros(slug);
   const { data: servicos = [] } = useServicos(slug);
   const { adicionarAgendamento, atualizarStatusAgendamento } = useMutacoesAgendamento();
 
-  // Estados da Tela
-  const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const scannerRef = useRef<HTMLInputElement>(null);
-
-  // 🛡️ Pegamos a data de hoje como texto puro (YYYY-MM-DD) para iniciar o calendário
-  const hojeStr = useMemo(() => {
+  // Data atual formatada corretamente para o input
+  const hojeLocal = useMemo(() => {
     const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const offset = d.getTimezoneOffset();
+    const local = new Date(d.getTime() - (offset * 60 * 1000));
+    return local.toISOString().split('T')[0];
   }, []);
 
-  // Novo estado: Permite ao barbeiro navegar pelos dias!
-  const [dataSelecionada, setDataSelecionada] = useState(hojeStr);
+  const [dataSelecionada, setDataSelecionada] = useState(hojeLocal);
+  const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Filtra os agendamentos pela DATA ESCOLHIDA no calendário
-  const agendamentosDoDia = useMemo(() => {
-    return agendamentos.filter((ag) => ag.data === dataSelecionada);
-  }, [agendamentos, dataSelecionada]);
+  // Forçar atualização do cache quando mudar a data
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["agendamentos", slug] });
+  }, [dataSelecionada, slug, queryClient]);
 
-  // Filtra pelo barbeiro se algum estiver selecionado
+  // FILTRO SEM ERRO DE FUSO: Compara strings limpas
   const agendamentosFiltrados = useMemo(() => {
-    if (barbeiroSelecionadoId) {
-      return agendamentosDoDia.filter(ag => ag.barbeiro_id === barbeiroSelecionadoId);
-    }
-    return agendamentosDoDia;
-  }, [agendamentosDoDia, barbeiroSelecionadoId]);
+    return agendamentos.filter((ag) => {
+      const dataAg = String(ag.data).split('T')[0];
+      const bateData = dataAg === dataSelecionada;
+      const bateBarbeiro = barbeiroSelecionadoId ? String(ag.barbeiro_id) === String(barbeiroSelecionadoId) : true;
+      return bateData && bateBarbeiro;
+    });
+  }, [agendamentos, dataSelecionada, barbeiroSelecionadoId]);
 
   const handleNovoAgendamento = async (dados: any) => {
     try {
-      await adicionarAgendamento.mutateAsync({
+      const res = await adicionarAgendamento.mutateAsync({
         ag: [dados],
         slug: slug || "",
-        idempotencyKey: typeof crypto !== 'undefined' ? crypto.randomUUID() : Date.now().toString()
+        idempotencyKey: crypto.randomUUID()
       });
-      return { success: true };
+      return res;
     } catch (err: any) {
-      return { error: err.message || "Erro ao salvar no banco." };
+      return { error: err.message };
     }
   };
 
-  const handleStatusChange = async (id: string, status: string) => {
-    await atualizarStatusAgendamento.mutateAsync({ id, status, slug: slug || "" });
-  };
-
-  const horariosOcupados = (dataCalc: string, bId: string) => {
-    return agendamentos
-      .filter(ag => ag.data === dataCalc && ag.barbeiro_id === bId && ag.status !== "Cancelado")
-      .map(ag => ag.horario);
-  };
-
-  if (loadLoja || loadAg) {
+  if (loadAg) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
-        <Loader2 className="animate-spin h-10 w-10 opacity-50" />
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="animate-spin h-10 w-10 text-zinc-800" />
       </div>
     );
   }
@@ -86,27 +77,22 @@ export function VisaoBarbeiro() {
         setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
         brand={brand}
         ctaFg="#000000"
-        isScanning={isScanning}
+        isScanning={false}
         onOpenScanner={() => {}}
         onScannerChange={() => {}}
-        scannerRef={scannerRef}
+        scannerRef={null as any}
         onOpenModal={() => setIsModalOpen(true)}
       />
 
-      {/* NOVO: Seletor de Data para o Barbeiro navegar na Agenda */}
-      <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-2 sm:p-3 rounded-2xl shadow-lg">
-        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${brand}20` }}>
-          <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6" style={{ color: brand }} />
-        </div>
+      <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-3 rounded-2xl shadow-lg">
+        <CalendarDays className="h-6 w-6" style={{ color: brand }} />
         <div className="flex flex-col flex-1">
-          <label className="text-[9px] sm:text-[10px] font-black uppercase text-white/50 tracking-widest ml-1">
-            Data da Agenda
-          </label>
+          <label className="text-[10px] font-black uppercase text-white/40">Data Selecionada:</label>
           <input
             type="date"
             value={dataSelecionada}
             onChange={(e) => setDataSelecionada(e.target.value)}
-            className="w-full bg-transparent border-0 text-sm sm:text-base font-bold text-white outline-none focus:ring-0 p-0 ml-1"
+            className="bg-transparent border-0 text-base font-bold text-white outline-none p-0"
             style={{ colorScheme: 'dark' }}
           />
         </div>
@@ -118,7 +104,7 @@ export function VisaoBarbeiro() {
         servicos_find={(id) => servicos.find(s => s.id === id)}
         brand={brand}
         infoLojaNome={loja?.nome || "Barbearia"}
-        onStatusChange={handleStatusChange}
+        onStatusChange={(id, status) => atualizarStatusAgendamento.mutateAsync({ id, status, slug: slug || "" })}
       />
 
       <ModalNovoAgendamento
@@ -130,8 +116,8 @@ export function VisaoBarbeiro() {
         servicos={servicos}
         barbeiroSelecionadoId={barbeiroSelecionadoId}
         onNovoAgendamento={handleNovoAgendamento}
-        horariosOcupados={horariosOcupados}
-        infoLoja={{ abertura: "09:00", fechamento: "20:00" }}
+        horariosOcupados={(d, b) => agendamentos.filter(a => String(a.data).split('T')[0] === d && String(a.barbeiro_id) === b).map(a => a.horario)}
+        infoLoja={{ abertura: "09:00", fechamento: "21:00" }}
       />
     </div>
   );
