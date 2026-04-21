@@ -9,20 +9,20 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import DOMPurify from "dompurify";
-import { agendamentoSchema } from "@/lib/schemas";
 
 const MotionButton = motion.create(Button);
 
-// Funções Auxiliares
+// --- FUNÇÕES AUXILIARES ---
 function getHojeLocal(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function gerarHorariosDinamicos(abertura = "09:00", fechamento = "19:00"): string[] {
+function gerarHorariosDinamicos(abertura = "09:00", fechamento = "20:00"): string[] {
   const horarios: string[] = [];
   let [horaAtual, minAtual] = abertura.split(':').map(Number);
   const [horaFim, minFim] = fechamento.split(':').map(Number);
+  
   while (horaAtual < horaFim || (horaAtual === horaFim && minAtual < minFim)) {
     horarios.push(`${String(horaAtual).padStart(2, '0')}:${String(minAtual).padStart(2, '0')}`);
     minAtual += 30;
@@ -51,7 +51,7 @@ interface ModalNovoAgendamentoProps {
   barbeiros: any[];
   servicos: any[];
   barbeiroSelecionadoId: string;
-  onNovoAgendamento: (ag: any) => Promise<{ error?: any }>;
+  onNovoAgendamento: (ag: any) => Promise<{ error?: any; success?: boolean }>;
   horariosOcupados: (data: string, bId: string) => string[];
   infoLoja: { abertura: string; fechamento: string };
 }
@@ -60,72 +60,96 @@ export function ModalNovoAgendamento({
   open, onOpenChange, brand, ctaFg, barbeiros, servicos, barbeiroSelecionadoId,
   onNovoAgendamento, horariosOcupados, infoLoja
 }: ModalNovoAgendamentoProps) {
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [novo, setNovo] = useState({ nome: "", telefone: "", servicoId: "", barbeiroId: "", data: "", horario: "", observacao: "" });
+  const [novo, setNovo] = useState({ 
+    nome: "", 
+    telefone: "", 
+    servicoId: "", 
+    barbeiroId: "", 
+    data: getHojeLocal(), 
+    horario: "", 
+    observacao: "" 
+  });
   const [erros, setErros] = useState<any>({});
 
+  // Reset do form ao abrir
   useEffect(() => {
     if (open) {
-      setNovo({ nome: "", telefone: "", servicoId: "", barbeiroId: barbeiroSelecionadoId || "", data: getHojeLocal(), horario: "", observacao: "" });
+      setNovo({ 
+        nome: "", 
+        telefone: "", 
+        servicoId: "", 
+        barbeiroId: barbeiroSelecionadoId || "", 
+        data: getHojeLocal(), 
+        horario: "", 
+        observacao: "" 
+      });
       setErros({});
     }
   }, [open, barbeiroSelecionadoId]);
 
-  const horarios = useMemo(() => gerarHorariosDinamicos(infoLoja.abertura, infoLoja.fechamento), [infoLoja]);
-  const { horaAtual, minAtual, hojeLocal } = useMemo(() => {
+  const listaHorarios = useMemo(() => 
+    gerarHorariosDinamicos(infoLoja.abertura, infoLoja.fechamento), 
+  [infoLoja]);
+
+  const { horaAgora, minAgora, hojeLocal } = useMemo(() => {
     const agora = new Date();
-    return { horaAtual: agora.getHours(), minAtual: agora.getMinutes(), hojeLocal: getHojeLocal() };
+    return { horaAgora: agora.getHours(), minAgora: agora.getMinutes(), hojeLocal: getHojeLocal() };
   }, []);
 
-  const slotsOcupados = useMemo(() => (novo.data && novo.barbeiroId ? horariosOcupados(novo.data, novo.barbeiroId) : []), [novo.data, novo.barbeiroId, horariosOcupados]);
+  const ocupadosNoDia = useMemo(() => 
+    (novo.data && novo.barbeiroId ? horariosOcupados(novo.data, novo.barbeiroId) : []), 
+  [novo.data, novo.barbeiroId, horariosOcupados]);
 
-  const isFormValid = novo.nome.trim().length > 0 && validarTelefone(novo.telefone) && novo.servicoId !== "" && novo.barbeiroId !== "" && novo.data !== "" && novo.horario !== "";
+  const formValido = novo.nome.trim().length >= 3 && 
+                     validarTelefone(novo.telefone) && 
+                     novo.servicoId !== "" && 
+                     novo.barbeiroId !== "" && 
+                     novo.horario !== "";
 
   const handleAgendar = async () => {
-    const newErros = { nome: !novo.nome.trim(), telefone: !validarTelefone(novo.telefone), servicoId: !novo.servicoId, barbeiroId: !novo.barbeiroId, data: !novo.data, horario: !novo.horario };
-    setErros(newErros);
-    if (Object.values(newErros).some(Boolean)) { toast.error("Preencha todos os campos."); return; }
-
-    setIsSubmitting(true);
-    const toastId = toast.loading("Processando...");
-
-    // 1. Zod exige um objeto Date, mas o input retorna string. Convertemos para a validação não travar:
-    const dataParaZod = new Date(`${novo.data}T12:00:00`);
+    const novosErros = { 
+      nome: novo.nome.trim().length < 3, 
+      telefone: !validarTelefone(novo.telefone), 
+      servicoId: novo.servicoId === "", 
+      barbeiroId: novo.barbeiroId === "", 
+      horario: novo.horario === "" 
+    };
     
-    const validacao = agendamentoSchema.safeParse({
-      ...novo,
-      data: dataParaZod
-    });
-
-    if (!validacao.success) {
-      toast.dismiss(toastId);
-      toast.error(validacao.error.errors[0].message);
-      setIsSubmitting(false);
+    setErros(novosErros);
+    if (Object.values(novosErros).some(v => v)) {
+      toast.error("Corrija os campos em vermelho.");
       return;
     }
 
+    setIsSubmitting(true);
+    const toastId = toast.loading("Confirmando agendamento...");
+
     try {
-      // 2. Mapeamento CORRETO para as colunas do banco de dados do Supabase
-      const res = await onNovoAgendamento({
-        nome_cliente: novo.nome,
-        telefone_cliente: novo.telefone,
+      // 🚀 Enviando os dados limpos como STRING para o banco
+      const resultado = await onNovoAgendamento({
+        nome_cliente: novo.nome.trim(),
+        telefone_cliente: novo.telefone.replace(/\D/g, ""),
         servico_id: novo.servicoId,
         barbeiro_id: novo.barbeiroId,
-        data: novo.data, // O banco espera a string 'YYYY-MM-DD'
-        horario: novo.horario,
+        data: novo.data, // Texto "YYYY-MM-DD"
+        horario: novo.horario, // Texto "HH:MM"
+        status: "Pendente",
         observacao: DOMPurify.sanitize(novo.observacao)
       });
 
       toast.dismiss(toastId);
-      if (!res?.error) {
+      
+      if (resultado?.success) {
+        toast.success("Agendamento realizado!");
         onOpenChange(false);
-        toast.success(`Agendamento confirmado! ✂️`);
       } else {
-        toast.error(res.error);
+        toast.error(resultado?.error || "Erro ao agendar.");
       }
-    } catch {
+    } catch (err: any) {
       toast.dismiss(toastId);
-      toast.error("Erro crítico de comunicação.");
+      toast.error("Falha na conexão.");
     } finally {
       setIsSubmitting(false);
     }
@@ -133,66 +157,131 @@ export function ModalNovoAgendamento({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="dark border-white/[0.08] text-white w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar bg-zinc-950/95 backdrop-blur-xl">
+      <DialogContent className="dark border-white/[0.08] text-white w-[95vw] sm:max-w-md p-6 rounded-[2rem] max-h-[90vh] overflow-y-auto bg-zinc-950/95 backdrop-blur-xl">
         <DialogHeader>
           <DialogTitle className="text-white font-black uppercase italic text-2xl flex items-center gap-2">
             <Clock style={{ color: brand }} /> Novo Horário
           </DialogTitle>
         </DialogHeader>
+
         <div className="space-y-5 pt-4">
+          {/* Nome */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
-            <Input placeholder="Nome Completo" className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.nome && "border-red-500")} value={novo.nome} onChange={(e) => { setNovo({ ...novo, nome: e.target.value }); setErros({ ...erros, nome: false }); }} />
+            <Input 
+              placeholder="Nome do Cliente" 
+              className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.nome && "border-red-500")} 
+              value={novo.nome} 
+              onChange={(e) => setNovo({ ...novo, nome: e.target.value })} 
+            />
           </div>
+
+          {/* WhatsApp */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
-            <Input type="tel" placeholder="(11) 99999-9999" className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.telefone && "border-red-500")} value={novo.telefone} onChange={(e) => { setNovo({ ...novo, telefone: aplicarMascaraTelefone(e.target.value) }); setErros({ ...erros, telefone: false }); }} />
+            <Input 
+              type="tel" 
+              placeholder="(00) 00000-0000" 
+              className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.telefone && "border-red-500")} 
+              value={novo.telefone} 
+              onChange={(e) => setNovo({ ...novo, telefone: aplicarMascaraTelefone(e.target.value) })} 
+            />
           </div>
+
+          {/* Barbeiro e Serviço */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Barbeiro</label>
-              <Select value={novo.barbeiroId} onValueChange={(v) => { setNovo({ ...novo, barbeiroId: v, horario: "" }); setErros({ ...erros, barbeiroId: false }); }}>
-                <SelectTrigger className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.barbeiroId && "border-red-500")}><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <Select value={novo.barbeiroId} onValueChange={(v) => setNovo({ ...novo, barbeiroId: v, horario: "" })}>
+                <SelectTrigger className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.barbeiroId && "border-red-500")}>
+                  <SelectValue placeholder="Quem?" />
+                </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
-                  {barbeiros.filter((b) => b.ativo).map((b) => (<SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>))}
+                  {barbeiros.filter(b => b.ativo).map(b => (
+                    <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Serviço</label>
-              <Select value={novo.servicoId} onValueChange={(v) => { setNovo({ ...novo, servicoId: v }); setErros({ ...erros, servicoId: false }); }}>
-                <SelectTrigger className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.servicoId && "border-red-500")}><SelectValue placeholder="Serviço" /></SelectTrigger>
+              <Select value={novo.servicoId} onValueChange={(v) => setNovo({ ...novo, servicoId: v })}>
+                <SelectTrigger className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.servicoId && "border-red-500")}>
+                  <SelectValue placeholder="O quê?" />
+                </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
-                  {servicos.map((s) => (<SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>))}
+                  {servicos.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {/* Data */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
-            <Input type="date" className={cn("rounded-xl border-white/[0.08] bg-black/35 h-14", erros.data && "border-red-500")} value={novo.data} onChange={(e) => { setNovo({ ...novo, data: e.target.value, horario: "" }); setErros({ ...erros, data: false }); }} style={{ colorScheme: 'dark' }} />
+            <Input 
+              type="date" 
+              className="rounded-xl border-white/[0.08] bg-black/35 h-14" 
+              value={novo.data} 
+              onChange={(e) => setNovo({ ...novo, data: e.target.value, horario: "" })} 
+              style={{ colorScheme: 'dark' }} 
+            />
           </div>
-          <div className="space-y-2 border-t border-white/[0.08] pt-4 mt-2">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Horários Disponíveis</label>
-            <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-              {horarios.map((h) => {
-                const [hH, mH] = h.split(":").map(Number);
+
+          {/* Horários */}
+          <div className="space-y-2 border-t border-white/[0.08] pt-4">
+            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Horário</label>
+            <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
+              {listaHorarios.map((h) => {
+                const [hH, mM] = h.split(":").map(Number);
                 const isHoje = novo.data === hojeLocal;
-                const disable = !novo.barbeiroId || slotsOcupados.includes(h) || (isHoje && (hH < horaAtual || (hH === horaAtual && mH <= minAtual)));
+                const indisponivel = !novo.barbeiroId || 
+                                   ocupadosNoDia.includes(h) || 
+                                   (isHoje && (hH < horaAgora || (hH === horaAgora && mM <= minAgora)));
+                
                 return (
-                  <MotionButton key={h} type="button" variant={novo.horario === h ? "default" : "outline"} disabled={disable} whileTap={!disable ? { scale: 0.95 } : undefined} onClick={() => { setNovo({ ...novo, horario: h }); setErros({ ...erros, horario: false }); }} className={cn("text-[12px] font-bold h-12 rounded-xl transition-colors", novo.horario === h ? "border-0 shadow-lg" : "text-white bg-black/30 border-white/[0.08]", disable && "opacity-20")} style={novo.horario === h ? { backgroundColor: brand, color: ctaFg } : undefined}>
+                  <MotionButton 
+                    key={h} 
+                    type="button" 
+                    disabled={indisponivel}
+                    onClick={() => setNovo({ ...novo, horario: h })}
+                    className={cn(
+                      "text-[11px] font-bold h-11 rounded-xl transition-all",
+                      novo.horario === h 
+                        ? "border-0 shadow-lg" 
+                        : "text-white bg-black/30 border-white/[0.08]"
+                    )}
+                    style={novo.horario === h ? { backgroundColor: brand, color: ctaFg } : {}}
+                  >
                     {h}
                   </MotionButton>
                 );
               })}
             </div>
           </div>
+
+          {/* Observação */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado (opcional)</label>
-            <Textarea placeholder="Ex: Quero igual da foto..." className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]" value={novo.observacao} onChange={(e) => setNovo({ ...novo, observacao: e.target.value })} />
+            <Textarea 
+              placeholder="Ex: Vou chegar 5 min atrasado..." 
+              className="bg-white/5 border-white/10 text-white rounded-xl min-h-[70px]" 
+              value={novo.observacao} 
+              onChange={(e) => setNovo({ ...novo, observacao: e.target.value })} 
+            />
           </div>
-          <MotionButton className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl disabled:opacity-50" style={{ backgroundColor: brand, color: ctaFg }} whileTap={{ scale: isFormValid && !isSubmitting ? 0.95 : 1 }} onClick={handleAgendar} disabled={!isFormValid || isSubmitting}>
-            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : "Confirmar Agendamento"}
+
+          {/* Botão Finalizar */}
+          <MotionButton 
+            className="w-full h-16 font-black uppercase text-sm rounded-2xl mt-4 border-0 shadow-xl" 
+            style={{ backgroundColor: brand, color: ctaFg }}
+            whileTap={formValido ? { scale: 0.96 } : {}}
+            onClick={handleAgendar}
+            disabled={!formValido || isSubmitting}
+          >
+            {isSubmitting ? <Loader2 className="animate-spin h-6 w-6" /> : "Confirmar Agendamento"}
           </MotionButton>
         </div>
       </DialogContent>
