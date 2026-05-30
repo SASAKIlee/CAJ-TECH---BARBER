@@ -174,14 +174,27 @@ export default function Index() {
 
   const isImpersonating = userRole === "ceo" && !!impersonateSlug;
 
-  const sairImpersonacao = useCallback(() => {
+  const sairImpersonacao = useCallback(async () => {
+    try {
+      if (user?.id) {
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          action: "impersonate_exit",
+          details: { target_slug: impersonateSlug, target_name: impersonateName },
+          user_agent: navigator.userAgent
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao registrar log de saída da impersonação:", err);
+    }
+
     localStorage.removeItem("ceo_impersonate_slug");
     localStorage.removeItem("ceo_impersonate_name");
     setImpersonateSlug(null);
     setImpersonateName(null);
     setImpersonateData(null);
     toast.info("Saindo do modo de visualização...");
-  }, []);
+  }, [user?.id, impersonateSlug, impersonateName]);
 
   useEffect(() => {
     if (!isImpersonating || !impersonateSlug) return;

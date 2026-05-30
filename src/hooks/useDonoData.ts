@@ -41,16 +41,17 @@ export function useDonoData() {
   const [pixGerado, setPixGerado] = useState<string | null>(null);
   const [tempoPix, setTempoPix] = useState(900);
 
-  // Carregar dados da loja
+  // Carregar dados da loja e se inscrever em tempo real para atualizações (PIX, plano, etc.)
   useEffect(() => {
-    async function carregarDadosLoja() {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user) return;
+    let authUser: any = null;
+    let channel: any = null;
 
+    const fetchLoja = async () => {
+      if (!authUser) return;
       const { data, error } = await supabase
         .from("barbearias")
         .select("*")
-        .eq("dono_id", authData.user.id)
+        .eq("dono_id", authUser.id)
         .single();
 
       if (data && !error) {
@@ -76,8 +77,40 @@ export function useDonoData() {
           fasePagamento: calcularFasePagamento(data.data_vencimento),
         }));
       }
+    };
+
+    async function carregarDadosLoja() {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) return;
+      authUser = authData.user;
+
+      await fetchLoja();
+
+      // Subscrever em tempo real a mudanças na tabela de barbearias do dono
+      channel = supabase
+        .channel(`barbearia-dono-${authUser.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "barbearias",
+            filter: `dono_id=eq.${authUser.id}`,
+          },
+          () => {
+            fetchLoja();
+          }
+        )
+        .subscribe();
     }
+
     carregarDadosLoja();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   // Timer do PIX

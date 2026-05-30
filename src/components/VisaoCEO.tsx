@@ -574,7 +574,21 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
     toast.success("Relatório Exportado!");
   }, [lojasAtivas, getValorPlano]);
 
-  const impersonarLoja = useCallback((loja: Loja) => {
+  const impersonarLoja = useCallback(async (loja: Loja) => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData?.user) {
+        await supabase.from("audit_logs").insert({
+          user_id: authData.user.id,
+          action: "impersonate_enter",
+          details: { target_slug: loja.slug, target_name: loja.nome },
+          user_agent: navigator.userAgent
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao registrar log de impersonação:", err);
+    }
+
     localStorage.setItem("ceo_impersonate_slug", loja.slug);
     localStorage.setItem("ceo_impersonate_name", loja.nome);
     toast.success(`Abrindo painel de "${loja.nome}"...`);

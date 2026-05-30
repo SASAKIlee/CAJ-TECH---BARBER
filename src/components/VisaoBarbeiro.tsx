@@ -44,6 +44,15 @@ export function VisaoBarbeiro({
   corPrimaria,
   onNovoAgendamento,
   onStatusChange,
+  checkinHabilitado: _checkinHabilitado,
+  planoAtual: _planoAtual,
+  pixGerado: _pixGerado,
+  tempoPix: _tempoPix,
+  isGerandoPix: _isGerandoPix,
+  onGerarPix: _onGerarPix,
+  onCopiarPix: _onCopiarPix,
+  onRenovacaoClick: _onRenovacaoClick,
+  getValorPlano: _getValorPlano,
 }: VisaoBarbeiroProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
