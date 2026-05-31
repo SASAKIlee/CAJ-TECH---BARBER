@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import {
   QrCode,
   Clock,
@@ -401,7 +401,6 @@ function EquipeSection({
         {barbeiros.map((b) => (
           <div key={b.id} className="bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* FOTO DO BARBEIRO COM BOTÃO DE TROCAR SEMPRE VISÍVEL */}
               <div className="relative">
                 {b.url_foto ? (
                   <img
@@ -437,7 +436,16 @@ function EquipeSection({
             </div>
             <div className="flex gap-2">
               <Button size="icon" variant="ghost" className="h-12 w-12 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl" onClick={() => onToggleBarbeiroStatus(b.id, !b.ativo)}>{b.ativo ? <PowerOff className="h-6 w-6" /> : <Power className="h-6 w-6" />}</Button>
-              <Button size="icon" variant="ghost" className="h-12 w-12 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl" disabled={b.ativo} onClick={() => onRemoveBarbeiro(b.id)}><Trash2 className="h-6 w-6" /></Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-12 w-12 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-xl"
+                disabled={b.ativo}
+                onClick={() => onRemoveBarbeiro(b.id)}
+                title={b.ativo ? "Desative o barbeiro primeiro" : "Excluir e transferir dados para o dono"}
+              >
+                <Trash2 className="h-6 w-6" />
+              </Button>
             </div>
           </div>
         ))}
@@ -481,7 +489,6 @@ function ServicosSection({
         {servicos.map((s) => (
           <div key={s.id} className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* FOTO DO SERVIÇO COM BOTÃO DE TROCAR SEMPRE VISÍVEL */}
               <div className="relative">
                 {s.url_imagem ? (
                   <img
@@ -522,6 +529,7 @@ function ServicosSection({
     </div>
   );
 }
+
 function BrandingSection({
   imagemLogo, imagemFundo, previewLogo, previewFundo,
   isUploadingBranding, brand, ctaFg, glass,

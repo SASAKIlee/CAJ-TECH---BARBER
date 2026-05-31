@@ -342,6 +342,63 @@ function VisaoDonoComponent({
   }, [handleUploadImagem]);
 
   // ==========================================
+  // EXCLUIR BARBEIRO COM TRANSFERÊNCIA DE DADOS
+  // ==========================================
+  const handleRemoveBarbeiroComTransferencia = useCallback(async (barbeiroId: string) => {
+    const barbeiro = barbeiros.find(b => b.id === barbeiroId);
+    if (!barbeiro) return;
+
+    if (barbeiro.ativo) {
+      return toast.error("Desative o barbeiro antes de excluir.");
+    }
+
+    const confirmado = confirm(
+      `Excluir "${barbeiro.nome}"?\n\nTodos os agendamentos e histórico serão transferidos para você (Dono).\nEsta ação não pode ser desfeita.`
+    );
+    if (!confirmado) return;
+
+    const toastId = toast.loading(`Excluindo ${barbeiro.nome} e transferindo dados...`);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) throw new Error("Sessão expirada.");
+
+      const donoId = authData.user.id;
+
+      // 1. Transferir todos os agendamentos para o dono
+      const { error: agError } = await supabase
+        .from("agendamentos")
+        .update({ barbeiro_id: donoId })
+        .eq("barbeiro_id", barbeiroId);
+
+      if (agError) throw agError;
+
+      // 2. Remover a role de barbeiro (se tiver)
+      await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", barbeiroId)
+        .eq("role", "barbeiro");
+
+      // 3. Deletar o barbeiro da tabela
+      const { error: delError } = await supabase
+        .from("barbeiros")
+        .delete()
+        .eq("id", barbeiroId);
+
+      if (delError) throw delError;
+
+      toast.success(`"${barbeiro.nome}" excluído. Dados transferidos para você!`, { id: toastId });
+
+      // Atualiza a lista local
+      onRemoveBarbeiro?.(barbeiroId);
+
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao excluir barbeiro.";
+      toast.error(message, { id: toastId });
+    }
+  }, [barbeiros, onRemoveBarbeiro]);
+
+  // ==========================================
   // SALVAR HORÁRIOS
   // ==========================================
   const handleSaveHorarios = useCallback(async () => {
@@ -765,7 +822,7 @@ function VisaoDonoComponent({
                 onAddBarbeiro={handleAddBarbeiroComFotoETrava}
                 onAddServico={handleAddServicoComFoto}
                 onToggleBarbeiroStatus={onToggleBarbeiroStatus ?? (() => { })}
-                onRemoveBarbeiro={onRemoveBarbeiro ?? (() => { })}
+                onRemoveBarbeiro={handleRemoveBarbeiroComTransferencia}
                 onRemoveServico={onRemoveServico ?? (() => { })}
                 onHorarioChange={(campo, valor) => updateData({ horariosLoja: { ...data.horariosLoja, [campo]: valor } })}
                 onUpdateBarbeiroPhoto={handleUpdateBarbeiroPhoto}
