@@ -586,28 +586,34 @@ function VisaoDonoComponent({
   }, []);
 
   // ==========================================
-  // RENDER CONDICIONAL DE BLOQUEIO
+  // RENDER CONDICIONAL DE BLOQUEIO (CORRIGIDO)
   // ==========================================
   const hoje = new Date();
-  const vencimentoDate = dataVencimento ? new Date(dataVencimento) : null;
-  const isVencida = vencimentoDate && vencimentoDate < hoje;
+  hoje.setHours(0, 0, 0, 0); // Zera horas para comparar apenas os dias
 
+  // Adiciona T23:59:59 para garantir que o dia do vencimento inteiro seja válido
+  const vencimentoDate = dataVencimento ? new Date(dataVencimento + "T23:59:59") : null;
+  const isVencida = vencimentoDate ? vencimentoDate < hoje : false;
+
+  // 1ª PRIORIDADE: Plano vencido (Bloqueia TUDO até pagar)
+  if (isVencida) {
+    return (
+      <DonoBloqueio
+        motivo="inadimplencia"
+        planoAtual={data.planoAtual}
+        pixGerado={pixGerado}
+        tempoPix={tempoPix}
+        isGerandoPix={isGerandoPix}
+        onGerarPix={() => void handleGerarPixDinâmico(data.planoAtual)}
+        onCopiarPix={copiarPix}
+        onRenovacaoClick={() => void handleGerarPixDinâmico(data.planoAtual)}
+        getValorPlano={getValorPlano}
+      />
+    );
+  }
+
+  // 2ª PRIORIDADE: Loja desativada manualmente (por você/admin)
   if (data.isLojaAtiva === false) {
-    if (isVencida) {
-      return (
-        <DonoBloqueio
-          motivo="inadimplencia"
-          planoAtual={data.planoAtual}
-          pixGerado={pixGerado}
-          tempoPix={tempoPix}
-          isGerandoPix={isGerandoPix}
-          onGerarPix={() => void handleGerarPixDinâmico(data.planoAtual)}
-          onCopiarPix={copiarPix}
-          onRenovacaoClick={() => void handleGerarPixDinâmico(data.planoAtual)}
-          getValorPlano={getValorPlano}
-        />
-      );
-    }
     return (
       <DonoBloqueio
         motivo="manual"
@@ -623,6 +629,7 @@ function VisaoDonoComponent({
     );
   }
 
+  // 3ª PRIORIDADE: Fase de pagamento crítica (ex: trial acabou)
   if (data.fasePagamento === 4) {
     return (
       <DonoBloqueio
@@ -640,7 +647,7 @@ function VisaoDonoComponent({
   }
 
   // ==========================================
-  // RENDER PRINCIPAL
+  // RENDER PRINCIPAL (Só chega aqui se estiver em dia)
   // ==========================================
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-32 sm:pb-40 pt-3 sm:pt-4 w-full overflow-x-hidden text-white relative min-h-screen">
