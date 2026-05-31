@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
-// 🚀 CLEAN CODE: Definimos os cargos em um lugar só. Se criar um novo, muda só aqui!
 export type AppRole = "dono" | "barbeiro" | "vendedor" | "ceo";
 
 interface AuthContextType {
@@ -18,7 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   userRole: null,
-  signOut: async () => {},
+  signOut: async () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -48,27 +47,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🚀 BLINDAGEM: Busca o cargo com async/await e Try/Catch (Evita o loading infinito)
   useEffect(() => {
     if (!user) return;
 
-    let isMounted = true; // Previne vazamento de memória se o componente desmontar
+    let isMounted = true;
 
     async function fetchRole() {
       try {
+        // 1. Busca a role na tabela user_roles
         const { data, error } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", user?.id)
+          .eq("user_id", user.id)
           .maybeSingle();
 
         if (error) throw error;
 
         if (isMounted) {
-          if (data) {
+          if (data?.role) {
             setUserRole(data.role as AppRole);
           } else {
-            setUserRole(null);
+            // 2. FALLBACK: Se não tem role, verifica se é barbeiro
+            const { data: barbeiroData } = await supabase
+              .from("barbeiros")
+              .select("id")
+              .eq("id", user.id)
+              .maybeSingle();
+
+            if (barbeiroData) {
+              // É barbeiro mas está sem role → corrige automaticamente
+              await supabase.from("user_roles").insert({ user_id: user.id, role: "barbeiro" });
+              setUserRole("barbeiro");
+            } else {
+              // 3. Verifica se é dono
+              const { data: donoData } = await supabase
+                .from("barbearias")
+                .select("id")
+                .eq("dono_id", user.id)
+                .maybeSingle();
+
+              if (donoData) {
+                await supabase.from("user_roles").insert({ user_id: user.id, role: "dono" });
+                setUserRole("dono");
+              } else {
+                setUserRole(null);
+              }
+            }
           }
         }
       } catch (err) {

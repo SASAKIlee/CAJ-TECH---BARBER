@@ -172,19 +172,35 @@ export function useBarbeiros(slug?: string) {
 export function useMutacoesBarbeiro() {
   const queryClient = useQueryClient();
   return {
-        adicionarBarbeiro: useMutation({
+    adicionarBarbeiro: useMutation({
       mutationFn: async ({ nome, comissao_pct, email, senha, slug, url_foto }: BarbeiroInsert) => {
         if (!supabaseUrl || !supabaseAnonKey) {
           throw new Error("Configuração do Supabase ausente. Contate o suporte.");
         }
 
-        const tempClient = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
+        // 1. Cria o usuário com cliente temporário
+        const tempClient = createClient(supabaseUrl, supabaseAnonKey, { 
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } 
+        });
+        
         const { data: authData, error: authError } = await tempClient.auth.signUp({ email, password: senha });
         if (authError) throw authError;
         if (!authData.user?.id) throw new Error("Erro ao criar conta do barbeiro. Tente novamente.");
 
         const userId = authData.user.id;
-        await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
+
+        // 2. Insere a role usando o tempClient (o barbeiro insere a própria role)
+        const { error: roleError } = await tempClient.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
+        if (roleError) {
+          // Se falhou com tempClient, tenta com o cliente principal (dono)
+          const { error: roleError2 } = await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
+          if (roleError2) {
+            console.error("Erro ao inserir role do barbeiro:", roleError2);
+            // Não interrompe o fluxo — o AuthContext vai corrigir automaticamente
+          }
+        }
+
+        // 3. Insere na tabela barbeiros
         const { error: barbError } = await supabase.from("barbeiros").insert({
           id: userId, nome, comissao_pct, barbearia_slug: slug.toLowerCase(), ativo: true, url_foto
         });
@@ -193,6 +209,10 @@ export function useMutacoesBarbeiro() {
       onSuccess: (_, vars) => {
         queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] });
         toast.success("Barbeiro contratado!");
+      },
+      onError: (err: SupabaseError) => {
+        logError(err, "adicionarBarbeiro");
+        toast.error(getErrorMessage(err));
       }
     }),
     alternarStatusBarbeiro: useMutation({
@@ -202,7 +222,6 @@ export function useMutacoesBarbeiro() {
       },
       onSuccess: (_, vars) => { queryClient.invalidateQueries({ queryKey: ["barbeiros", vars.slug.toLowerCase()] }); }
     }),
-    // 👇 A FUNÇÃO QUE ESTAVA FALTANDO AQUI!
     atualizarMetaBarbeiro: useMutation({
       mutationFn: async ({ id, meta, slug }: BarbeiroMetaUpdate) => {
         const { error } = await supabase.from("barbeiros").update({ meta_diaria: meta }).eq("id", id);
