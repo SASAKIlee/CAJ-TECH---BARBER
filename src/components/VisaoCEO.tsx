@@ -280,27 +280,72 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
     if (!extras.email_dono || !extras.senha_temp) return toast.error("Este lead não possui e-mail e senha.");
     const toastId = toast.loading("Verificando disponibilidade e ativando...");
     try {
-      const { data: slugExistente } = await supabase.from("barbearias").select("id").eq("slug", slugDesejado).maybeSingle();
+      // Verifica slug com tratamento de erro
+      const { data: slugExistente, error: slugError } = await supabase
+        .from("barbearias")
+        .select("id")
+        .eq("slug", slugDesejado)
+        .maybeSingle();
+
+      if (slugError) throw new Error("Erro ao verificar slug. Tente novamente.");
       if (slugExistente) throw new Error(`O link '${slugDesejado}' já está sendo usado.`);
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-      const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: extras.email_dono, password: extras.senha_temp });
-      if (authError) throw new Error(authError.message);
-      if (!authData.user?.id) throw new Error("Erro ao criar conta. Verifique se o e-mail já não está cadastrado.");
+
+      // Cliente temporário com storage em memória (evita warning do GoTrue)
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          storage: {
+            getItem: () => null,
+            setItem: () => { },
+            removeItem: () => { },
+          },
+        },
+      });
+
+      const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+        email: extras.email_dono,
+        password: extras.senha_temp,
+      });
+
+      if (authError) {
+        if (authError.message.includes("already registered") || authError.message.includes("already exists")) {
+          throw new Error("Este e-mail já está cadastrado. Use outro e-mail ou recupere a senha.");
+        }
+        throw new Error(authError.message);
+      }
+
+      if (!authData.user?.id) throw new Error("Erro ao criar conta. Tente novamente.");
       const novoDonoId = authData.user.id;
+
       await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
+
       const dataVencimento = new Date();
       dataVencimento.setDate(dataVencimento.getDate() + 7);
+
       const { error: barbError } = await supabase.from("barbearias").insert({
-        nome: lead.nome_barbearia, slug: slugDesejado, dono_id: novoDonoId,
-        cor_primaria: extras.cor_primaria || "#D4AF37", cor_secundaria: extras.cor_secundaria || "#18181B",
-        cor_destaque: extras.cor_destaque || "#FFFFFF", plano: planoEscolhido, ativo: true,
-        data_vencimento: dataVencimento.toISOString()
+        nome: lead.nome_barbearia,
+        slug: slugDesejado,
+        dono_id: novoDonoId,
+        cor_primaria: extras.cor_primaria || "#D4AF37",
+        cor_secundaria: extras.cor_secundaria || "#18181B",
+        cor_destaque: extras.cor_destaque || "#FFFFFF",
+        plano: planoEscolhido,
+        ativo: true,
+        data_vencimento: dataVencimento.toISOString(),
       });
+
       if (barbError) throw new Error(barbError.message);
-      await supabase.from("leads").update({ status: 'convertido', dados_adicionais: { ...extras, plano_escolhido: planoEscolhido } }).eq('id', lead.id);
+
+      await supabase.from("leads").update({
+        status: 'convertido',
+        dados_adicionais: { ...extras, plano_escolhido: planoEscolhido }
+      }).eq('id', lead.id);
+
       toast.success("✅ Barbearia ativada com sucesso!", { id: toastId });
       carregarDados();
       setExpandido(null);
+
       if (extras.telefone) {
         const msg = `Fala mestre! Seu app CAJ TECH está no ar.\n🔗 cajtech.net.br/agendar/${slugDesejado}\n\nAcesse com:\nE-mail: ${extras.email_dono}\nSenha: ${extras.senha_temp}`;
         window.open(`https://wa.me/55${extras.telefone}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -405,21 +450,54 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
     setIsSavingConsultor(true);
     const toastId = toast.loading("Registrando consultor...");
     try {
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-      const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: novoConsultor.email, password: novoConsultor.senha });
-      if (authError) throw new Error(authError.message);
-      if (!authData.user?.id) throw new Error("Usuário não criado. Verifique se o e-mail já não está cadastrado.");
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          storage: {
+            getItem: () => null,
+            setItem: () => { },
+            removeItem: () => { },
+          },
+        },
+      });
+
+      const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+        email: novoConsultor.email,
+        password: novoConsultor.senha,
+      });
+
+      if (authError) {
+        if (authError.message.includes("already registered") || authError.message.includes("already exists")) {
+          throw new Error("Este e-mail já está cadastrado.");
+        }
+        throw new Error(authError.message);
+      }
+
+      if (!authData.user?.id) throw new Error("Usuário não criado. Tente outro e-mail.");
       const novoId = authData.user.id;
+
       const { error: roleError } = await supabase.from("user_roles").insert({ user_id: novoId, role: "vendedor" });
       if (roleError) throw roleError;
-      const { error: perfilError } = await supabase.from("perfis_vendedores").insert({ id: novoId, nome: novoConsultor.nome, email: novoConsultor.email, ativo: true });
+
+      const { error: perfilError } = await supabase.from("perfis_vendedores").insert({
+        id: novoId,
+        nome: novoConsultor.nome,
+        email: novoConsultor.email,
+        ativo: true
+      });
       if (perfilError) throw perfilError;
+
       toast.success("✅ Consultor criado com sucesso!", { id: toastId });
-      carregarDados(); setModalConsultorAberto(false); setNovoConsultor({ nome: "", email: "", senha: "" });
+      carregarDados();
+      setModalConsultorAberto(false);
+      setNovoConsultor({ nome: "", email: "", senha: "" });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erro desconhecido";
       toast.error(message, { id: toastId });
-    } finally { setIsSavingConsultor(false); }
+    } finally {
+      setIsSavingConsultor(false);
+    }
   }, [novoConsultor, carregarDados]);
 
   const salvarComissao = useCallback(async () => {
