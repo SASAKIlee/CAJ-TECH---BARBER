@@ -41,80 +41,81 @@ export function useDonoData() {
   const [tempoPix, setTempoPix] = useState(900);
 
   // Carregar dados da loja e se inscrever em tempo real
-  useEffect(() => {
-    let authUser: { id: string } | null = null;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+// Carregar dados da loja e se inscrever em tempo real
+useEffect(() => {
+  let authUser: { id: string } | null = null;
+  let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const fetchLoja = async () => {
-      if (!authUser) return;
-      const { data, error } = await supabase
-        .from("barbearias")
-        .select("*")
-        .eq("dono_id", authUser.id)
-        .single();
+  const fetchLoja = async () => {
+    if (!authUser) return;
+    
+    const { data, error } = await supabase
+      .from("barbearias")
+      .select("*")
+      .eq("dono_id", authUser.id)
+      .maybeSingle();
 
-      if (error) {
-        console.error("Erro ao carregar dados da loja:", error);
-        return;
-      }
-
-      if (data) {
-        setData((prev) => ({
-          ...prev,
-          slug: data.slug,
-          isLojaAtiva: data.ativo !== false,
-          planoAtual: normalizePlano(data.plano),
-          checkinHabilitado: data.checkin_habilitado ?? false,
-          vipRemindersEnabled: data.vip_reminders_enabled ?? false,
-          vipClubEnabled: data.vip_club_enabled ?? false,
-          horariosLoja: {
-            abertura: data.horario_abertura || "09:00",
-            fechamento: data.horario_fechamento || "18:00",
-            inicio_almoco: data.pausa_inicio || "12:00",
-            fim_almoco: data.pausa_fim || "13:00",
-            dias_trabalho: Array.isArray(data.dias_abertos) ? data.dias_abertos : [1, 2, 3, 4, 5, 6],
-            datas_fechadas: Array.isArray(data.datas_fechadas) ? data.datas_fechadas : [],
-          },
-          diasRestantes: data.data_vencimento
-            ? Math.ceil((new Date(data.data_vencimento).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-            : null,
-          fasePagamento: calcularFasePagamento(data.data_vencimento),
-        }));
-      }
-    };
-
-    async function carregarDadosLoja() {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user) return;
-      authUser = authData.user;
-
-      await fetchLoja();
-
-      channel = supabase
-        .channel(`barbearia-dono-${authUser.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "barbearias",
-            filter: `dono_id=eq.${authUser.id}`,
-          },
-          () => {
-            fetchLoja();
-          }
-        )
-        .subscribe();
+    if (error) {
+      console.error("Erro ao carregar dados da loja:", error);
+      return;
     }
 
-    carregarDadosLoja();
+    if (!data) {
+      console.log("Nenhuma barbearia encontrada para este dono.");
+      return;
+    }
 
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
-    };
-  }, []);
+    // ✅ Processar os dados da loja
+    // Aqui você atualiza o estado com os dados recebidos
+    // Exemplo:
+    // setDadosLoja(data);
+    // setHorariosLoja({
+    //   abertura: data.horario_abertura || "09:00",
+    //   fechamento: data.horario_fechamento || "18:00",
+    //   ...
+    // });
+  };
+
+  const carregarDadosLoja = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) return;
+    authUser = authData.user;
+
+    // ✅ Limpar canal anterior antes de criar um novo
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+
+    await fetchLoja();
+
+    channel = supabase
+      .channel(`barbearia-dono-${authUser.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "barbearias",
+          filter: `dono_id=eq.${authUser.id}`,
+        },
+        () => {
+          fetchLoja();
+        }
+      )
+      .subscribe();
+  };
+
+  carregarDadosLoja();
+
+  // ✅ Cleanup ao desmontar
+  return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+  };
+}, []);
 
   // Timer do PIX — rodando limpo, sem re-criar intervalo
   useEffect(() => {
