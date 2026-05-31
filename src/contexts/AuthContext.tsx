@@ -54,44 +54,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function fetchRole() {
       try {
-        // 1. Busca a role na tabela user_roles
+        // 1. Busca TODAS as roles do usuário (removido o maybeSingle para evitar erro se tiver mais de 1)
         const { data, error } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", user.id)
-          .maybeSingle();
+          .eq("user_id", user.id);
 
         if (error) throw error;
 
-        if (isMounted) {
-          if (data?.role) {
-            setUserRole(data.role as AppRole);
-          } else {
-            // 2. FALLBACK: Se não tem role, verifica se é barbeiro
-            const { data: barbeiroData } = await supabase
+        const roles = (data || []).map(r => r.role as AppRole);
+
+        if (roles.length > 0) {
+          // SEGURANÇA: Se for DONO, garante que também seja BARBEIRO no banco de dados
+          if (roles.includes("dono") && !roles.includes("barbeiro")) {
+            await supabase.from("user_roles").insert({ user_id: user.id, role: "barbeiro" });
+            roles.push("barbeiro"); // Adiciona no array local também
+          }
+
+          // Garante que o dono também exista na tabela 'barbeiros'
+          if (roles.includes("dono")) {
+            const { data: barbExists } = await supabase
               .from("barbeiros")
               .select("id")
               .eq("id", user.id)
               .maybeSingle();
 
-            if (barbeiroData) {
-              // É barbeiro mas está sem role → corrige automaticamente
-              await supabase.from("user_roles").insert({ user_id: user.id, role: "barbeiro" });
-              setUserRole("barbeiro");
-            } else {
-              // 3. Verifica se é dono
-              const { data: donoData } = await supabase
+            if (!barbExists) {
+              // Pega o nome do metadata (caso tenha sido salvo no signup) ou usa o email
+              const nomeDono = user.user_metadata?.full_name || user.email?.split('@')[0] || "Dono";
+
+              // Busca o ID da barbearia dele
+              const { data: barbeariaData } = await supabase
                 .from("barbearias")
                 .select("id")
                 .eq("dono_id", user.id)
                 .maybeSingle();
 
-              if (donoData) {
-                await supabase.from("user_roles").insert({ user_id: user.id, role: "dono" });
-                setUserRole("dono");
-              } else {
-                setUserRole(null);
+              if (barbeariaData) {
+                await supabase.from("barbeiros").insert({
+                  id: user.id,
+                  barbearia_id: barbeariaData.id,
+                  nome: nomeDono,
+                  comissao_pct: 0, // Dono não paga comissão pra ele mesmo
+                  ativo: true,
+                });
               }
+            }
+          }
+
+          if (isMounted) {
+            // Define a role principal para o estado (prioridade: ceo > dono > barbeiro > vendedor)
+            if (roles.includes("ceo")) setUserRole("ceo");
+            else if (roles.includes("dono")) setUserRole("dono");
+            else if (roles.includes("barbeiro")) setUserRole("barbeiro");
+            else if (roles.includes("vendedor")) setUserRole("vendedor");
+            else setUserRole(null);
+          }
+        } else {
+          // 2. FALLBACK: Se não tem nenhuma role, verifica se é barbeiro
+          const { data: barbeiroData } = await supabase
+            .from("barbeiros")
+            .select("id")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (barbeiroData) {
+            await supabase.from("user_roles").insert({ user_id: user.id, role: "barbeiro" });
+            if (isMounted) setUserRole("barbeiro");
+          } else {
+            // 3. Verifica se é dono
+            const { data: donoData } = await supabase
+              .from("barbearias")
+              .select("id")
+              .eq("dono_id", user.id)
+              .maybeSingle();
+
+            if (donoData) {
+              // Insere AMBAS as roles de uma vez
+              await supabase.from("user_roles").insert([
+                { user_id: user.id, role: "dono" },
+                { user_id: user.id, role: "barbeiro" }
+              ]);
+
+              // Cria o dono como barbeiro também
+              const nomeDono = user.user_metadata?.full_name || user.email?.split('@')[0] || "Dono";
+              await supabase.from("barbeiros").insert({
+                id: user.id,
+                barbearia_id: donoData.id,
+                nome: nomeDono,
+                comissao_pct: 0,
+                ativo: true,
+              });
+
+              if (isMounted) setUserRole("dono");
+            } else {
+              if (isMounted) setUserRole(null);
             }
           }
         }
