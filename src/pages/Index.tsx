@@ -13,13 +13,13 @@ import { TermosDeUso } from "@/components/TermosDeUso";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  useBarbearia, 
-  useBarbeiros, 
-  useServicos, 
+  useBarbearia,
+  useBarbeiros,
+  useServicos,
   useAgendamentos,
-  useMutacoesBarbeiro, 
-  useMutacoesServico, 
-  useMutacoesAgendamento, 
+  useMutacoesBarbeiro,
+  useMutacoesServico,
+  useMutacoesAgendamento,
   useClientesVIP
 } from "@/hooks/useQueries";
 import { useDonoData } from "@/hooks/useDonoData";
@@ -27,7 +27,6 @@ import type { AgendamentoInsert } from "@/types/queries";
 import type { PlanoType } from "@/types/dono";
 import { DonoModalRenovacao } from "@/components/dono/DonoModalRenovacao";
 
-// Lazy load
 const VisaoDono = lazy(() => import("@/components/VisaoDono").then(m => ({ default: m.VisaoDono })));
 const VisaoVendedor = lazy(() => import("@/components/VisaoVendedor").then(m => ({ default: m.VisaoVendedor })));
 const VisaoCEO = lazy(() => import("@/components/VisaoCEO").then(m => ({ default: m.VisaoCEO })));
@@ -76,7 +75,6 @@ interface Barbearia {
   ativo?: boolean;
   plano?: string;
   checkin_habilitado?: boolean;
-  data_vencimento?: string | null;
 }
 
 interface ImpersonateData {
@@ -95,6 +93,11 @@ const getLocalDate = (): string => {
   const m = String(agora.getMonth() + 1).padStart(2, "0");
   const d = String(agora.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+};
+
+const extrairData = (data: string | undefined | null): string => {
+  if (!data) return "";
+  return String(data).substring(0, 10);
 };
 
 function mensagemDeErro(err: unknown): string {
@@ -166,11 +169,11 @@ export default function Index() {
   const [impersonateData, setImpersonateData] = useState<ImpersonateData | null>(null);
   const [loadingImpersonate, setLoadingImpersonate] = useState(false);
 
-  const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira" | "vendedor">("barbeiro");
+  const [tab, setTab] = useState<"barbeiro" | "dono" | "carteira">("barbeiro");
   const [tabSlideDir, setTabSlideDir] = useState(1);
   const [dataFiltro, setDataFiltro] = useState<string>(getLocalDate());
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState<string>("");
-  const [dadosCEO, setDadosCEO] = useState({ lojas: 0, faturamento: 0, vendedores: [] });
+  const [dadosCEO, setDadosCEO] = useState({ lojas: 0, faturamento: 0, vendedores: [] as any[] });
 
   const isImpersonating = userRole === "ceo" && !!impersonateSlug;
 
@@ -178,10 +181,10 @@ export default function Index() {
     try {
       if (user?.id) {
         await supabase.from("audit_logs").insert({
-          user_id: user.id,
-          action: "impersonate_exit",
-          details: { target_slug: impersonateSlug, target_name: impersonateName },
-          user_agent: navigator.userAgent
+          tabela: "barbearias",
+          registro_id: impersonateSlug || "",
+          acao: "impersonate_exit",
+          dados_novos: { target_slug: impersonateSlug, target_name: impersonateName },
         });
       }
     } catch (err) {
@@ -244,11 +247,15 @@ export default function Index() {
         console.error("Erro ao carregar dados da barbearia:", err);
         toast.error("Erro ao carregar dados da barbearia.");
       } finally {
-        setLoadingImpersonate(false);
+        if (!controller.signal.aborted) {
+          setLoadingImpersonate(false);
+        }
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+    };
   }, [impersonateSlug, isImpersonating, sairImpersonacao]);
 
   const barbeariaQueryEnabled = !isImpersonating && userRole !== "ceo" && userRole !== "vendedor";
@@ -284,12 +291,12 @@ export default function Index() {
     () => (isImpersonating ? impersonateData?.barbeiros || [] : barbeirosNormal),
     [isImpersonating, impersonateData?.barbeiros, barbeirosNormal]
   );
-  
+
   const servicos = useMemo(
     () => (isImpersonating ? impersonateData?.servicos || [] : servicosNormal),
     [isImpersonating, impersonateData?.servicos, servicosNormal]
   );
-  
+
   const agendamentos = useMemo(
     () => (isImpersonating ? impersonateData?.agendamentos || [] : agendamentosNormal),
     [isImpersonating, impersonateData?.agendamentos, agendamentosNormal]
@@ -322,7 +329,7 @@ export default function Index() {
       agendamentos
         .filter((ag: Agendamento) => {
           if (!ag.data) return false;
-          return String(ag.data).substring(0, 10) === data && String(ag.barbeiro_id) === String(bId) && ag.status !== "Cancelado";
+          return extrairData(ag.data) === data && String(ag.barbeiro_id) === String(bId) && ag.status !== "Cancelado";
         })
         .map((ag: Agendamento) => ag.horario),
     [agendamentos]
@@ -349,13 +356,13 @@ export default function Index() {
     }
     return userRole === "barbeiro"
       ? [
-          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
-          { id: "carteira" as const, label: "Carteira", icon: Wallet },
-        ]
+        { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
+        { id: "carteira" as const, label: "Carteira", icon: Wallet },
+      ]
       : [
-          { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
-          { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard },
-        ];
+        { id: "barbeiro" as const, label: "Agenda", icon: Scissors },
+        { id: "dono" as const, label: "Dashboard", icon: LayoutDashboard },
+      ];
   }, [userRole, isImpersonating]);
 
   // ==========================================
@@ -364,12 +371,12 @@ export default function Index() {
   const stats = useMemo(() => {
     const hoje = getLocalDate();
     const prefixoMes = hoje.substring(0, 7);
-    
+
     const noDia = agendamentos.filter((ag: Agendamento) => {
       if (!ag.data) return false;
-      return String(ag.data).substring(0, 10) === String(dataFiltro).substring(0, 10);
+      return extrairData(ag.data) === extrairData(dataFiltro);
     });
-    
+
     const idParaFiltrar = isDono ? barbeiroSelecionadoId : user?.id;
 
     const agParaExibir = (idParaFiltrar && idParaFiltrar !== "" && idParaFiltrar !== "all")
@@ -383,7 +390,7 @@ export default function Index() {
     const fatMensal = agendamentos
       .filter((ag: Agendamento) => {
         if (!ag.data) return false;
-        return String(ag.data).substring(0, 10).startsWith(prefixoMes) && ag.status === "Finalizado";
+        return extrairData(ag.data).startsWith(prefixoMes) && ag.status === "Finalizado";
       })
       .reduce((sum, ag) => sum + Number(servicos_find(ag.servico_id)?.preco || 0), 0);
 
@@ -394,9 +401,9 @@ export default function Index() {
     const agMesMeuBarbeiro = agendamentos.filter(
       (ag: Agendamento) => {
         if (!ag.data) return false;
-        return String(ag.barbeiro_id) === String(user?.id) && 
-               String(ag.data).substring(0, 10).startsWith(prefixoMes) && 
-               ag.status === "Finalizado";
+        return String(ag.barbeiro_id) === String(user?.id) &&
+          extrairData(ag.data).startsWith(prefixoMes) &&
+          ag.status === "Finalizado";
       }
     );
 
@@ -414,9 +421,9 @@ export default function Index() {
       const cortes = agendamentos.filter(
         (ag: Agendamento) => {
           if (!ag.data) return false;
-          return String(ag.data).substring(0, 10) === String(dataFiltro).substring(0, 10) && 
-                 String(ag.barbeiro_id) === String(b.id) && 
-                 ag.status === "Finalizado";
+          return extrairData(ag.data) === extrairData(dataFiltro) &&
+            String(ag.barbeiro_id) === String(b.id) &&
+            ag.status === "Finalizado";
         }
       );
       return {
@@ -428,7 +435,7 @@ export default function Index() {
   }, [barbeiros, agendamentos, dataFiltro]);
 
   const handleNovoAgendamento = useCallback(
-    async (ag: Partial<Agendamento>): Promise<{ error?: unknown }> => {
+    async (ag: Partial<Agendamento>): Promise<{ error?: any }> => {
       if (!slug) return { error: "Slug não definido" };
       try {
         const idempotencyKey = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -453,7 +460,7 @@ export default function Index() {
         const servico = servicos_find(agAtual?.servico_id || "");
         const barbeiro = barbeiros.find((b) => String(b.id) === String(agAtual?.barbeiro_id));
         const valorComissao = (Number(servico?.preco || 0) * Number(barbeiro?.comissao_pct || 0)) / 100;
-        
+
         return mutacoesAgendamento.atualizarStatusAgendamento.mutateAsync({
           id,
           status: "Finalizado",
@@ -604,8 +611,8 @@ export default function Index() {
   }, [donoData.planoAtual]);
 
   const getValorPlano = useCallback((plano: PlanoType) => {
-    const valores: Record<PlanoType, number> = { starter: 35, pro: 50, elite: 497 };
-    return valores[plano] || 50;
+    const valores: Record<PlanoType, number> = { starter: 50, pro: 99.90, elite: 497 };
+    return valores[plano] || 99.90;
   }, []);
 
   useEffect(() => {
@@ -617,10 +624,13 @@ export default function Index() {
         supabase.from("barbearias").select("*").abortSignal(controller.signal)
       ]);
       if (controller.signal.aborted) return;
+      const lojas = lojasRes.data || [];
+      const valoresPlano: Record<string, number> = { starter: 50, pro: 99.90, elite: 497 };
+      const faturamento = lojas.reduce((acc: number, l: any) => acc + (valoresPlano[l.plano] || 99.90), 0);
       setDadosCEO({
-        lojas: lojasRes.data?.length || 0,
-        faturamento: (lojasRes.data?.length || 0) * 50,
-        vendedores: vendsRes.data?.map((v) => ({ id: v.id, nome: v.nome, total_lojas: 0 })) || []
+        lojas: lojas.length,
+        faturamento,
+        vendedores: vendsRes.data?.map((v: any) => ({ id: v.id, nome: v.nome, total_lojas: 0 })) || []
       });
     })();
     return () => controller.abort();
@@ -638,17 +648,17 @@ export default function Index() {
     }
   }, [barbeariaQueryEnabled, isDono, user?.id, barbeiros]);
 
-  const hojeDate = new Date(); 
-  let dataVenc: Date | null = null; 
-  const vencRaw = (barbearia as any)?.data_vencimento; 
-  
+  const hojeDate = new Date();
+  let dataVenc: Date | null = null;
+  const vencRaw = (barbearia as any)?.data_vencimento;
+
   if (vencRaw) {
     const parsed = new Date(String(vencRaw));
     if (!isNaN(parsed.getTime())) {
       dataVenc = parsed;
     }
   }
-  
+
   const vencida = dataVenc ? dataVenc < hojeDate : false;
   const lojaBloqueada = donoData.isLojaAtiva === false || vencida || donoData.fasePagamento === 4;
 
@@ -693,14 +703,14 @@ export default function Index() {
             <VisaoVendedor />
           </Suspense>
         </main>
-        <TermosDeUso />
+        <TermosDeUso userId={user?.id} />
       </div>
     );
   }
 
   if (barbeariaQueryEnabled && exibirSkeleton) {
     const skeletonTab = tab === "dono" || tab === "carteira" || tab === "barbeiro" ? tab : "barbeiro";
-    return <IndexPageSkeleton tab={skeletonTab} aria-busy="true" />;
+    return <IndexPageSkeleton tab={skeletonTab} />;
   }
 
   if (isImpersonating && loadingImpersonate) {
@@ -744,10 +754,6 @@ export default function Index() {
 
         <ImpersonationBanner isImpersonating={isImpersonating} impersonateName={impersonateName} onExit={sairImpersonacao} />
 
-        {/* O AVISO ESTÁ AQUI: O filtro de cima com os calendários duplos 
-          foi totalmente REMOVIDO para a tela ficar limpa! 
-        */}
-
         <main className="flex-1 p-3 sm:p-4 md:p-6 pb-28 max-w-7xl mx-auto w-full flex flex-col min-h-0">
           {lojaBloqueada ? (
             <div className="flex flex-col items-center justify-center flex-1 h-full text-center px-4">
@@ -762,7 +768,7 @@ export default function Index() {
           ) : (
             <AnimatePresence mode="wait" initial={false} custom={tabSlideDir}>
               <motion.div key={tab} custom={tabSlideDir} variants={tabPanelVariants} initial="enter" animate="center" exit="exit" transition={{ type: "spring", stiffness: 400, damping: 36 }} className="flex-1 w-full">
-                
+
                 {tab === "barbeiro" && (
                   <VisaoBarbeiro
                     barbeiros={barbeiros}
@@ -775,19 +781,9 @@ export default function Index() {
                     horariosOcupados={horariosOcupados}
                     servicos_find={servicos_find}
                     isDono={isDono || false}
-                    userId={user?.id}
                     corPrimaria={marca}
                     onNovoAgendamento={handleNovoAgendamento}
                     onStatusChange={handleStatusChange}
-                    checkinHabilitado={barbearia?.checkin_habilitado || false}
-                    planoAtual={(donoData.planoAtual as PlanoType) || "pro"}
-                    pixGerado={pixGerado}
-                    tempoPix={tempoPix}
-                    isGerandoPix={isGerandoPix}
-                    onGerarPix={handleGerarPix}
-                    onCopiarPix={handleCopiarPix}
-                    onRenovacaoClick={handleRenovacaoClick}
-                    getValorPlano={getValorPlano}
                   />
                 )}
 
@@ -832,7 +828,7 @@ export default function Index() {
                         onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
                         onAddServico={isImpersonating ? undefined : handleAddServico}
                         onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
-                        onAddDespesa={isImpersonating ? undefined : () => {}}
+                        onAddDespesa={() => { }}
                       />
                     </>
                   </Suspense>
@@ -860,7 +856,7 @@ export default function Index() {
             ))}
           </nav>
         )}
-        <TermosDeUso />
+        <TermosDeUso userId={user?.id} />
 
         <DonoModalRenovacao
           open={modalRenovacaoAberto}

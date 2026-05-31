@@ -32,6 +32,16 @@ interface AgendamentoCheckin {
   barbearia: { nome: string; slug: string; cor_primaria: string; checkin_habilitado: boolean } | null;
 }
 
+// ✅ Função auxiliar fora do componente (não é recriada a cada render)
+function gerarPin(codigo: string): string {
+  let hash = 0;
+  for (let i = 0; i < codigo.length; i++) {
+    hash = (hash << 5) - hash + codigo.charCodeAt(i);
+    hash |= 0;
+  }
+  return String(Math.abs(hash) % 10000).padStart(4, '0');
+}
+
 export default function Checkin() {
   const { slug, ticket } = useParams<{ slug: string; ticket: string }>();
   const navigate = useNavigate();
@@ -43,16 +53,6 @@ export default function Checkin() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [pin, setPin] = useState("");
-
-  // Gera PIN de 4 dígitos a partir do ticket_codigo (determinístico)
-  const gerarPin = (codigo: string) => {
-    let hash = 0;
-    for (let i = 0; i < codigo.length; i++) {
-      hash = (hash << 5) - hash + codigo.charCodeAt(i);
-      hash |= 0;
-    }
-    return String(Math.abs(hash) % 10000).padStart(4, '0');
-  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -76,7 +76,8 @@ export default function Checkin() {
           return;
         }
 
-        if (!barbeariaData.checkin_habilitado) {
+        // ✅ Corrige o bug do null (assegura que seja estritamente true)
+        if (barbeariaData.checkin_habilitado !== true) {
           setError("O check-in digital não está disponível para esta barbearia.");
           setLoading(false);
           return;
@@ -151,6 +152,7 @@ export default function Checkin() {
     };
   }, [slug, ticket]);
 
+  // ✅ Toast consolidado (mais limpo e rápido)
   const handleConfirmarCheckin = async () => {
     if (!agendamento || isSubmitting) return;
 
@@ -181,13 +183,11 @@ export default function Checkin() {
 
       if (error) throw error;
 
-      toast.dismiss(toastId);
       setSuccess(true);
-      toast.success("Check-in realizado! Aguarde seu atendimento.");
+      toast.success("Check-in realizado! Aguarde seu atendimento.", { id: toastId });
     } catch (err) {
-      toast.dismiss(toastId);
       console.error(err);
-      toast.error("Erro ao confirmar check-in. Tente novamente.");
+      toast.error("Erro ao confirmar check-in. Tente novamente.", { id: toastId });
     } finally {
       setIsSubmitting(false);
     }

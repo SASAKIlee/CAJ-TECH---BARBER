@@ -29,12 +29,23 @@ interface Servico {
   duracao_minutos: number;
 }
 
+// ✅ Substitui Partial<any> por tipo forte
+interface AgendamentoPayload {
+  nome_cliente: string;
+  telefone_cliente: string;
+  servico_id: string;
+  barbeiro_id: string;
+  data: string;
+  horario: string;
+  observacao?: string;
+}
+
 interface NovoAgendamentoModalProps {
   open: boolean;
   setOpen: (open: boolean) => void;
   barbeiros: Barbeiro[];
   servicos: Servico[];
-  onNovoAgendamento: (agendamento: Partial<any>) => Promise<{ error?: any }>;
+  onNovoAgendamento: (agendamento: AgendamentoPayload) => Promise<{ error?: string | null }>;
   barbeiroSelecionadoId: string;
   horariosOcupados: (data: string, barbeiroId: string) => string[];
   horarios: string[];
@@ -48,11 +59,6 @@ interface NovoAgendamentoModalProps {
 // ==========================================
 // FUNÇÕES AUXILIARES
 // ==========================================
-function getHojeLocal(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function aplicarMascaraTelefone(valor: string): string {
   const digits = valor.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits;
@@ -88,13 +94,13 @@ export function NovoAgendamentoModal({
     telefone: "",
     servicoId: "",
     barbeiroId: barbeiroSelecionadoId || "",
-    data: getHojeLocal(),
+    data: hojeLocal,
     horario: "",
     observacao: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Resetar formulário ao abrir
+  // ✅ Usa a prop hojeLocal em vez de recalcular
   useEffect(() => {
     if (open) {
       setNovo({
@@ -102,13 +108,13 @@ export function NovoAgendamentoModal({
         telefone: "",
         servicoId: "",
         barbeiroId: barbeiroSelecionadoId || "",
-        data: getHojeLocal(),
+        data: hojeLocal,
         horario: "",
         observacao: "",
       });
       setIsSubmitting(false);
     }
-  }, [open, barbeiroSelecionadoId]);
+  }, [open, barbeiroSelecionadoId, hojeLocal]);
 
   const slotsOcupados = useMemo(() => {
     if (!novo.data || !novo.barbeiroId) return [];
@@ -132,7 +138,6 @@ export function NovoAgendamentoModal({
   }, [novo]);
 
   const handleAgendar = useCallback(async () => {
-    // Validação local adicional (Zod fará a validação completa depois)
     if (!isFormValid) {
       toast.error("Preencha todos os campos corretamente.");
       return;
@@ -140,11 +145,10 @@ export function NovoAgendamentoModal({
 
     setIsSubmitting(true);
     const toastId = toast.loading("Processando...");
-    
-    // Remove máscara do telefone para validação e envio
+
     const telefoneLimpo = novo.telefone.replace(/\D/g, "");
     const payload = { ...novo, telefone: telefoneLimpo };
-    
+
     const validacao = agendamentoSchema.safeParse(payload);
     if (!validacao.success) {
       toast.dismiss(toastId);
@@ -198,8 +202,9 @@ export function NovoAgendamentoModal({
         </DialogHeader>
         <div className="space-y-5 pt-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
+            <label htmlFor="agend-nome" className="text-[10px] font-black text-zinc-500 uppercase ml-1">Cliente</label>
             <Input
+              id="agend-nome"
               placeholder="Nome Completo"
               className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm"
               value={novo.nome}
@@ -208,8 +213,9 @@ export function NovoAgendamentoModal({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
+            <label htmlFor="agend-tel" className="text-[10px] font-black text-zinc-500 uppercase ml-1">WhatsApp</label>
             <Input
+              id="agend-tel"
               type="tel"
               placeholder="(11) 99999-9999"
               maxLength={15}
@@ -224,16 +230,16 @@ export function NovoAgendamentoModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Barbeiro</label>
+              <label htmlFor="agend-barbeiro" className="text-[10px] font-black text-zinc-500 uppercase ml-1">Barbeiro</label>
               <Select
                 value={novo.barbeiroId}
                 onValueChange={(v) => setNovo({ ...novo, barbeiroId: v, horario: "" })}
               >
-                <SelectTrigger className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm">
+                <SelectTrigger id="agend-barbeiro" className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
-                  {barbeiros.filter((b) => b.ativo).map((b) => (
+                  {barbeiros.filter((b) => b.ativo !== false).map((b) => (
                     <SelectItem key={b.id} value={b.id}>{b.nome}</SelectItem>
                   ))}
                 </SelectContent>
@@ -241,9 +247,9 @@ export function NovoAgendamentoModal({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Serviço</label>
+              <label htmlFor="agend-servico" className="text-[10px] font-black text-zinc-500 uppercase ml-1">Serviço</label>
               <Select value={novo.servicoId} onValueChange={(v) => setNovo({ ...novo, servicoId: v })}>
-                <SelectTrigger className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm">
+                <SelectTrigger id="agend-servico" className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm">
                   <SelectValue placeholder="Serviço" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
@@ -256,11 +262,13 @@ export function NovoAgendamentoModal({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
+            <label htmlFor="agend-data" className="text-[10px] font-black text-zinc-500 uppercase ml-1">Data</label>
             <Input
+              id="agend-data"
               type="date"
               min={hojeLocal}
-              className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base color-scheme-dark backdrop-blur-sm"
+              className="rounded-xl border-white/[0.08] bg-black/35 h-14 text-base backdrop-blur-sm"
+              style={{ colorScheme: 'dark' }}
               value={novo.data}
               onChange={(e) => setNovo({ ...novo, data: e.target.value, horario: "" })}
             />
@@ -270,7 +278,7 @@ export function NovoAgendamentoModal({
             <label className="text-[10px] font-black text-zinc-500 tracking-widest ml-1 uppercase">
               Horários Disponíveis
             </label>
-            <div className="grid grid-cols-4 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
               {horarios.map((h) => {
                 const [hH, mH] = h.split(":").map(Number);
                 const isHoje = novo.data === hojeLocal;
@@ -300,8 +308,9 @@ export function NovoAgendamentoModal({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado para o barbeiro (opcional)</label>
+            <label htmlFor="agend-obs" className="text-[10px] font-black text-zinc-500 uppercase ml-1">Recado para o barbeiro (opcional)</label>
             <Textarea
+              id="agend-obs"
               placeholder="Ex: Quero igual da foto..."
               className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]"
               value={novo.observacao}

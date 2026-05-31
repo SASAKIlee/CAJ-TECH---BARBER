@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { Wallet, Scissors, Calendar, TrendingUp, Clock, Target, Edit2, Check, X, Trophy, Crown, Medal } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useCountUp } from "@/hooks/useCountUp";
@@ -20,9 +19,9 @@ export interface CarteiraBarbeiroProps {
   onUpdateMeta?: (novaMeta: number) => void;
 }
 
-const formatarMoedaBR = (valor: number) => {
-  return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
-};
+// ✅ Formatter reutilizável — não recria a cada chamada
+const formatarMoedaBR = (valor: number) =>
+  (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export function CarteiraBarbeiro({
   comissaoTotalMes,
@@ -42,6 +41,10 @@ export function CarteiraBarbeiro({
 
   const progressoMeta = Math.min((comissaoHoje / metaDiaria) * 100, 100);
   const metaBatida = progressoMeta >= 100;
+
+  // ✅ Média pelos dias que já passaram no mês, não por 30
+  const diaAtual = new Date().getDate();
+  const mediaDiaria = comissaoTotalMes / diaAtual;
 
   const comissaoAnimada = useCountUp(comissaoHoje);
   const totalMesAnimado = useCountUp(comissaoTotalMes);
@@ -76,37 +79,31 @@ export function CarteiraBarbeiro({
         </h2>
       </div>
 
-      {/* SEÇÃO DA META (GAMIFICAÇÃO) */}
+      {/* SEÇÃO DA META */}
       <div className="space-y-3 px-1">
         <div className="flex justify-between items-center">
           <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" /> Progresso Diário
           </p>
-
           <div className="flex items-center gap-2">
             {editandoMeta ? (
               <div className="flex items-center gap-1 animate-in zoom-in-95">
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   value={novaMetaValor}
-                  onChange={(e) => setNovaMetaValor(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9]/g, '');
+                    setNovaMetaValor(v);
+                  }}
                   className="w-20 bg-zinc-800 border border-emerald-500/50 text-white text-xs font-bold px-3 py-1.5 rounded-xl outline-none"
                   autoFocus
                   aria-label="Nova meta diária"
                 />
-                <button
-                  onClick={handleSalvarMeta}
-                  className="bg-emerald-500 text-black p-1.5 rounded-lg active:scale-90 transition-transform"
-                  aria-label="Salvar meta"
-                >
+                <button onClick={handleSalvarMeta} className="bg-emerald-500 text-black p-1.5 rounded-lg active:scale-90 transition-transform" aria-label="Salvar meta">
                   <Check className="h-4 w-4 stroke-[3px]" />
                 </button>
-                <button
-                  onClick={handleCancelarEdicao}
-                  className="bg-zinc-800 text-zinc-400 p-1.5 rounded-lg"
-                  aria-label="Cancelar edição"
-                >
+                <button onClick={handleCancelarEdicao} className="bg-zinc-800 text-zinc-400 p-1.5 rounded-lg" aria-label="Cancelar edição">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -121,7 +118,7 @@ export function CarteiraBarbeiro({
               >
                 <Target className={cn("h-3.5 w-3.5", metaBatida ? "text-yellow-500" : "text-emerald-500")} />
                 <span className="text-[10px] text-zinc-300 font-black uppercase tracking-widest">
-                  Meta: R$ {metaDiaria}
+                  Meta: {formatarMoedaBR(metaDiaria)}
                 </span>
                 <Edit2 className="h-3 w-3 text-zinc-600 group-hover:text-white transition-colors" />
               </div>
@@ -129,7 +126,6 @@ export function CarteiraBarbeiro({
           </div>
         </div>
 
-        {/* BARRA DE PROGRESSO COM GLOW */}
         <div className="relative">
           <div className="w-full bg-zinc-900 rounded-full h-4 border border-zinc-800 p-0.5 overflow-hidden">
             <motion.div
@@ -143,7 +139,6 @@ export function CarteiraBarbeiro({
                   : "bg-emerald-500"
               )}
             >
-              {/* Efeito de brilho passando pela barra */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-20 animate-[shimmer_2s_infinite]" />
             </motion.div>
           </div>
@@ -166,7 +161,7 @@ export function CarteiraBarbeiro({
           <div>
             <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1">Comissão Hoje</p>
             <p className="text-2xl font-black text-white italic tabular-nums">
-              R$ <span className="text-emerald-400">{formatarMoedaBR(comissaoAnimada)}</span>
+              <span className="text-emerald-400">{formatarMoedaBR(comissaoAnimada)}</span>
             </p>
           </div>
         </Card>
@@ -190,7 +185,7 @@ export function CarteiraBarbeiro({
               <div>
                 <p className="text-[10px] text-emerald-600/80 uppercase font-black tracking-widest">Gorjetas Hoje</p>
                 <p className="text-xl font-black text-emerald-300 italic tabular-nums">
-                  R$ {formatarMoedaBR(gorjetaAnimada)}
+                  {formatarMoedaBR(gorjetaAnimada)}
                 </p>
               </div>
             </div>
@@ -246,7 +241,7 @@ export function CarteiraBarbeiro({
         )}
       </div>
 
-      {/* RESUMO MENSAL (CRM) */}
+      {/* RESUMO MENSAL */}
       <div className="space-y-3 pt-2">
         <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] px-1 flex items-center gap-2">
           <Calendar className="h-4 w-4 text-zinc-600" /> Acumulado do Mês
@@ -259,7 +254,7 @@ export function CarteiraBarbeiro({
             <div>
               <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-0.5">Saldo Disponível</p>
               <p className="text-2xl font-black text-white tabular-nums tracking-tighter">
-                R$ {formatarMoedaBR(totalMesAnimado)}
+                {formatarMoedaBR(totalMesAnimado)}
               </p>
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="h-1 w-1 rounded-full bg-emerald-500" />
@@ -270,7 +265,7 @@ export function CarteiraBarbeiro({
           <div className="h-12 w-px bg-zinc-800 mx-2" />
           <div className="text-center">
             <p className="text-[10px] text-zinc-600 font-black uppercase">Média/Dia</p>
-            <p className="text-sm font-black text-zinc-300">R$ {formatarMoedaBR(comissaoTotalMes / 30)}</p>
+            <p className="text-sm font-black text-zinc-300">{formatarMoedaBR(mediaDiaria)}</p>
           </div>
         </Card>
       </div>

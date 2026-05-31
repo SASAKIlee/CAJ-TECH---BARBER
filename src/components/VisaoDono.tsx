@@ -83,18 +83,14 @@ function VisaoDonoComponent({
   const [barbeiroFiltroId, setBarbeiroFiltroId] = useState("");
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
-  
-  // Sub-navegação para aba VIP
+
   const [vipSubTab, setVipSubTab] = useState<"radar" | "fila" | "lojinha" | "despesas" | "automacoes">("automacoes");
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
   const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter");
   const [isGerandoPix, setIsGerandoPix] = useState(false);
-
-  // Novo estado para data de vencimento
   const [dataVencimento, setDataVencimento] = useState<string | null>(null);
 
-  // Formulários
   const [nBarbeiro, setNBarbeiro] = useState<BarbeiroForm>({ nome: "", comissao: "50", email: "", senha: "" });
   const [nServico, setNServico] = useState<ServicoForm>({ nome: "", preco: "", duracao_minutos: "30" });
   const [imagemBarbeiro, setImagemBarbeiro] = useState<File | null>(null);
@@ -103,7 +99,6 @@ function VisaoDonoComponent({
   const [imagemFundo, setImagemFundo] = useState<File | null>(null);
   const [novaDataFechada, setNovaDataFechada] = useState("");
 
-  // Loading states
   const [isUploadingBarbeiro, setIsUploadingBarbeiro] = useState(false);
   const [isUploadingServico, setIsUploadingServico] = useState(false);
   const [isUploadingBranding, setIsUploadingBranding] = useState(false);
@@ -124,7 +119,7 @@ function VisaoDonoComponent({
   // ==========================================
   useEffect(() => {
     let dismissTimer: ReturnType<typeof setTimeout>;
-    
+
     const buscarAviso = async () => {
       const { data, error } = await supabase
         .from('avisos_rede')
@@ -152,7 +147,6 @@ function VisaoDonoComponent({
     };
   }, []);
 
-  // Buscar data de vencimento da barbearia
   useEffect(() => {
     async function buscarVencimento() {
       const { data: authData } = await supabase.auth.getUser();
@@ -170,7 +164,7 @@ function VisaoDonoComponent({
   }, []);
 
   // ==========================================
-  // MEMOS PARA CÁLCULOS DERIVADOS
+  // MEMOS
   // ==========================================
   const stats = useMemo(
     () =>
@@ -189,9 +183,26 @@ function VisaoDonoComponent({
   // ==========================================
   // CALLBACKS
   // ==========================================
+  const abasVisiveis = useMemo(() => {
+    const baseAbas: Array<{ id: DonoSubTab; label: string; Icon: React.ElementType }> = [
+      { id: "resumo", label: "Resumo", Icon: FileText },
+      { id: "dashboard", label: "Métricas", Icon: BarChart3 },
+    ];
+    if (data.planoAtual === "pro" || data.planoAtual === "elite") {
+      baseAbas.push({ id: "vip", label: "VIP", Icon: Zap });
+    }
+    baseAbas.push({ id: "config", label: "Ajustes", Icon: Settings2 });
+    return baseAbas;
+  }, [data.planoAtual]);
+
+  useEffect(() => {
+    if (!abasVisiveis.some(aba => aba.id === subTab)) {
+      setSubTab("resumo");
+    }
+  }, [abasVisiveis, subTab]);
+
   const switchSub = useCallback(
     (next: DonoSubTab) => {
-      // Ordem dinâmica baseada no plano
       const ordemAtiva = abasVisiveis.map(a => a.id);
       setSubDir(ordemAtiva.indexOf(next) > ordemAtiva.indexOf(subTab) ? 1 : -1);
       setSubTab(next);
@@ -199,7 +210,7 @@ function VisaoDonoComponent({
         setVipSubTab("automacoes");
       }
     },
-    [subTab, data.planoAtual]
+    [subTab, abasVisiveis]
   );
 
   const persistCheckin = useCallback(
@@ -451,36 +462,13 @@ function VisaoDonoComponent({
   }, []);
 
   // ==========================================
-  // LISTA DE ABAS VISÍVEIS (VIP oculta para Starter)
-  // ==========================================
-  const abasVisiveis = useMemo(() => {
-    const baseAbas: Array<{ id: DonoSubTab; label: string; Icon: React.ElementType }> = [
-      { id: "resumo", label: "Resumo", Icon: FileText },
-      { id: "dashboard", label: "Métricas", Icon: BarChart3 },
-    ];
-    if (data.planoAtual === "pro" || data.planoAtual === "elite") {
-      baseAbas.push({ id: "vip", label: "VIP", Icon: Zap });
-    }
-    baseAbas.push({ id: "config", label: "Ajustes", Icon: Settings2 });
-    return baseAbas;
-  }, [data.planoAtual]);
-
-  // Garante que subTab atual seja válida (caso plano mude)
-  useEffect(() => {
-    if (!abasVisiveis.some(aba => aba.id === subTab)) {
-      setSubTab("resumo");
-    }
-  }, [abasVisiveis, subTab]);
-
-  // ==========================================
-  // RENDER CONDICIONAL DE BLOQUEIO (CORRIGIDO)
+  // RENDER CONDICIONAL DE BLOQUEIO
   // ==========================================
   const hoje = new Date();
   const vencimentoDate = dataVencimento ? new Date(dataVencimento) : null;
   const isVencida = vencimentoDate && vencimentoDate < hoje;
 
   if (data.isLojaAtiva === false) {
-    // Se está inativa E vencida, é inadimplência → tela de pagamento
     if (isVencida) {
       return (
         <DonoBloqueio
@@ -496,7 +484,6 @@ function VisaoDonoComponent({
         />
       );
     }
-    // Inativa mas não vencida → bloqueio manual (suporte)
     return (
       <DonoBloqueio
         motivo="manual"
@@ -675,7 +662,7 @@ function VisaoDonoComponent({
               </div>
             )}
             {subTab === "config" && (
-              <DonoTabConfig  
+              <DonoTabConfig
                 barbeiros={barbeiros}
                 servicos={servicos}
                 horariosLoja={data.horariosLoja}
@@ -710,9 +697,9 @@ function VisaoDonoComponent({
                 onSaveBranding={handleSaveBranding}
                 onAddBarbeiro={handleAddBarbeiroComFotoETrava}
                 onAddServico={handleAddServicoComFoto}
-                onToggleBarbeiroStatus={onToggleBarbeiroStatus ?? (() => {})}
-                onRemoveBarbeiro={onRemoveBarbeiro ?? (() => {})}
-                onRemoveServico={onRemoveServico ?? (() => {})}
+                onToggleBarbeiroStatus={onToggleBarbeiroStatus ?? (() => { })}
+                onRemoveBarbeiro={onRemoveBarbeiro ?? (() => { })}
+                onRemoveServico={onRemoveServico ?? (() => { })}
                 onHorarioChange={(campo, valor) => updateData({ horariosLoja: { ...data.horariosLoja, [campo]: valor } })}
               />
             )}
@@ -743,5 +730,4 @@ function VisaoDonoComponent({
   );
 }
 
-// Memoização para evitar re-renderizações desnecessárias
 export const VisaoDono = React.memo(VisaoDonoComponent);

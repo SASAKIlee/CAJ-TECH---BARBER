@@ -27,7 +27,6 @@ export default function Auth() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validação local
     if (!email.trim() || !password.trim()) {
       toast.error("Preencha todos os campos.");
       return;
@@ -47,21 +46,14 @@ export default function Auth() {
       });
 
       if (error) {
-        // Mensagem genérica por segurança
         throw new Error("Credenciais inválidas ou acesso não autorizado.");
       }
 
-      toast.dismiss(toastId);
-      toast.success("Acesso autorizado! Bem-vindo.");
-      
-      // Limpar campos por segurança
-      setPassword("");
-      
-      // Redirecionar para o dashboard
+      toast.success("Acesso autorizado! Bem-vindo.", { id: toastId });
       navigate("/", { replace: true });
-    } catch (err: any) {
-      toast.dismiss(toastId);
-      toast.error(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro inesperado. Tente novamente.";
+      toast.error(message, { id: toastId });
     } finally {
       setLoading(false);
     }

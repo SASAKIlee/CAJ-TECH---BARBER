@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { ShoppingBag, Plus, X, Minus, Package, DollarSign, TrendingUp, Loader2, Search, Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Produto, VendaProduto } from "@/types/dono";
@@ -51,7 +51,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
     try {
       const [prodsRes, vendasRes] = await Promise.all([
         supabase.from("produtos").select("*").eq("barbearia_slug", slug).order("nome", { ascending: true }),
-        supabase.from("vendas_produtos").select("*, produtos(nome)").eq("barbearia_slug", slug).order("data", { ascending: false }).limit(50)
+        supabase.from("vendas_produtos").select("*").eq("barbearia_slug", slug).order("data", { ascending: false }).limit(50)
       ]);
 
       if (prodsRes.error) throw prodsRes.error;
@@ -59,8 +59,9 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
 
       setProdutos(prodsRes.data || []);
       setVendas(vendasRes.data || []);
-    } catch (err: any) {
-      toast.error("Erro ao carregar dados: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro ao carregar dados: " + message);
     } finally {
       setLoading(false);
     }
@@ -96,8 +97,9 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
       setNovoProduto({ nome: "", preco: "", estoque: "" });
       setModalProduto(false);
       carregarDados();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro: " + message);
     }
   };
 
@@ -125,8 +127,9 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
 
       toast.success(`Venda de ${produto.nome} registrada!`);
       carregarDados();
-    } catch (err: any) {
-      toast.error("Erro ao vender: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro ao vender: " + message);
     }
   };
 
@@ -140,8 +143,9 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
 
       if (error) throw error;
       carregarDados();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro: " + message);
     }
   };
 
@@ -151,17 +155,19 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
       if (error) throw error;
       toast.success("Produto removido.");
       carregarDados();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro: " + message);
     }
   };
 
-  const totalVendasMes = vendas.reduce((sum, v) => sum + v.valor_total, 0);
-  const produtosFiltrados = produtos.filter(p =>
-    p.nome.toLowerCase().includes(busca.toLowerCase())
+  const totalVendasMes = useMemo(() => vendas.reduce((sum, v) => sum + v.valor_total, 0), [vendas]);
+
+  const produtosFiltrados = useMemo(() =>
+    produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase())),
+    [produtos, busca]
   );
 
-  // Tela de carregamento inicial
   if (loadingPlano || (loading && hasProAccess)) {
     return (
       <Card className="p-8 rounded-2xl border border-white/[0.08] text-center" style={glass}>
@@ -171,7 +177,6 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
     );
   }
 
-  // Bloqueio para planos sem acesso
   if (!hasProAccess) {
     return (
       <Card className="p-6 rounded-2xl border border-white/[0.08] text-center" style={glass}>
@@ -210,13 +215,12 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
     );
   }
 
-  // Conteúdo completo para planos Pro/Elite
   return (
     <section className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ShoppingBag className="h-5 w-5 text-purple-500" />
+          <ShoppingBag className="h-5 w-5 text-purple-500" aria-hidden="true" />
           <div>
             <h3 className="font-black text-white uppercase text-xl italic">Lojinha / PDV</h3>
             <p className="text-xs text-zinc-500">Controle de estoque e vendas</p>
@@ -226,8 +230,9 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
           onClick={() => setModalProduto(true)}
           className="h-10 px-4 font-black text-xs uppercase"
           style={{ backgroundColor: brand }}
+          aria-label="Adicionar novo produto"
         >
-          <Plus className="h-4 w-4 mr-1" /> Produto
+          <Plus className="h-4 w-4 mr-1" aria-hidden="true" /> Produto
         </Button>
       </div>
 
@@ -249,12 +254,13 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
 
       {/* Busca */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" aria-hidden="true" />
         <Input
           placeholder="Buscar produto..."
           value={busca}
           onChange={e => setBusca(e.target.value)}
           className="bg-black/30 border-white/10 pl-10 h-10 rounded-xl text-sm"
+          aria-label="Buscar produto"
         />
       </div>
 
@@ -265,7 +271,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
         </div>
       ) : produtosFiltrados.length === 0 ? (
         <Card className="p-8 rounded-2xl border border-white/[0.08] text-center" style={glass}>
-          <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
+          <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" aria-hidden="true" />
           <p className="text-white font-bold">Nenhum produto cadastrado</p>
           <p className="text-zinc-500 text-sm mt-1">Cadastre produtos para vender na barbearia.</p>
         </Card>
@@ -276,7 +282,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center shrink-0">
-                    <Package className="h-4 w-4 text-purple-400" />
+                    <Package className="h-4 w-4 text-purple-400" aria-hidden="true" />
                   </div>
                   <div className="min-w-0">
                     <p className="font-bold text-white text-xs truncate">{produto.nome}</p>
@@ -285,7 +291,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <div className="flex items-center gap-1 bg-black/40 rounded-lg px-2 py-1">
-                    <button onClick={() => handleAjustarEstoque(produto, -1)} className="text-zinc-400 hover:text-white">
+                    <button onClick={() => handleAjustarEstoque(produto, -1)} className="text-zinc-400 hover:text-white" aria-label="Diminuir estoque">
                       <Minus className="h-3 w-3" />
                     </button>
                     <Badge
@@ -295,13 +301,13 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                         produto.estoque === 0
                           ? "text-red-400 border-red-500/30"
                           : produto.estoque <= 3
-                          ? "text-yellow-400 border-yellow-500/30"
-                          : "text-zinc-300 border-white/10"
+                            ? "text-yellow-400 border-yellow-500/30"
+                            : "text-zinc-300 border-white/10"
                       )}
                     >
                       {produto.estoque}
                     </Badge>
-                    <button onClick={() => handleAjustarEstoque(produto, 1)} className="text-zinc-400 hover:text-white">
+                    <button onClick={() => handleAjustarEstoque(produto, 1)} className="text-zinc-400 hover:text-white" aria-label="Aumentar estoque">
                       <Plus className="h-3 w-3" />
                     </button>
                   </div>
@@ -311,10 +317,11 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                     disabled={produto.estoque === 0}
                     className="h-7 px-2 text-[8px] font-black uppercase"
                     style={{ backgroundColor: brand }}
+                    aria-label={`Vender ${produto.nome}`}
                   >
-                    <DollarSign className="h-3 w-3 mr-0.5" /> Vender
+                    <DollarSign className="h-3 w-3 mr-0.5" aria-hidden="true" /> Vender
                   </Button>
-                  <button onClick={() => handleRemoverProduto(produto.id)} className="text-zinc-600 hover:text-red-500 p-1">
+                  <button onClick={() => handleRemoverProduto(produto.id)} className="text-zinc-600 hover:text-red-500 p-1" aria-label={`Remover ${produto.nome}`}>
                     <X className="h-3 w-3" />
                   </button>
                 </div>
@@ -328,12 +335,12 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
       {vendas.length > 0 && (
         <div className="pt-4 border-t border-white/5">
           <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
-            <TrendingUp className="h-3 w-3" /> Últimas Vendas
+            <TrendingUp className="h-3 w-3" aria-hidden="true" /> Últimas Vendas
           </h4>
           <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
             {vendas.slice(0, 10).map(venda => (
               <div key={venda.id} className="flex items-center justify-between text-xs py-2 px-3 bg-black/20 rounded-lg">
-                <span className="text-zinc-300 truncate">{(venda as any).produtos?.nome || "Produto"}</span>
+                <span className="text-zinc-300 truncate">{venda.produto_nome || "Produto"}</span>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-zinc-500 text-[10px]">
                     {new Date(venda.data).toLocaleDateString("pt-BR")}
@@ -356,6 +363,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                 <button
                   onClick={() => setModalProduto(false)}
                   className="text-zinc-500 hover:text-white bg-zinc-800 h-8 w-8 rounded-full flex items-center justify-center"
+                  aria-label="Fechar modal"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -368,6 +376,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                     onChange={e => setNovoProduto({ ...novoProduto, nome: e.target.value })}
                     placeholder="Ex: Pomada Modeladora"
                     className="bg-black/30 border-white/10 h-12 rounded-xl"
+                    aria-label="Nome do produto"
                   />
                 </div>
                 <div>
@@ -379,6 +388,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                     onChange={e => setNovoProduto({ ...novoProduto, preco: e.target.value })}
                     placeholder="29.90"
                     className="bg-black/30 border-white/10 h-12 rounded-xl"
+                    aria-label="Preço do produto"
                   />
                 </div>
                 <div>
@@ -389,6 +399,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                     onChange={e => setNovoProduto({ ...novoProduto, estoque: e.target.value })}
                     placeholder="10"
                     className="bg-black/30 border-white/10 h-12 rounded-xl"
+                    aria-label="Estoque inicial do produto"
                   />
                 </div>
               </div>
@@ -396,6 +407,7 @@ export function LojinhaPDV({ slug, brand, glass }: LojinhaPDVProps) {
                 onClick={handleAddProduto}
                 className="w-full h-12 font-black text-xs uppercase"
                 style={{ backgroundColor: brand }}
+                aria-label="Cadastrar produto"
               >
                 Cadastrar Produto
               </Button>

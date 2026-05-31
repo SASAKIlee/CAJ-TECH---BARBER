@@ -10,7 +10,6 @@ export function DonoTabVIP({
   glass,
 }: DonoTabVIPProps) {
   const temVIP = planoAtual === "pro" || planoAtual === "elite";
-  const isElite = planoAtual === "elite";
 
   return (
     <section className="space-y-4 animate-in fade-in duration-500">

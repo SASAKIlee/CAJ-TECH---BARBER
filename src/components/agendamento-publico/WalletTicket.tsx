@@ -1,5 +1,5 @@
 import QRCode from "react-qr-code";
-import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
+import { hexToRgba } from "@/lib/branding";
 
 export const WALLET_TICKET_CAPTURE_ID = "wallet-ticket-capture";
 
@@ -31,7 +31,7 @@ type WalletTicketProps = {
   servicos?: ServicoItem[];
   precoTotal?: number;
   duracaoTotal?: number;
-  checkinHabilitado?: boolean; // 🆕 Prop opcional para controlar exibição do QR Code
+  checkinHabilitado?: boolean;
 };
 
 export function WalletTicket({
@@ -42,10 +42,9 @@ export function WalletTicket({
   servicos = [],
   precoTotal = 0,
   duracaoTotal = 30,
-  checkinHabilitado = false, // padrão desabilitado
+  checkinHabilitado = false,
 }: WalletTicketProps) {
   const brand = config?.cor_primaria || "#D4AF37";
-  const onBrand = contrastTextOnBrand(brand);
   const logoUrl = config?.url_logo?.trim() || null;
   const nomeBarbearia = config?.nome || "Barbearia";
 
@@ -70,7 +69,7 @@ export function WalletTicket({
       id={WALLET_TICKET_CAPTURE_ID}
       className="w-full max-w-[340px] mx-auto overflow-hidden rounded-[28px] bg-[#f2f2f7] shadow-[0_25px_80px_rgba(0,0,0,0.35)] ring-1 ring-black/[0.06]"
     >
-      <div className="h-2 w-full" style={{ backgroundColor: brand }} aria-hidden />
+      <div className="h-2 w-full" style={{ backgroundColor: brand }} aria-hidden="true" />
 
       {/* Cabeçalho */}
       <div className="bg-white px-8 pt-8 pb-6 text-center">
@@ -97,7 +96,7 @@ export function WalletTicket({
         </h2>
       </div>
 
-      <div className="h-px bg-gradient-to-r from-transparent via-zinc-300 to-transparent mx-6" />
+      <div className="h-px bg-gradient-to-r from-transparent via-zinc-300 to-transparent mx-6" aria-hidden="true" />
 
       {/* Corpo - Detalhes do agendamento */}
       <div className="space-y-4 bg-white px-8 py-6">
@@ -136,10 +135,10 @@ export function WalletTicket({
         </div>
       </div>
 
-      {/* Rodapé: QR sempre visível (check-in na página ainda respeita checkin_habilitado na barbearia) */}
+      {/* Rodapé: QR sempre visível */}
       <div className="border-t border-solid border-zinc-200 bg-[#fafafa] px-8 py-8 relative">
-        <div className="absolute -top-3 -left-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
-        <div className="absolute -top-3 -right-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" />
+        <div className="absolute -top-3 -left-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" aria-hidden="true" />
+        <div className="absolute -top-3 -right-3 h-6 w-6 rounded-full bg-[#18181B] shadow-inner" aria-hidden="true" />
 
         <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4">
           Apresente na recepção
@@ -147,7 +146,7 @@ export function WalletTicket({
 
         {linkCheckin ? (
           <div className="mx-auto flex justify-center rounded-2xl bg-white p-4 shadow-md ring-1 ring-black/[0.05] w-fit relative group">
-            <QRCode value={linkCheckin} size={140} level="H" />
+            <QRCode value={linkCheckin} size={140} level="H" aria-label="QR Code de check-in" />
           </div>
         ) : (
           <p className="text-center text-xs font-bold text-amber-700">Não foi possível montar o link do ticket.</p>

@@ -62,9 +62,10 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
       if (controller.signal.aborted) return;
       if (error) throw error;
       setDespesas(data || []);
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      toast.error("Erro ao carregar despesas: " + err.message);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro ao carregar despesas: " + message);
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
@@ -108,8 +109,9 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
       });
       setModalAberto(false);
       carregarDespesas();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro: " + message);
     } finally {
       setIsSubmitting(false);
     }
@@ -121,8 +123,9 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
       if (error) throw error;
       toast.success("Despesa removida.");
       carregarDespesas();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro: " + message);
     }
   };
 

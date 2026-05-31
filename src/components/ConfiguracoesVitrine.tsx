@@ -9,11 +9,25 @@ import { Palette, Image as ImageIcon, Type, Link as LinkIcon, Loader2, Smartphon
 import { cn } from "@/lib/utils";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
 
+// ✅ Valida se é um hex válido
+function isValidHex(hex: string): boolean {
+  return /^#([0-9A-Fa-f]{3}){1,2}$/.test(hex);
+}
+
+// ✅ Garante que o hex comece com #
+function normalizeHex(value: string): string {
+  let hex = value.trim();
+  if (!hex.startsWith("#")) hex = "#" + hex;
+  return hex;
+}
+
 export default function ConfiguracoesVitrine() {
   const { user } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [logoError, setLogoError] = useState(false);
+  const [bgError, setBgError] = useState(false);
   const [config, setConfig] = useState({
     id: "",
     nome: "",
@@ -23,13 +37,18 @@ export default function ConfiguracoesVitrine() {
     url_logo: "",
   });
 
-  const brand = config.cor_primaria || "#D4AF37";
+  const rawBrand = config.cor_primaria || "#D4AF37";
+  // ✅ Se o hex for inválido, usa o default pra não quebrar a preview
+  const brand = isValidHex(rawBrand) ? rawBrand : "#D4AF37";
   const ctaFg = contrastTextOnBrand(brand);
 
-  // Carregar configurações da barbearia
+  // Reset erros de imagem quando URL muda
+  useEffect(() => { setLogoError(false); }, [config.url_logo]);
+  useEffect(() => { setBgError(false); }, [config.url_fundo]);
+
+  // Carregar configurações
   useEffect(() => {
     if (!user) return;
-
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -60,24 +79,24 @@ export default function ConfiguracoesVitrine() {
           toast.error("Não foi possível carregar os dados da vitrine.");
         }
       } finally {
-        if (!controller.signal.aborted) {
-          setFetching(false);
-        }
+        if (!controller.signal.aborted) setFetching(false);
       }
     }
 
     carregarConfiguracoes();
-
-    return () => {
-      controller.abort();
-      abortControllerRef.current = null;
-    };
+    return () => { controller.abort(); abortControllerRef.current = null; };
   }, [user]);
 
   // Salvar alterações
   const handleSalvar = useCallback(async () => {
     if (!config.id) {
       toast.error("Erro ao identificar barbearia.");
+      return;
+    }
+
+    const hex = normalizeHex(config.cor_primaria);
+    if (!isValidHex(hex)) {
+      toast.error("Cor da marca inválida. Use formato hex: #D4AF37");
       return;
     }
 
@@ -88,15 +107,14 @@ export default function ConfiguracoesVitrine() {
       const { error } = await supabase
         .from("barbearias")
         .update({
-          nome: config.nome,
-          cor_primaria: config.cor_primaria,
-          url_fundo: config.url_fundo,
-          url_logo: config.url_logo || null,
+          nome: config.nome.trim(),
+          cor_primaria: hex,
+          url_fundo: config.url_fundo.trim() || null,
+          url_logo: config.url_logo.trim() || null,
         })
         .eq("id", config.id);
 
       if (error) throw error;
-
       toast.success("Vitrine atualizada com sucesso! 🚀", { id: toastId });
     } catch (error) {
       console.error("Erro ao salvar:", error);
@@ -104,7 +122,7 @@ export default function ConfiguracoesVitrine() {
     } finally {
       setLoading(false);
     }
-  }, [config]);
+  }, [config.id, config.nome, config.cor_primaria, config.url_fundo, config.url_logo]);
 
   if (fetching) {
     return (
@@ -128,10 +146,11 @@ export default function ConfiguracoesVitrine() {
         <div className="space-y-6">
           {/* NOME */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
+            <label htmlFor="cfg-nome" className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
               <Type className="w-3 h-3" /> Nome de Exibição
             </label>
             <Input
+              id="cfg-nome"
               className="bg-black/50 border-zinc-800 h-14 rounded-xl text-base focus:border-primary transition-all"
               value={config.nome}
               onChange={(e) => setConfig({ ...config, nome: e.target.value })}
@@ -141,23 +160,22 @@ export default function ConfiguracoesVitrine() {
 
           {/* LINK FIXO */}
           <div className="space-y-1.5 opacity-60">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
+            <label htmlFor="cfg-slug" className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
               <LinkIcon className="w-3 h-3" /> Endereço do seu App (Slug)
             </label>
-            <div className="relative">
-              <Input
-                disabled
-                className="bg-zinc-800/30 border-zinc-800 h-14 rounded-xl text-zinc-500 cursor-not-allowed pl-4"
-                value={`cajtech.net.br/agendar/${config.slug}`}
-              />
-            </div>
+            <Input
+              id="cfg-slug"
+              disabled
+              className="bg-zinc-800/30 border-zinc-800 h-14 rounded-xl text-zinc-500 cursor-not-allowed pl-4"
+              value={`cajtech.net.br/agendar/${config.slug}`}
+            />
             <p className="text-[9px] text-zinc-600 italic font-medium">* Para alterar o link, contate o suporte.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* COR TEMA */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
+              <label htmlFor="cfg-cor-text" className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
                 <Palette className="w-3 h-3" /> Cor da Marca
               </label>
               <div className="flex gap-2">
@@ -165,24 +183,29 @@ export default function ConfiguracoesVitrine() {
                   <input
                     type="color"
                     className="absolute inset-0 h-[150%] w-[150%] -translate-x-[15%] -translate-y-[15%] cursor-pointer bg-transparent border-none"
-                    value={config.cor_primaria}
+                    value={brand}
                     onChange={(e) => setConfig({ ...config, cor_primaria: e.target.value })}
                   />
                 </div>
                 <Input
+                  id="cfg-cor-text"
                   className="bg-black/50 border-zinc-800 h-14 flex-1 font-mono text-sm uppercase rounded-xl"
                   value={config.cor_primaria}
-                  onChange={(e) => setConfig({ ...config, cor_primaria: e.target.value })}
+                  onChange={(e) => setConfig({ ...config, cor_primaria: normalizeHex(e.target.value) })}
                 />
               </div>
+              {!isValidHex(rawBrand) && (
+                <p className="text-red-400 text-[10px] mt-1 ml-1">Cor inválida. Use formato #D4AF37</p>
+              )}
             </div>
 
             {/* LOGO URL */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
+              <label htmlFor="cfg-logo" className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
                 <ImageIcon className="w-3 h-3" /> Link da Logo (PNG)
               </label>
               <Input
+                id="cfg-logo"
                 className="bg-black/50 border-zinc-800 h-14 rounded-xl"
                 value={config.url_logo}
                 onChange={(e) => setConfig({ ...config, url_logo: e.target.value })}
@@ -193,10 +216,11 @@ export default function ConfiguracoesVitrine() {
 
           {/* BACKGROUND URL */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
+            <label htmlFor="cfg-bg" className="text-[10px] font-black text-zinc-500 uppercase ml-1 tracking-widest flex items-center gap-2">
               <ImageIcon className="w-3 h-3" /> Link da Imagem de Fundo (Wallpaper)
             </label>
             <Input
+              id="cfg-bg"
               className="bg-black/50 border-zinc-800 h-14 rounded-xl"
               value={config.url_fundo}
               onChange={(e) => setConfig({ ...config, url_fundo: e.target.value })}
@@ -211,7 +235,7 @@ export default function ConfiguracoesVitrine() {
               color: ctaFg,
               boxShadow: `0 10px 30px ${hexToRgba(brand, 0.2)}`,
             }}
-            disabled={loading}
+            disabled={loading || !isValidHex(rawBrand)}
             onClick={handleSalvar}
           >
             {loading ? <Loader2 className="animate-spin h-6 w-6" /> : "Salvar Mudanças"}
@@ -226,15 +250,18 @@ export default function ConfiguracoesVitrine() {
         </p>
 
         <div className="relative mx-auto w-full max-w-[280px] aspect-[9/18] bg-zinc-950 rounded-[3rem] border-[8px] border-zinc-800 shadow-2xl overflow-hidden flex flex-col">
-          {/* Notch do Celular */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-zinc-800 rounded-b-2xl z-20" />
 
-          {/* Conteúdo Interno da Vitrine */}
           <div className="relative flex-1 flex flex-col">
             {/* Imagem de Fundo */}
             <div className="absolute inset-0 z-0">
-              {config.url_fundo ? (
-                <img src={config.url_fundo} className="h-full w-full object-cover" alt="fundo" />
+              {config.url_fundo && !bgError ? (
+                <img
+                  src={config.url_fundo}
+                  className="h-full w-full object-cover"
+                  alt="fundo"
+                  onError={() => setBgError(true)}
+                />
               ) : (
                 <div className="h-full w-full bg-zinc-900" />
               )}
@@ -243,10 +270,14 @@ export default function ConfiguracoesVitrine() {
 
             {/* Elementos UI */}
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 text-center">
-              {/* Logo Preview */}
               <div className="h-20 w-20 rounded-full border-2 border-white/10 bg-black/40 backdrop-blur-md mb-4 overflow-hidden flex items-center justify-center">
-                {config.url_logo ? (
-                  <img src={config.url_logo} className="max-h-12 max-w-12 object-contain" alt="logo" />
+                {config.url_logo && !logoError ? (
+                  <img
+                    src={config.url_logo}
+                    className="max-h-12 max-w-12 object-contain"
+                    alt="logo"
+                    onError={() => setLogoError(true)}
+                  />
                 ) : (
                   <ImageIcon className="h-8 w-8" style={{ color: brand }} />
                 )}
@@ -256,7 +287,6 @@ export default function ConfiguracoesVitrine() {
                 {config.nome || "Sua Barbearia"}
               </h1>
 
-              {/* Botão de Exemplo */}
               <div className="w-full space-y-3">
                 <div
                   className="w-full h-12 rounded-xl flex items-center justify-center font-black uppercase text-[10px] tracking-widest shadow-lg"
@@ -270,7 +300,6 @@ export default function ConfiguracoesVitrine() {
               </div>
             </div>
 
-            {/* Footer Mock */}
             <div className="relative z-10 p-4 border-t border-white/5 bg-black/20 backdrop-blur-md text-[8px] text-center text-zinc-500 font-bold uppercase tracking-widest">
               Powered by CAJ TECH
             </div>

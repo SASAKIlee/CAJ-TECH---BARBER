@@ -26,7 +26,8 @@ export function DonoTabDashboard({
         <select
           value={barbeiroFiltroId}
           onChange={(e) => onFiltroChange(e.target.value)}
-          className="rounded-full border border-white/[0.12] bg-black/35 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-white/20 color-scheme-dark text-white backdrop-blur-sm transition-shadow"
+          className="rounded-full border border-white/[0.12] bg-black/35 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-white/20 text-white backdrop-blur-sm transition-shadow"
+          style={{ colorScheme: "dark" }}
           aria-label="Filtrar por barbeiro"
         >
           <option value="">Todos os barbeiros</option>

@@ -4,8 +4,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import html2canvas from "html2canvas";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  ChevronLeft, ChevronRight, Loader2, Lock,
-  CalendarX2, User, MessageCircle, CheckCircle2, Scissors, AlertTriangle
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Lock,
+  CalendarX2,
+  User,
+  MessageCircle,
+  CheckCircle2,
+  Scissors,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +28,8 @@ import { AppHeroBackdrop, APP_HERO_FALLBACK_BG } from "@/components/AppHeroBackd
 // TIPAGENS
 // ==========================================
 interface BarbeariaRow {
-  id?: string;
-  nome?: string | null;
+  id: string;
+  nome: string;
   cor_primaria?: string | null;
   cor_secundaria?: string | null;
   cor_destaque?: string | null;
@@ -61,6 +69,31 @@ interface AgendamentoExistente {
 // ==========================================
 // FUNÇÕES AUXILIARES
 // ==========================================
+const DIAS_SEMANA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const MESES_CURTO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+function formatarDataYMD(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function gerarProximosDias(quantidade = 30) {
+  const dias = [];
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  for (let i = 0; i < quantidade; i++) {
+    const d = new Date(hoje);
+    d.setDate(hoje.getDate() + i);
+    dias.push({
+      dateObj: d,
+      ymd: formatarDataYMD(d),
+      diaSemana: DIAS_SEMANA_CURTO[d.getDay()],
+      diaMes: String(d.getDate()).padStart(2, '0'),
+      mes: MESES_CURTO[d.getMonth()],
+    });
+  }
+  return dias;
+}
+
 function gerarHorarios(
   abertura = "09:00",
   fechamento = "18:00",
@@ -68,24 +101,24 @@ function gerarHorarios(
   fimAlmoco = "13:00"
 ): string[] {
   const horarios: string[] = [];
-  let [horaAtual, minAtual] = abertura.split(':').map(Number);
-  const [horaFim, minFim] = fechamento.split(':').map(Number);
-  const [horaIniAlmoco, minIniAlmoco] = inicioAlmoco.split(':').map(Number);
-  const [horaFimAlmoco, minFimAlmoco] = fimAlmoco.split(':').map(Number);
+  let [hora, minuto] = abertura.split(":").map(Number);
+  const [horaFim, minutoFim] = fechamento.split(":").map(Number);
+  const [horaInicioAlmoco, minInicioAlmoco] = inicioAlmoco.split(":").map(Number);
+  const [horaFimAlmoco, minFimAlmoco] = fimAlmoco.split(":").map(Number);
 
-  while (horaAtual < horaFim || (horaAtual === horaFim && minAtual < minFim)) {
-    const isHoraAlmoco =
-      (horaAtual > horaIniAlmoco || (horaAtual === horaIniAlmoco && minAtual >= minIniAlmoco)) &&
-      (horaAtual < horaFimAlmoco || (horaAtual === horaFimAlmoco && minAtual < minFimAlmoco));
+  while (hora < horaFim || (hora === horaFim && minuto < minutoFim)) {
+    const isAlmoco =
+      (hora > horaInicioAlmoco || (hora === horaInicioAlmoco && minuto >= minInicioAlmoco)) &&
+      (hora < horaFimAlmoco || (hora === horaFimAlmoco && minuto < minFimAlmoco));
 
-    if (!isHoraAlmoco) {
-      horarios.push(`${String(horaAtual).padStart(2, '0')}:${String(minAtual).padStart(2, '0')}`);
+    if (!isAlmoco) {
+      horarios.push(`${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`);
     }
 
-    minAtual += 30;
-    if (minAtual >= 60) {
-      minAtual -= 60;
-      horaAtual += 1;
+    minuto += 30;
+    if (minuto >= 60) {
+      minuto = 0;
+      hora += 1;
     }
   }
   return horarios;
@@ -108,38 +141,12 @@ function validarNome(nome: string): boolean {
   return nome.trim().length >= 3 && /^[A-Za-zÀ-ÿ\s]+$/.test(nome.trim());
 }
 
-function formatarDataYMD(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-const DIAS_SEMANA_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const MESES_CURTO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-function gerarProximosDias(quantidade = 30) {
-  const dias = [];
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  for (let i = 0; i < quantidade; i++) {
-    const d = new Date(hoje);
-    d.setDate(hoje.getDate() + i);
-    dias.push({
-      dateObj: d,
-      ymd: formatarDataYMD(d),
-      diaSemana: DIAS_SEMANA_CURTO[d.getDay()],
-      diaMes: String(d.getDate()).padStart(2, '0'),
-      mes: MESES_CURTO[d.getMonth()]
-    });
-  }
-  return dias;
-}
-
 function verificarDisponibilidadeHorario(
   horarioInicio: string,
   duracaoMinutos: number,
   ocupados: string[],
   horariosDisponiveis: string[]
 ): boolean {
-  const [horaInicio, minInicio] = horarioInicio.split(':').map(Number);
   const blocosNecessarios = Math.ceil(duracaoMinutos / 30);
   const indiceInicio = horariosDisponiveis.indexOf(horarioInicio);
   if (indiceInicio === -1) return false;
@@ -147,8 +154,7 @@ function verificarDisponibilidadeHorario(
   for (let i = 0; i < blocosNecessarios; i++) {
     const indiceBloco = indiceInicio + i;
     if (indiceBloco >= horariosDisponiveis.length) return false;
-    const bloco = horariosDisponiveis[indiceBloco];
-    if (ocupados.includes(bloco)) return false;
+    if (ocupados.includes(horariosDisponiveis[indiceBloco])) return false;
   }
   return true;
 }
@@ -160,7 +166,7 @@ const listItem = { hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0 } };
 // COMPONENTE PRINCIPAL
 // ==========================================
 export default function AgendamentoPublico() {
-  const { slug } = useParams();
+  const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -174,16 +180,9 @@ export default function AgendamentoPublico() {
   const [isBarbeariaAtiva, setIsBarbeariaAtiva] = useState(true);
   const [barbeariaNaoEncontrada, setBarbeariaNaoEncontrada] = useState(false);
 
-  const [selecao, setSelecao] = useState<{
-    servico: Servico | null;
-    barbeiro: Barbeiro | null;
-    data: string;
-    horario: string;
-    nome: string;
-    whatsapp: string;
-  }>({
-    servico: null,
-    barbeiro: null,
+  const [selecao, setSelecao] = useState({
+    servico: null as Servico | null,
+    barbeiro: null as Barbeiro | null,
     data: "",
     horario: "",
     nome: "",
@@ -195,22 +194,19 @@ export default function AgendamentoPublico() {
   const textHighlight = config?.cor_destaque?.trim() || "#FFFFFF";
   const ctaFg = contrastTextOnBrand(brand);
 
-  const horariosDoDia = useMemo(
-    () =>
-      gerarHorarios(
-        config?.horario_abertura || "09:00",
-        config?.horario_fechamento || "18:00",
-        config?.inicio_almoco || "12:00",
-        config?.fim_almoco || "13:00"
-      ),
-    [config]
-  );
+  const horariosDoDia = useMemo(() => {
+    return gerarHorarios(
+      config?.horario_abertura || "09:00",
+      config?.horario_fechamento || "18:00",
+      config?.inicio_almoco || "12:00",
+      config?.fim_almoco || "13:00"
+    );
+  }, [config]);
 
   const diasTrabalho = config?.dias_trabalho || [1, 2, 3, 4, 5, 6];
   const datasFechadas = config?.datas_fechadas || [];
   const hojeYMD = formatarDataYMD(new Date());
 
-  // Verificar se a barbearia está ativa e dentro do prazo
   const verificarStatusBarbearia = useCallback((barbearia: BarbeariaRow) => {
     if (barbearia.ativo === false) return false;
     if (barbearia.data_vencimento) {
@@ -220,7 +216,7 @@ export default function AgendamentoPublico() {
     return true;
   }, []);
 
-  // Carregar dados iniciais
+  // Carregar dados da barbearia
   useEffect(() => {
     if (!slug) {
       setBarbeariaNaoEncontrada(true);
@@ -231,7 +227,7 @@ export default function AgendamentoPublico() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    async function carregarDados() {
+    const carregarDados = async () => {
       try {
         const { data: bInfo, error: barbError } = await supabase
           .from("barbearias")
@@ -253,13 +249,22 @@ export default function AgendamentoPublico() {
         setIsBarbeariaAtiva(verificarStatusBarbearia(barbearia));
 
         const [{ data: barbs }, { data: servs }] = await Promise.all([
-          supabase.from("barbeiros").select("*").eq("barbearia_slug", slug).eq("ativo", true).abortSignal(controller.signal),
-          supabase.from("servicos").select("*").eq("barbearia_slug", slug).abortSignal(controller.signal)
+          supabase
+            .from("barbeiros")
+            .select("*")
+            .eq("barbearia_slug", slug)
+            .eq("ativo", true)
+            .abortSignal(controller.signal),
+          supabase
+            .from("servicos")
+            .select("*")
+            .eq("barbearia_slug", slug)
+            .abortSignal(controller.signal),
         ]);
 
         if (!controller.signal.aborted) {
-          setBarbeiros((barbs as Barbeiro[]) || []);
-          setServicos((servs as Servico[]) || []);
+          setBarbeiros(barbs || []);
+          setServicos(servs || []);
         }
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -267,11 +272,9 @@ export default function AgendamentoPublico() {
           toast.error("Erro ao carregar dados da barbearia.");
         }
       } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
+        if (!controller.signal.aborted) setLoading(false);
       }
-    }
+    };
 
     carregarDados();
 
@@ -281,12 +284,16 @@ export default function AgendamentoPublico() {
     };
   }, [slug, verificarStatusBarbearia]);
 
-  // Carregar ocupados quando data ou barbeiro mudam
+  // Carregar horários ocupados
   useEffect(() => {
-    if (!selecao.data || !selecao.barbeiro || !slug) return;
+    if (!selecao.data || !selecao.barbeiro?.id || !slug) {
+      setOcupados([]);
+      return;
+    }
 
     const controller = new AbortController();
-    async function carregarOcupados() {
+
+    const carregarOcupados = async () => {
       const { data } = await supabase
         .from("agendamentos")
         .select("horario, servico_id")
@@ -300,92 +307,87 @@ export default function AgendamentoPublico() {
       const slots: string[] = [];
       data.forEach((ag: AgendamentoExistente) => {
         const serv = servicos.find((s) => s.id === ag.servico_id);
-        const qtdeBlocos = Math.ceil((serv?.duracao_minutos || 30) / 30);
-        let [h, m] = ag.horario.split(':').map(Number);
-        for (let i = 0; i < qtdeBlocos; i++) {
-          slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        const duracao = serv?.duracao_minutos || 30;
+        const blocos = Math.ceil(duracao / 30);
+
+        let [h, m] = ag.horario.split(":").map(Number);
+        for (let i = 0; i < blocos; i++) {
+          slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
           m += 30;
           if (m >= 60) {
-            m -= 60;
+            m = 0;
             h += 1;
           }
         }
       });
       setOcupados(slots);
-    }
+    };
 
     carregarOcupados();
     return () => controller.abort();
-  }, [selecao.data, selecao.barbeiro, slug, servicos]);
+  }, [selecao.data, selecao.barbeiro?.id, slug, servicos]);
 
   const salvarTicketComoImagem = useCallback(async () => {
     const el = document.getElementById(WALLET_TICKET_CAPTURE_ID);
     if (!el) return toast.error("Ticket não encontrado.");
 
-    const wait = toast.loading("Gerando imagem...");
+    const toastId = toast.loading("Gerando imagem...");
     try {
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
         backgroundColor: bg,
-        logging: false
+        logging: false,
       });
       const link = document.createElement("a");
-      link.download = `agendamento-${slug || 'caj'}.png`;
+      link.download = `agendamento-${slug || "caj"}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
-      toast.dismiss(wait);
-      toast.success("Imagem salva! 📸");
+      toast.success("Imagem salva! 📸", { id: toastId });
     } catch (err) {
-      toast.dismiss(wait);
       console.error(err);
-      toast.error("Erro ao salvar imagem.");
+      toast.error("Erro ao salvar imagem.", { id: toastId });
     }
   }, [slug, bg]);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [etapa]);
 
   const handleFinalizar = async () => {
     if (!validarNome(selecao.nome)) {
       return toast.error("Nome inválido. Use apenas letras e espaços (mín. 3 caracteres).");
     }
-    const zap = selecao.whatsapp.replace(/\D/g, '');
     if (!validarWhatsApp(selecao.whatsapp)) {
       return toast.error("WhatsApp inválido. Use DDD + número.");
     }
     if (!selecao.servico || !selecao.barbeiro) {
       return toast.error("Selecione serviço e profissional.");
     }
-
-    if (!verificarDisponibilidadeHorario(selecao.horario, selecao.servico.duracao_minutos, ocupados, horariosDoDia)) {
-      return toast.error("Este horário não está mais disponível. Escolha outro.");
+    if (!selecao.data || !selecao.horario) {
+      return toast.error("Selecione data e horário.");
     }
 
     const generatedTicket = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    // AQUI ESTÁ A CHAVE DE IDEMPOTÊNCIA QUE FALTAVA
-    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
-    
+    const idempotencyKey = crypto.randomUUID?.() ?? Date.now().toString();
+
     const toastId = toast.loading("Confirmando reserva...");
 
     const { error } = await supabase.from("agendamentos").insert({
       nome_cliente: selecao.nome.trim(),
-      telefone_cliente: zap,
+      telefone_cliente: selecao.whatsapp.replace(/\D/g, ""),
       servico_id: selecao.servico.id,
       barbeiro_id: selecao.barbeiro.id,
       data: selecao.data,
       horario: selecao.horario,
-      barbearia_slug: slug,
+      barbearia_slug: slug!,
       status: "Pendente",
       ticket_codigo: generatedTicket,
-      idempotency_key: idempotencyKey // O BANCO EXIGIA ISSO!
+      idempotency_key: idempotencyKey,
+      observacao: "",
     });
 
     toast.dismiss(toastId);
+
     if (error) {
       console.error(error);
-      return toast.error("Erro ao confirmar. Tente novamente.");
+      return toast.error("Erro ao confirmar agendamento. Tente novamente.");
     }
 
     setTicketCodigo(generatedTicket);
@@ -396,7 +398,7 @@ export default function AgendamentoPublico() {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 space-y-4 text-white">
         <Loader2 className="h-10 w-10 animate-spin text-zinc-700" />
-        <Skeleton className="h-10 w-48 bg-zinc-800" />
+        <p className="text-zinc-500 text-sm font-medium">Carregando barbearia...</p>
       </div>
     );
   }
@@ -406,8 +408,10 @@ export default function AgendamentoPublico() {
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white text-center">
         <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
         <h1 className="text-2xl font-black uppercase">Barbearia não encontrada</h1>
-        <p className="text-zinc-400 mt-2">O link que você acessou é inválido.</p>
-        <Button className="mt-6" onClick={() => navigate('/')}>Voltar ao início</Button>
+        <p className="text-zinc-400 mt-2">O link que você acessou não existe.</p>
+        <Button className="mt-6" onClick={() => navigate("/")}>
+          Voltar ao início
+        </Button>
       </div>
     );
   }
@@ -456,7 +460,7 @@ export default function AgendamentoPublico() {
                 {etapa > 1 && (
                   <Button
                     variant="ghost"
-                    onClick={() => setEtapa(e => e - 1)}
+                    onClick={() => setEtapa((e) => e - 1)}
                     className="text-zinc-400 gap-2 font-bold uppercase text-[10px] tracking-widest px-0 hover:bg-transparent"
                   >
                     <ChevronLeft className="h-4 w-4" /> Voltar
@@ -469,7 +473,7 @@ export default function AgendamentoPublico() {
                     <h2 className="text-lg font-black uppercase italic tracking-tighter ml-1" style={{ color: textHighlight }}>
                       1. Escolha o Serviço
                     </h2>
-                    <motion.div className="space-y-3" variants={listContainer} initial="hidden" animate="show">
+                    <motion.div className="space-y-3" initial="hidden" animate="show" variants={listContainer}>
                       {servicos.map((s) => (
                         <motion.button
                           key={s.id}
@@ -570,9 +574,9 @@ export default function AgendamentoPublico() {
                                 isSelected ? "shadow-xl" : "opacity-40"
                               )}
                               style={{
-                                backgroundColor: isSelected ? brand : 'transparent',
+                                backgroundColor: isSelected ? brand : "transparent",
                                 borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.1),
-                                color: isSelected ? ctaFg : textHighlight
+                                color: isSelected ? ctaFg : textHighlight,
                               }}
                             >
                               <span className="text-[9px] font-black uppercase mb-1">{dia.diaSemana}</span>
@@ -591,14 +595,12 @@ export default function AgendamentoPublico() {
                         </h3>
                         <div className="grid grid-cols-3 gap-3">
                           {horariosDoDia.map((h) => {
-                            const [hH, mM] = h.split(':').map(Number);
-                            const passou = selecao.data === hojeYMD && (hH < new Date().getHours() || (hH === new Date().getHours() && mM <= new Date().getMinutes()));
-                            const disponivel = !passou && verificarDisponibilidadeHorario(
-                              h,
-                              selecao.servico?.duracao_minutos || 30,
-                              ocupados,
-                              horariosDoDia
-                            );
+                            const [hH, mM] = h.split(":").map(Number);
+                            const passou =
+                              selecao.data === hojeYMD &&
+                              (hH < new Date().getHours() || (hH === new Date().getHours() && mM <= new Date().getMinutes()));
+                            const disponivel = !passou && verificarDisponibilidadeHorario(h, selecao.servico?.duracao_minutos || 30, ocupados, horariosDoDia);
+
                             return (
                               <button
                                 key={h}
@@ -632,7 +634,7 @@ export default function AgendamentoPublico() {
                       <h2 className="text-2xl font-black uppercase italic tracking-tighter" style={{ color: textHighlight }}>
                         Confirmar Dados
                       </h2>
-                      <p className="text-sm opacity-50 font-medium" style={{ color: textHighlight }}>
+                      <p className="text-sm opacity-60 max-w-xs" style={{ color: textHighlight }}>
                         Informe seu contato para receber os detalhes.
                       </p>
                     </div>

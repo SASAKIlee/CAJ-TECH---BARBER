@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { PlanoType, HorariosLoja, FasePagamento } from "@/types/dono";
 
 export interface DonoData {
@@ -41,10 +40,10 @@ export function useDonoData() {
   const [pixGerado, setPixGerado] = useState<string | null>(null);
   const [tempoPix, setTempoPix] = useState(900);
 
-  // Carregar dados da loja e se inscrever em tempo real para atualizações (PIX, plano, etc.)
+  // Carregar dados da loja e se inscrever em tempo real
   useEffect(() => {
-    let authUser: any = null;
-    let channel: any = null;
+    let authUser: { id: string } | null = null;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     const fetchLoja = async () => {
       if (!authUser) return;
@@ -54,7 +53,12 @@ export function useDonoData() {
         .eq("dono_id", authUser.id)
         .single();
 
-      if (data && !error) {
+      if (error) {
+        console.error("Erro ao carregar dados da loja:", error);
+        return;
+      }
+
+      if (data) {
         setData((prev) => ({
           ...prev,
           slug: data.slug,
@@ -86,7 +90,6 @@ export function useDonoData() {
 
       await fetchLoja();
 
-      // Subscrever em tempo real a mudanças na tabela de barbearias do dono
       channel = supabase
         .channel(`barbearia-dono-${authUser.id}`)
         .on(
@@ -113,16 +116,23 @@ export function useDonoData() {
     };
   }, []);
 
-  // Timer do PIX
+  // Timer do PIX — rodando limpo, sem re-criar intervalo
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (pixGerado && tempoPix > 0) {
-      interval = setInterval(() => setTempoPix((t) => t - 1), 1000);
-    } else if (tempoPix === 0) {
-      setPixGerado(null);
-    }
+    if (!pixGerado) return;
+
+    const interval = setInterval(() => {
+      setTempoPix((prev) => {
+        if (prev <= 1) {
+          setPixGerado(null);
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
     return () => clearInterval(interval);
-  }, [pixGerado, tempoPix]);
+  }, [pixGerado]);
 
   const updateData = (updates: Partial<DonoData>) => {
     setData((prev) => ({ ...prev, ...updates }));

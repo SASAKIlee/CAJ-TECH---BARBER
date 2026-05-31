@@ -13,13 +13,16 @@ import type {
   ServicoInsert,
   ServicoRemove,
   DespesaInsert,
-  QueryCacheContext,
   SupabaseError,
 } from "@/types/queries";
 import { getErrorMessage, logError } from "@/lib/error-handler";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("Variáveis de ambiente do Supabase não configuradas.");
+}
 
 const getInicioBusca = () => {
   const d = new Date();
@@ -169,13 +172,18 @@ export function useBarbeiros(slug?: string) {
 export function useMutacoesBarbeiro() {
   const queryClient = useQueryClient();
   return {
-    adicionarBarbeiro: useMutation({
+        adicionarBarbeiro: useMutation({
       mutationFn: async ({ nome, comissao_pct, email, senha, slug, url_foto }: BarbeiroInsert) => {
+        if (!supabaseUrl || !supabaseAnonKey) {
+          throw new Error("Configuração do Supabase ausente. Contate o suporte.");
+        }
+
         const tempClient = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
         const { data: authData, error: authError } = await tempClient.auth.signUp({ email, password: senha });
         if (authError) throw authError;
+        if (!authData.user?.id) throw new Error("Erro ao criar conta do barbeiro. Tente novamente.");
 
-        const userId = authData.user!.id;
+        const userId = authData.user.id;
         await supabase.from("user_roles").insert({ user_id: userId, role: "barbeiro" });
         const { error: barbError } = await supabase.from("barbeiros").insert({
           id: userId, nome, comissao_pct, barbearia_slug: slug.toLowerCase(), ativo: true, url_foto

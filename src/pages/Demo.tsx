@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Scissors, LayoutDashboard, ArrowLeft, Crown, Eye, LogOut } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { VisaoDono } from "@/components/VisaoDono";
@@ -18,6 +18,13 @@ type DemoView = "menu" | "dono" | "barbeiro";
 export default function Demo() {
   const [view, setView] = useState<DemoView>("menu");
   const [barbeiroSelecionadoId, setBarbeiroSelecionadoId] = useState("");
+  const [dataFiltro, setDataFiltro] = useState(() => {
+    const agora = new Date();
+    const y = agora.getFullYear();
+    const m = String(agora.getMonth() + 1).padStart(2, "0");
+    const d = String(agora.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  });
 
   const handleMockAction = (mensagem: string) => {
     alert(`[DEMONSTRAÇÃO] ${mensagem}\n\nNa versão real, esta ação seria salva no banco de dados.`);
@@ -32,7 +39,6 @@ export default function Demo() {
   if (view === "menu") {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col">
-        {/* Banner de Demonstração */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Eye className="h-5 w-5 animate-pulse" />
@@ -174,6 +180,7 @@ export default function Demo() {
             faturamentoMensal={MOCK_STATS.faturamentoMensal}
             comissoesAPagarHoje={MOCK_STATS.comissoesAPagarHoje}
             lucroRealHoje={MOCK_STATS.lucroRealHoje}
+            despesasNoDia={0}
             comissaoPorBarbeiroHoje={MOCK_COMISSAO_POR_BARBEIRO}
             barbeiros={MOCK_BARBEIROS}
             servicos={MOCK_SERVICOS}
@@ -183,6 +190,7 @@ export default function Demo() {
             onToggleBarbeiroStatus={() => handleMockAction("Status do barbeiro alterado!")}
             onAddServico={() => handleMockAction("Novo serviço cadastrado!")}
             onRemoveServico={() => handleMockAction("Serviço removido!")}
+            onAddDespesa={() => handleMockAction("Despesa registrada!")}
           />
         </div>
       </div>
@@ -228,6 +236,8 @@ export default function Demo() {
             agendamentos={MOCK_AGENDAMENTOS}
             barbeiroSelecionadoId={barbeiroSelecionadoId}
             setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
+            dataFiltro={dataFiltro}
+            setDataFiltro={setDataFiltro}
             horariosOcupados={(data: string, bId: string) =>
               MOCK_AGENDAMENTOS
                 .filter((ag) => ag.data === data && ag.barbeiro_id === bId && ag.status !== "Cancelado")
@@ -235,7 +245,6 @@ export default function Demo() {
             }
             servicos_find={(id: string) => MOCK_SERVICOS.find((s) => s.id === id)}
             isDono={false}
-            userId={MOCK_BARBEIROS[0]?.id}
             corPrimaria="#3b82f6"
             onNovoAgendamento={() => {
               handleMockAction("Novo agendamento criado!");

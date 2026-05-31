@@ -1,13 +1,11 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { ListOrdered, Phone, User, Scissors, Plus, X, Check, Bell, AlertCircle, Loader2 } from "lucide-react";
+import { ListOrdered, User, Scissors, Plus, X, Check, Bell, AlertCircle, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { FilaEspera, Barbeiro } from "@/types/dono";
 
@@ -54,9 +52,10 @@ export function FilaEsperaInteligente({ slug, barbeiros, brand, glass }: FilaEsp
       if (controller.signal.aborted) return;
       if (error) throw error;
       setFila(data || []);
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      toast.error("Erro ao carregar fila: " + err.message);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro ao carregar fila: " + message);
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);

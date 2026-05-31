@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { DonoModalUpgradeProps, PlanoType } from "@/types/dono";
 
 const VALORES_PLANO: Record<PlanoType, number> = {
-  starter: 35.0,
-  pro: 50.0,
+  starter: 50.0,
+  pro: 100.0,
   elite: 497.0,
 };
 

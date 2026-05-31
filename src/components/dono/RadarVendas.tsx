@@ -49,34 +49,33 @@ export function RadarVendas({ slug, brand, glass }: RadarVendasProps) {
         return;
       }
 
-      // Agrupa por cliente (telefone ou nome)
       const mapaClientes = new Map<string, ClienteRadar>();
       const hoje = new Date();
 
-      agendamentos.forEach((ag: any) => {
-        const chave = ag.telefone_cliente?.replace(/\D/g, "") || ag.nome_cliente?.toLowerCase().trim();
+      agendamentos.forEach((ag) => {
+        const agAny = ag as Record<string, any>;
+        const chave = agAny.telefone_cliente?.replace(/\D/g, "") || agAny.nome_cliente?.toLowerCase().trim();
         if (!chave) return;
 
-        const dataAg = new Date(ag.data);
+        const dataAg = new Date(agAny.data);
         const diasSemVisitar = Math.ceil((hoje.getTime() - dataAg.getTime()) / (1000 * 60 * 60 * 24));
-        const servico = ag.servicos?.nome || "Serviço";
-        const valor = ag.servicos?.preco || 0;
+        const servico = (agAny.servicos as Record<string, any>)?.nome || "Serviço";
+        const valor = (agAny.servicos as Record<string, any>)?.preco || 0;
 
         const existente = mapaClientes.get(chave);
         if (existente) {
           existente.total_visitas += 1;
           existente.valor_total_gasto += valor;
-          // Mantém o agendamento mais recente (menor diasSemVisitar)
           if (diasSemVisitar < existente.dias_sem_visitar) {
             existente.dias_sem_visitar = diasSemVisitar;
-            existente.ultimo_agendamento = ag.data;
+            existente.ultimo_agendamento = agAny.data;
           }
         } else {
           mapaClientes.set(chave, {
-            id: chave, // usar a chave como id para evitar duplicatas visuais
-            nome: ag.nome_cliente,
-            telefone: ag.telefone_cliente,
-            ultimo_agendamento: ag.data,
+            id: chave,
+            nome: agAny.nome_cliente,
+            telefone: agAny.telefone_cliente,
+            ultimo_agendamento: agAny.data,
             dias_sem_visitar: diasSemVisitar,
             total_visitas: 1,
             valor_total_gasto: valor,
@@ -89,8 +88,8 @@ export function RadarVendas({ slug, brand, glass }: RadarVendasProps) {
         .sort((a, b) => b.valor_total_gasto - a.valor_total_gasto);
 
       setClientes(lista);
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Erro ao carregar radar:", err);
       toast.error("Erro ao carregar dados do radar.");
     } finally {
@@ -128,7 +127,6 @@ export function RadarVendas({ slug, brand, glass }: RadarVendasProps) {
     setReconquistando(cliente.id);
     const msg = `Olá ${cliente.nome}! 😊 Faz um tempinho que você não vem na barbearia. Que tal voltar e dar aquele trato no visual? Temos horário essa semana!`;
     window.open(`https://api.whatsapp.com/send?phone=55${tel}&text=${encodeURIComponent(msg)}`, "_blank");
-    // Pequeno delay para resetar o estado de loading
     setTimeout(() => setReconquistando(null), 500);
   }, []);
 
@@ -235,8 +233,8 @@ export function RadarVendas({ slug, brand, glass }: RadarVendasProps) {
                     <Badge className={cn(
                       "text-[9px] px-2 py-0.5",
                       cliente.dias_sem_visitar > 90 ? "bg-red-500/20 text-red-400" :
-                      cliente.dias_sem_visitar > 60 ? "bg-orange-500/20 text-orange-400" :
-                      "bg-yellow-500/20 text-yellow-400"
+                        cliente.dias_sem_visitar > 60 ? "bg-orange-500/20 text-orange-400" :
+                          "bg-yellow-500/20 text-yellow-400"
                     )}>
                       {cliente.dias_sem_visitar} dias
                     </Badge>
