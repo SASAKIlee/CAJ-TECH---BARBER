@@ -8,9 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { hexToRgba } from "@/lib/branding";
 
-// ==========================================
-// TIPOS LOCAIS
-// ==========================================
 interface AgendamentoBarbeiro {
   id: string;
   horario: string;
@@ -42,9 +39,6 @@ interface AgendaBarbeiroProps {
   onStatusChange: (id: string, status: string) => Promise<void>;
 }
 
-// ==========================================
-// COMPONENTE
-// ==========================================
 export function AgendaBarbeiro({ agendamentos, barbeiros, servicos_find, brand, infoLojaNome, onStatusChange }: AgendaBarbeiroProps) {
   const [statusFiltro, setStatusFiltro] = useState<"Pendente" | "Todos">("Pendente");
   const [dismissing, setDismissing] = useState<{ id: string; status: "Finalizado" | "Cancelado" } | null>(null);
@@ -108,16 +102,27 @@ export function AgendaBarbeiro({ agendamentos, barbeiros, servicos_find, brand, 
               const numValido = ag.telefone_cliente ? ag.telefone_cliente.replace(/\D/g, "") : "";
               const temWhatsapp = numValido.length >= 10;
               const isVip = agendamentos.filter(a => a.telefone_cliente === ag.telefone_cliente && a.status === "Finalizado").length >= 5;
+              const isPendente = ag.status === "Pendente";
 
               return (
                 <motion.li key={ag.id} layout initial={{ opacity: 0, x: 36 }} animate={saindo ? { opacity: 0, x: saidaDireita ? 56 : -56, scale: 0.98 } : { opacity: 1, x: 0, scale: 1 }} className="relative">
                   <div className="absolute left-[-22px] sm:left-[-24.5px] top-6 sm:top-7 h-3.5 w-3.5 rounded-full border-[3px] border-white/20 bg-zinc-950 z-10 transition-colors" style={{ borderColor: saindo ? "transparent" : hexToRgba(brand, 0.85), boxShadow: `0 0 14px ${hexToRgba(brand, 0.4)}` }} aria-hidden="true" />
-                  <Card className="p-5 sm:p-6 rounded-[24px] border border-white/[0.08] shadow-2xl flex flex-col gap-5" style={glass}>
+                  <Card className={cn(
+                    "p-5 sm:p-6 rounded-[24px] border border-white/[0.08] shadow-2xl flex flex-col gap-5 transition-opacity",
+                    !isPendente && "opacity-50 grayscale-[20%]"
+                  )} style={glass}>
                     <div className="flex flex-col gap-3">
                       <div className="flex justify-between items-start">
                         <div className="flex items-center gap-3 flex-wrap">
                           <span className="text-4xl font-black text-white tracking-tighter">{ag.horario}</span>
-                          <Badge className="text-[9px] font-black uppercase py-1 px-3 rounded-md border-0" style={{ backgroundColor: hexToRgba(brand, 0.15), color: brand }}>{ag.status}</Badge>
+                          <Badge className={cn(
+                            "text-[9px] font-black uppercase py-1 px-3 rounded-md border-0",
+                            ag.status === "Finalizado" && "bg-emerald-500/15 text-emerald-400",
+                            ag.status === "Cancelado" && "bg-red-500/15 text-red-400",
+                            isPendente && "bg-white/10 text-white/70"
+                          )} style={isPendente ? { backgroundColor: hexToRgba(brand, 0.15), color: brand } : {}}>
+                            {ag.status}
+                          </Badge>
                         </div>
                       </div>
                       <div>
@@ -137,34 +142,48 @@ export function AgendaBarbeiro({ agendamentos, barbeiros, servicos_find, brand, 
                         <p className="text-xs text-yellow-100/80 italic">{ag.observacao}</p>
                       </div>
                     )}
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 pt-4 border-t border-white/[0.08]">
-                      <Button
-                        size="icon"
-                        className={cn("h-12 w-12 rounded-xl shrink-0 border transition-all", temWhatsapp ? "text-green-500 bg-green-500/10 hover:bg-green-500/20 border-green-500/20" : "text-zinc-600 bg-zinc-800/30 border-zinc-800 opacity-50 cursor-not-allowed")}
-                        disabled={!!dismissing || !temWhatsapp}
-                        onClick={() => { if (temWhatsapp) window.open(`https://api.whatsapp.com/send?phone=55${numValido}&text=${encodeURIComponent(`Fala, *${ag.nome_cliente}*! Tudo bem? ✂️\n\nPassando para confirmar seu horário hoje às *${ag.horario}* aqui na *${infoLojaNome}*!`)}`, "_blank"); }}
-                        aria-label={temWhatsapp ? `Enviar WhatsApp para ${ag.nome_cliente}` : "WhatsApp indisponível"}
-                      >
-                        <MessageCircle className="h-6 w-6" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        className="flex-1 h-12 bg-green-600 hover:bg-green-500 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-xl shadow-lg border-0"
-                        disabled={!!dismissing}
-                        onClick={() => iniciarSaida(ag.id, "Finalizado")}
-                        aria-label={`Concluir agendamento de ${ag.nome_cliente}`}
-                      >
-                        <Check className="h-5 w-5 mr-1.5 stroke-[3px]" aria-hidden="true" /> Concluir
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="flex-1 sm:flex-none sm:w-32 h-12 text-red-500 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-xl transition-colors"
-                        disabled={!!dismissing}
-                        onClick={() => iniciarSaida(ag.id, "Cancelado")}
-                        aria-label={`Cancelar agendamento de ${ag.nome_cliente}`}
-                      >
-                        <X className="h-5 w-5 mr-1.5 stroke-[3px]" aria-hidden="true" /> Cancelar
-                      </Button>
-                    </div>
+
+                    {/* ===== AÇÕES: Só aparece se for Pendente ===== */}
+                    {isPendente ? (
+                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 pt-4 border-t border-white/[0.08]">
+                        <Button
+                          size="icon"
+                          className={cn("h-12 w-12 rounded-xl shrink-0 border transition-all", temWhatsapp ? "text-green-500 bg-green-500/10 hover:bg-green-500/20 border-green-500/20" : "text-zinc-600 bg-zinc-800/30 border-zinc-800 opacity-50 cursor-not-allowed")}
+                          disabled={!!dismissing || !temWhatsapp}
+                          onClick={() => { if (temWhatsapp) window.open(`https://api.whatsapp.com/send?phone=55${numValido}&text=${encodeURIComponent(`Fala, *${ag.nome_cliente}*! Tudo bem? ✂️\n\nPassando para confirmar seu horário hoje às *${ag.horario}* aqui na *${infoLojaNome}*!`)}`, "_blank"); }}
+                          aria-label={temWhatsapp ? `Enviar WhatsApp para ${ag.nome_cliente}` : "WhatsApp indisponível"}
+                        >
+                          <MessageCircle className="h-6 w-6" aria-hidden="true" />
+                        </Button>
+                        <Button
+                          className="flex-1 h-12 bg-green-600 hover:bg-green-500 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-xl shadow-lg border-0"
+                          disabled={!!dismissing}
+                          onClick={() => iniciarSaida(ag.id, "Finalizado")}
+                          aria-label={`Concluir agendamento de ${ag.nome_cliente}`}
+                        >
+                          <Check className="h-5 w-5 mr-1.5 stroke-[3px]" aria-hidden="true" /> Concluir
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1 sm:flex-none sm:w-32 h-12 text-red-500 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-xl transition-colors"
+                          disabled={!!dismissing}
+                          onClick={() => iniciarSaida(ag.id, "Cancelado")}
+                          aria-label={`Cancelar agendamento de ${ag.nome_cliente}`}
+                        >
+                          <X className="h-5 w-5 mr-1.5 stroke-[3px]" aria-hidden="true" /> Cancelar
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="pt-4 border-t border-white/[0.08] text-center">
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest",
+                          ag.status === "Finalizado" && "text-emerald-500/60",
+                          ag.status === "Cancelado" && "text-red-500/60"
+                        )}>
+                          {ag.status === "Finalizado" ? "✅ Atendido" : ag.status === "Cancelado" ? "❌ Cancelado" : ag.status}
+                        </span>
+                      </div>
+                    )}
                   </Card>
                 </motion.li>
               );

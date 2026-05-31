@@ -8,16 +8,16 @@ import {
   ChevronRight,
   Loader2,
   Lock,
-  CalendarX2,
+  X,
   User,
-  MessageCircle,
   CheckCircle2,
   Scissors,
   AlertTriangle,
+  Clock,
+  CalendarX2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { hexToRgba, contrastTextOnBrand } from "@/lib/branding";
@@ -74,6 +74,12 @@ const MESES_CURTO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 
 function formatarDataYMD(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function formatarDataVisual(ymd: string): string {
+  if (!ymd) return "";
+  const [y, m, d] = ymd.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 function gerarProximosDias(quantidade = 30) {
@@ -159,8 +165,8 @@ function verificarDisponibilidadeHorario(
   return true;
 }
 
-const listContainer = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } };
-const listItem = { hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0 } };
+const listContainer = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } };
+const listItem = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
 
 // ==========================================
 // COMPONENTE PRINCIPAL
@@ -234,7 +240,7 @@ export default function AgendamentoPublico() {
           .select("*")
           .eq("slug", slug)
           .abortSignal(controller.signal)
-          .single();
+          .maybeSingle();
 
         if (controller.signal.aborted) return;
 
@@ -409,9 +415,7 @@ export default function AgendamentoPublico() {
         <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
         <h1 className="text-2xl font-black uppercase">Barbearia não encontrada</h1>
         <p className="text-zinc-400 mt-2">O link que você acessou não existe.</p>
-        <Button className="mt-6" onClick={() => navigate("/")}>
-          Voltar ao início
-        </Button>
+        <Button className="mt-6" onClick={() => navigate("/")}>Voltar ao início</Button>
       </div>
     );
   }
@@ -421,9 +425,7 @@ export default function AgendamentoPublico() {
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white text-center">
         <Lock className="h-12 w-12 text-red-500 mb-4" />
         <h1 className="text-2xl font-black uppercase">Acesso Suspenso</h1>
-        <p className="text-zinc-400 mt-2 max-w-md">
-          Esta barbearia está temporariamente indisponível para agendamentos online.
-        </p>
+        <p className="text-zinc-400 mt-2 max-w-md">Esta barbearia está temporariamente indisponível para agendamentos online.</p>
       </div>
     );
   }
@@ -433,16 +435,30 @@ export default function AgendamentoPublico() {
       <AppHeroBackdrop imageUrl={config?.url_fundo || APP_HERO_FALLBACK_BG} />
 
       <div className="relative z-10 flex min-h-[100dvh] flex-col max-w-lg mx-auto">
+        {/* HEADER PREMIUM */}
         <motion.header
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mx-4 mt-6 mb-2 rounded-[28px] p-6 border shadow-2xl"
-          style={{ backgroundColor: hexToRgba(bg, 0.6), borderColor: hexToRgba(textHighlight, 0.08), backdropFilter: "blur(16px)" }}
+          transition={{ type: "spring", stiffness: 260, damping: 20 }}
+          className="mx-4 mt-6 mb-2 rounded-[28px] p-6 border shadow-2xl text-center relative overflow-hidden"
+          style={{ backgroundColor: hexToRgba(bg, 0.7), borderColor: hexToRgba(textHighlight, 0.08), backdropFilter: "blur(20px)" }}
         >
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 mb-1" style={{ color: textHighlight }}>
+          <div className="absolute inset-0 opacity-[0.03]" style={{ background: `radial-gradient(circle at 50% 0%, ${brand}, transparent 70%)` }} aria-hidden="true" />
+
+          {config?.url_logo ? (
+            <div className="relative mx-auto mb-4 h-20 w-20 rounded-2xl overflow-hidden border-2 shadow-lg" style={{ borderColor: hexToRgba(brand, 0.4) }}>
+              <img src={config.url_logo} alt={config.nome} className="h-full w-full object-cover" />
+            </div>
+          ) : (
+            <div className="relative mx-auto mb-4 h-20 w-20 rounded-2xl flex items-center justify-center shadow-lg" style={{ backgroundColor: hexToRgba(brand, 0.15) }}>
+              <span className="text-4xl font-black" style={{ color: brand }}>{config?.nome?.charAt(0)?.toUpperCase() || "B"}</span>
+            </div>
+          )}
+
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 mb-1 relative" style={{ color: textHighlight }}>
             Agendamento Online
           </p>
-          <h1 className="text-3xl font-black tracking-tighter uppercase italic" style={{ color: textHighlight }}>
+          <h1 className="text-3xl font-black tracking-tighter uppercase italic relative" style={{ color: textHighlight }}>
             {config?.nome || "Barbearia"}
           </h1>
         </motion.header>
@@ -450,19 +466,10 @@ export default function AgendamentoPublico() {
         <main className="flex-1 px-4 pb-32 pt-2">
           <AnimatePresence mode="wait">
             {etapa < 5 ? (
-              <motion.div
-                key={etapa}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
-              >
+              <motion.div key={etapa} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className="space-y-6">
+
                 {etapa > 1 && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => setEtapa((e) => e - 1)}
-                    className="text-zinc-400 gap-2 font-bold uppercase text-[10px] tracking-widest px-0 hover:bg-transparent"
-                  >
+                  <Button variant="ghost" onClick={() => setEtapa((e) => e - 1)} className="text-zinc-400 gap-2 font-bold uppercase text-[10px] tracking-widest px-0 hover:bg-transparent hover:text-white transition-colors">
                     <ChevronLeft className="h-4 w-4" /> Voltar
                   </Button>
                 )}
@@ -478,31 +485,26 @@ export default function AgendamentoPublico() {
                         <motion.button
                           key={s.id}
                           variants={listItem}
-                          onClick={() => {
-                            setSelecao({ ...selecao, servico: s });
-                            setEtapa(2);
-                          }}
-                          className="w-full rounded-[24px] border p-4 text-left flex items-center justify-between gap-4 transition-all active:scale-[0.98]"
+                          onClick={() => { setSelecao({ ...selecao, servico: s }); setEtapa(2); }}
+                          className="w-full rounded-[24px] border p-4 text-left flex items-center justify-between gap-4 transition-all hover:scale-[1.02] active:scale-[0.98] group"
                           style={{ backgroundColor: hexToRgba(bg, 0.4), borderColor: hexToRgba(textHighlight, 0.05) }}
                         >
                           <div className="flex items-center gap-4">
                             {s.url_imagem ? (
-                              <img src={s.url_imagem} className="w-14 h-14 rounded-2xl object-cover" alt={s.nome} />
+                              <img src={s.url_imagem} className="w-14 h-14 rounded-2xl object-cover border border-white/5" alt={s.nome} />
                             ) : (
-                              <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
+                              <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-white/10 transition-colors">
                                 <Scissors className="opacity-20 h-6 w-6" style={{ color: textHighlight }} />
                               </div>
                             )}
                             <div>
-                              <span className="text-base font-bold block" style={{ color: textHighlight }}>
-                                {s.nome}
-                              </span>
-                              <span className="text-[10px] font-black uppercase opacity-50" style={{ color: brand }}>
-                                ⏱ {s.duracao_minutos} min
+                              <span className="text-base font-bold block" style={{ color: textHighlight }}>{s.nome}</span>
+                              <span className="text-[10px] font-black uppercase opacity-50 flex items-center gap-1" style={{ color: brand }}>
+                                <Clock className="h-3 w-3" /> {s.duracao_minutos} min
                               </span>
                             </div>
                           </div>
-                          <span className="text-lg font-black tabular-nums" style={{ color: textHighlight }}>
+                          <span className="text-lg font-black tabular-nums" style={{ color: brand }}>
                             R$ {s.preco.toFixed(2)}
                           </span>
                         </motion.button>
@@ -517,30 +519,26 @@ export default function AgendamentoPublico() {
                     <h2 className="text-lg font-black uppercase italic tracking-tighter ml-1" style={{ color: textHighlight }}>
                       2. Quem vai te atender?
                     </h2>
-                    <div className="grid grid-cols-1 gap-3">
+                    <motion.div className="space-y-3" initial="hidden" animate="show" variants={listContainer}>
                       {barbeiros.map((b) => (
-                        <button
+                        <motion.button
                           key={b.id}
-                          onClick={() => {
-                            setSelecao({ ...selecao, barbeiro: b });
-                            setEtapa(3);
-                          }}
-                          className="flex items-center gap-4 rounded-[24px] border p-4 transition-all active:scale-[0.98]"
+                          variants={listItem}
+                          onClick={() => { setSelecao({ ...selecao, barbeiro: b }); setEtapa(3); }}
+                          className="w-full flex items-center gap-4 rounded-[24px] border p-4 transition-all hover:scale-[1.02] active:scale-[0.98] group"
                           style={{ backgroundColor: hexToRgba(bg, 0.4), borderColor: hexToRgba(textHighlight, 0.05) }}
                         >
-                          <div className="h-14 w-14 rounded-2xl overflow-hidden bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/5 flex items-center justify-center">
+                          <div className="h-14 w-14 rounded-2xl overflow-hidden bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/5 flex items-center justify-center group-hover:border-white/20 transition-colors">
                             {b.url_foto ? (
                               <img src={b.url_foto} className="h-full w-full object-cover" alt={b.nome} />
                             ) : (
                               <User className="text-zinc-700 h-6 w-6" />
                             )}
                           </div>
-                          <span className="text-lg font-bold" style={{ color: textHighlight }}>
-                            {b.nome}
-                          </span>
-                        </button>
+                          <span className="text-lg font-bold" style={{ color: textHighlight }}>{b.nome}</span>
+                        </motion.button>
                       ))}
-                    </div>
+                    </motion.div>
                   </section>
                 )}
 
@@ -553,35 +551,42 @@ export default function AgendamentoPublico() {
                           3. Quando?
                         </h2>
                         <div className="flex items-center gap-1 opacity-40 animate-pulse">
-                          <span className="text-[8px] font-black uppercase tracking-widest" style={{ color: textHighlight }}>
-                            Arraste
-                          </span>
+                          <span className="text-[8px] font-black uppercase tracking-widest" style={{ color: textHighlight }}>Arraste</span>
                           <ChevronRight className="h-3 w-3" style={{ color: textHighlight }} />
                         </div>
                       </div>
-                      <div className="flex overflow-x-auto gap-2 pb-4 no-scrollbar snap-x">
+
+                      <div className="flex overflow-x-auto gap-2 pb-4 no-scrollbar snap-x" style={{ scrollbarWidth: 'none' }}>
                         {gerarProximosDias(30).map((dia) => {
                           const isTrabalho = diasTrabalho.includes(dia.dateObj.getDay());
                           const isFechado = datasFechadas.includes(dia.ymd);
+                          const isDisabled = !isTrabalho || isFechado;
                           const isSelected = selecao.data === dia.ymd;
+
                           return (
                             <button
                               key={dia.ymd}
-                              disabled={!isTrabalho || isFechado}
-                              onClick={() => setSelecao({ ...selecao, data: dia.ymd, horario: "" })}
+                              disabled={isDisabled}
+                              onClick={() => !isDisabled && setSelecao({ ...selecao, data: dia.ymd, horario: "" })}
                               className={cn(
-                                "min-w-[70px] flex flex-col items-center p-4 rounded-[22px] border transition-all snap-center",
-                                isSelected ? "shadow-xl" : "opacity-40"
+                                "min-w-[70px] flex flex-col items-center p-4 rounded-[22px] border transition-all snap-center relative",
+                                isSelected ? "shadow-xl scale-105" : isDisabled ? "opacity-30" : "opacity-70 hover:opacity-100 hover:scale-105"
                               )}
                               style={{
                                 backgroundColor: isSelected ? brand : "transparent",
-                                borderColor: isSelected ? brand : hexToRgba(textHighlight, 0.1),
+                                borderColor: isSelected ? brand : isDisabled ? hexToRgba("#ef4444", 0.15) : hexToRgba(textHighlight, 0.1),
                                 color: isSelected ? ctaFg : textHighlight,
                               }}
+                              aria-label={`${dia.diaSemana} ${dia.diaMes} ${dia.mes}${isDisabled ? " - Indisponível" : ""}`}
                             >
-                              <span className="text-[9px] font-black uppercase mb-1">{dia.diaSemana}</span>
-                              <span className="text-xl font-black mb-1">{dia.diaMes}</span>
-                              <span className="text-[9px] font-black uppercase">{dia.mes}</span>
+                              {isDisabled && (
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                  <X className="h-6 w-6 text-red-500/70" aria-hidden="true" />
+                                </div>
+                              )}
+                              <span className={cn("text-[9px] font-black uppercase mb-1 relative", isDisabled && "line-through")}>{dia.diaSemana}</span>
+                              <span className={cn("text-xl font-black mb-1 relative", isDisabled && "line-through")}>{dia.diaMes}</span>
+                              <span className={cn("text-[9px] font-black uppercase relative", isDisabled && "line-through")}>{dia.mes}</span>
                             </button>
                           );
                         })}
@@ -596,26 +601,25 @@ export default function AgendamentoPublico() {
                         <div className="grid grid-cols-3 gap-3">
                           {horariosDoDia.map((h) => {
                             const [hH, mM] = h.split(":").map(Number);
-                            const passou =
-                              selecao.data === hojeYMD &&
-                              (hH < new Date().getHours() || (hH === new Date().getHours() && mM <= new Date().getMinutes()));
+                            const passou = selecao.data === hojeYMD && (hH < new Date().getHours() || (hH === new Date().getHours() && mM <= new Date().getMinutes()));
                             const disponivel = !passou && verificarDisponibilidadeHorario(h, selecao.servico?.duracao_minutos || 30, ocupados, horariosDoDia);
+                            const isSelecionado = selecao.horario === h;
 
                             return (
                               <button
                                 key={h}
                                 disabled={!disponivel}
-                                onClick={() => {
-                                  if (disponivel) {
-                                    setSelecao({ ...selecao, horario: h });
-                                    setEtapa(4);
-                                  }
-                                }}
+                                onClick={() => { if (disponivel) { setSelecao({ ...selecao, horario: h }); setEtapa(4); } }}
                                 className={cn(
-                                  "py-3 rounded-2xl border text-sm font-bold transition-all",
-                                  disponivel ? "active:scale-90" : "opacity-10 line-through cursor-not-allowed"
+                                  "py-3.5 rounded-2xl border text-sm font-bold transition-all",
+                                  isSelecionado ? "scale-105 shadow-lg" : disponivel ? "active:scale-90 hover:scale-105 hover:opacity-100 opacity-70" : "opacity-10 line-through cursor-not-allowed"
                                 )}
-                                style={{ borderColor: hexToRgba(textHighlight, 0.1), color: textHighlight }}
+                                style={{
+                                  backgroundColor: isSelecionado ? brand : "transparent",
+                                  borderColor: isSelecionado ? brand : hexToRgba(textHighlight, 0.1),
+                                  color: isSelecionado ? ctaFg : textHighlight,
+                                }}
+                                aria-label={`Horário ${h}${!disponivel ? " - Indisponível" : ""}`}
                               >
                                 {h}
                               </button>
@@ -627,58 +631,66 @@ export default function AgendamentoPublico() {
                   </section>
                 )}
 
-                {/* Etapa 4: Dados do cliente */}
+                {/* Etapa 4: Dados do cliente + RESUMO */}
                 {etapa === 4 && (
                   <section className="space-y-6">
-                    <div className="text-center space-y-2 mb-8">
+                    <div className="text-center space-y-2 mb-6">
                       <h2 className="text-2xl font-black uppercase italic tracking-tighter" style={{ color: textHighlight }}>
                         Confirmar Dados
                       </h2>
-                      <p className="text-sm opacity-60 max-w-xs" style={{ color: textHighlight }}>
-                        Informe seu contato para receber os detalhes.
+                      <p className="text-sm opacity-60 max-w-xs mx-auto" style={{ color: textHighlight }}>
+                        Revise seu agendamento e informe seu contato.
                       </p>
                     </div>
-                    <div className="space-y-4">
-                      <Input
-                        placeholder="Seu Nome Completo"
-                        className="h-14 rounded-2xl bg-white/5 border-white/10 text-center text-lg text-white"
-                        value={selecao.nome}
-                        onChange={(e) => setSelecao({ ...selecao, nome: e.target.value })}
-                      />
-                      <Input
-                        placeholder="WhatsApp com DDD"
-                        type="tel"
-                        className="h-14 rounded-2xl bg-white/5 border-white/10 text-center text-lg text-white"
-                        value={selecao.whatsapp}
-                        onChange={(e) => setSelecao({ ...selecao, whatsapp: aplicarMascaraZap(e.target.value) })}
-                      />
-                      <Button
-                        className="w-full h-16 rounded-[24px] font-black uppercase text-sm shadow-2xl mt-4"
-                        style={{ backgroundColor: brand, color: ctaFg }}
-                        onClick={handleFinalizar}
-                      >
-                        Finalizar Agendamento
+
+                    {/* CARD DE RESUMO */}
+                    <div className="rounded-[24px] border p-5 space-y-3 relative overflow-hidden" style={{ backgroundColor: hexToRgba(bg, 0.6), borderColor: hexToRgba(brand, 0.15) }}>
+                      <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: brand }} aria-hidden="true" />
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black uppercase opacity-40" style={{ color: textHighlight }}>Serviço</span>
+                        <span className="text-sm font-bold" style={{ color: textHighlight }}>{selecao.servico?.nome}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black uppercase opacity-40" style={{ color: textHighlight }}>Profissional</span>
+                        <span className="text-sm font-bold" style={{ color: textHighlight }}>{selecao.barbeiro?.nome}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black uppercase opacity-40" style={{ color: textHighlight }}>Data</span>
+                        <span className="text-sm font-bold" style={{ color: textHighlight }}>{formatarDataVisual(selecao.data)}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black uppercase opacity-40" style={{ color: textHighlight }}>Horário</span>
+                        <span className="text-sm font-bold" style={{ color: brand }}>{selecao.horario}</span>
+                      </div>
+
+                      <div className="pt-3 mt-2 border-t flex justify-between items-center" style={{ borderColor: hexToRgba(textHighlight, 0.1) }}>
+                        <span className="text-[10px] font-black uppercase opacity-40" style={{ color: textHighlight }}>Valor</span>
+                        <span className="text-xl font-black" style={{ color: brand }}>R$ {selecao.servico?.preco.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 pt-2">
+                      <Input placeholder="Seu Nome Completo" className="h-14 rounded-2xl bg-white/5 border-white/10 text-center text-lg text-white placeholder:opacity-30" value={selecao.nome} onChange={(e) => setSelecao({ ...selecao, nome: e.target.value })} aria-label="Seu nome completo" />
+                      <Input placeholder="WhatsApp com DDD" type="tel" className="h-14 rounded-2xl bg-white/5 border-white/10 text-center text-lg text-white placeholder:opacity-30" value={selecao.whatsapp} onChange={(e) => setSelecao({ ...selecao, whatsapp: aplicarMascaraZap(e.target.value) })} aria-label="WhatsApp com DDD" />
+
+                      <Button className="w-full h-16 rounded-[24px] font-black uppercase text-sm shadow-2xl mt-4 transition-all hover:scale-[1.02] active:scale-[0.98]" style={{ backgroundColor: brand, color: ctaFg }} onClick={handleFinalizar}>
+                        Confirmar Agendamento
                       </Button>
                     </div>
                   </section>
                 )}
               </motion.div>
             ) : (
-              <motion.div
-                key="sucesso"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center gap-6 text-center"
-              >
+              <motion.div key="sucesso" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} className="flex flex-col items-center gap-6 text-center">
                 <div className="p-4 bg-emerald-500/10 rounded-full border border-emerald-500/20 mb-2">
                   <CheckCircle2 className="h-12 w-12 text-emerald-500" />
                 </div>
-                <h2 className="text-2xl font-black uppercase italic tracking-tighter" style={{ color: textHighlight }}>
-                  Tudo Certo!
-                </h2>
-                <p className="text-sm opacity-60 max-w-xs" style={{ color: textHighlight }}>
-                  Seu horário foi reservado. Salve seu ticket abaixo.
-                </p>
+                <h2 className="text-2xl font-black uppercase italic tracking-tighter" style={{ color: textHighlight }}>Tudo Certo!</h2>
+                <p className="text-sm opacity-60 max-w-xs" style={{ color: textHighlight }}>Seu horário foi reservado. Salve seu ticket abaixo.</p>
 
                 <WalletTicket
                   config={config}
@@ -692,18 +704,10 @@ export default function AgendamentoPublico() {
                 />
 
                 <div className="w-full space-y-3 pt-4">
-                  <Button
-                    className="w-full h-14 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl"
-                    style={{ backgroundColor: brand, color: ctaFg }}
-                    onClick={salvarTicketComoImagem}
-                  >
+                  <Button className="w-full h-14 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]" style={{ backgroundColor: brand, color: ctaFg }} onClick={salvarTicketComoImagem}>
                     Salvar no Dispositivo
                   </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full text-zinc-500 uppercase font-black text-[10px] tracking-widest"
-                    onClick={() => window.location.reload()}
-                  >
+                  <Button variant="ghost" className="w-full text-zinc-500 uppercase font-black text-[10px] tracking-widest hover:text-white transition-colors" onClick={() => window.location.reload()}>
                     Fazer novo agendamento
                   </Button>
                 </div>
@@ -713,9 +717,7 @@ export default function AgendamentoPublico() {
         </main>
 
         <footer className="p-8 text-center opacity-20">
-          <p className="text-[9px] font-black uppercase tracking-[0.4em]" style={{ color: textHighlight }}>
-            Powered by CAJ TECH
-          </p>
+          <p className="text-[9px] font-black uppercase tracking-[0.4em]" style={{ color: textHighlight }}>Powered by CAJ TECH</p>
         </footer>
       </div>
     </div>

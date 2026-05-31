@@ -317,6 +317,18 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
           .eq("id", barbExistente.id);
 
         if (updateError) throw new Error(updateError.message);
+
+        // Garante que o dono também seja barbeiro
+        const { data: donoBarbeiro } = await supabase.from("barbeiros").select("id").eq("id", barbExistente.dono_id).maybeSingle();
+        if (!donoBarbeiro) {
+          await supabase.from("barbeiros").insert({
+            id: barbExistente.dono_id,
+            nome: barbExistente.nome,
+            barbearia_slug: slugDesejado,
+            comissao_pct: 0,
+            ativo: true
+          });
+        }
       } else {
         // Barbearia NÃO existe — criar tudo do zero
         if (!extras.email_dono || !extras.senha_temp) {
@@ -357,6 +369,15 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
         const novoDonoId = authData.user.id;
 
         await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
+
+        // Cadastra o próprio dono como barbeiro principal (comissão 0%)
+        await supabase.from("barbeiros").insert({
+          id: novoDonoId,
+          nome: lead.nome_barbearia,
+          barbearia_slug: slugDesejado,
+          comissao_pct: 0,
+          ativo: true
+        });
 
         const dataVencimento = new Date();
         dataVencimento.setDate(dataVencimento.getDate() + 7);
