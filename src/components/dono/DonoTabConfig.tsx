@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   QrCode,
   Clock,
@@ -14,6 +14,7 @@ import {
   Power,
   PowerOff,
   Trash2,
+  Camera,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,8 @@ const formatarDataBR = (dataIso: string) => {
 
 type ExtendedDonoTabConfigProps = DonoTabConfigProps & {
   onHorarioChange?: (campo: string, valor: string) => void;
+  onUpdateBarbeiroPhoto?: (barbeiroId: string, file: File) => void;
+  onUpdateServicoImage?: (servicoId: string, file: File) => void;
 };
 
 // ==========================================
@@ -117,6 +120,8 @@ export function DonoTabConfig({
   onImagemFundoChange,
   onNovaDataFechadaChange,
   onHorarioChange,
+  onUpdateBarbeiroPhoto,
+  onUpdateServicoImage,
 }: ExtendedDonoTabConfigProps) {
 
   const previewLogo = useMemo(
@@ -159,6 +164,7 @@ export function DonoTabConfig({
         isUploadingBarbeiro={isUploadingBarbeiro} brand={brand} ctaFg={ctaFg} glass={glass}
         onNBarbeiroChange={onNBarbeiroChange} onImagemBarbeiroChange={onImagemBarbeiroChange}
         onAddBarbeiro={onAddBarbeiro} onToggleBarbeiroStatus={onToggleBarbeiroStatus} onRemoveBarbeiro={onRemoveBarbeiro}
+        onUpdateBarbeiroPhoto={onUpdateBarbeiroPhoto}
       />
 
       <ServicosSection
@@ -166,6 +172,7 @@ export function DonoTabConfig({
         isUploadingServico={isUploadingServico} brand={brand} ctaFg={ctaFg} glass={glass}
         onNServicoChange={onNServicoChange} onImagemServicoChange={onImagemServicoChange}
         onAddServico={onAddServico} onRemoveServico={onRemoveServico}
+        onUpdateServicoImage={onUpdateServicoImage}
       />
 
       <BrandingSection
@@ -215,6 +222,7 @@ interface EquipeSectionProps {
   onAddBarbeiro: () => void;
   onToggleBarbeiroStatus: (id: string, novoStatus: boolean) => void;
   onRemoveBarbeiro: (id: string) => void;
+  onUpdateBarbeiroPhoto?: (barbeiroId: string, file: File) => void;
 }
 
 interface ServicosSectionProps {
@@ -229,6 +237,7 @@ interface ServicosSectionProps {
   onImagemServicoChange: (file: File | null) => void;
   onAddServico: () => void;
   onRemoveServico: (id: string) => void;
+  onUpdateServicoImage?: (servicoId: string, file: File) => void;
 }
 
 interface BrandingSectionProps {
@@ -309,21 +318,11 @@ function HorariosSection({
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 space-y-2">
             <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Abertura</label>
-            <input
-              type="time" value={horariosLoja?.abertura || ""}
-              onChange={(e) => handleChange("abertura", e.target.value)}
-              className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
-              style={{ colorScheme: "dark" }}
-            />
+            <input type="time" value={horariosLoja?.abertura || ""} onChange={(e) => handleChange("abertura", e.target.value)} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{ colorScheme: "dark" }} />
           </div>
           <div className="flex-1 space-y-2">
             <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Fechamento</label>
-            <input
-              type="time" value={horariosLoja?.fechamento || ""}
-              onChange={(e) => handleChange("fechamento", e.target.value)}
-              className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
-              style={{ colorScheme: "dark" }}
-            />
+            <input type="time" value={horariosLoja?.fechamento || ""} onChange={(e) => handleChange("fechamento", e.target.value)} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{ colorScheme: "dark" }} />
           </div>
         </div>
 
@@ -332,21 +331,11 @@ function HorariosSection({
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 space-y-2">
               <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Início Pausa</label>
-              <input
-                type="time" value={horariosLoja?.inicio_almoco || ""}
-                onChange={(e) => handleChange("inicio_almoco", e.target.value)}
-                className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
-                style={{ colorScheme: "dark" }}
-              />
+              <input type="time" value={horariosLoja?.inicio_almoco || ""} onChange={(e) => handleChange("inicio_almoco", e.target.value)} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{ colorScheme: "dark" }} />
             </div>
             <div className="flex-1 space-y-2">
               <label className="text-[10px] text-white/50 uppercase font-bold ml-1 tracking-widest">Fim Pausa</label>
-              <input
-                type="time" value={horariosLoja?.fim_almoco || ""}
-                onChange={(e) => handleChange("fim_almoco", e.target.value)}
-                className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base"
-                style={{ colorScheme: "dark" }}
-              />
+              <input type="time" value={horariosLoja?.fim_almoco || ""} onChange={(e) => handleChange("fim_almoco", e.target.value)} className="w-full rounded-xl border border-white/[0.08] bg-black/30 p-4 text-white outline-none focus:border-white/20 text-base" style={{ colorScheme: "dark" }} />
             </div>
           </div>
         </div>
@@ -380,7 +369,7 @@ function HorariosSection({
 
 function EquipeSection({
   barbeiros, nBarbeiro, imagemBarbeiro, isUploadingBarbeiro, brand, ctaFg, glass,
-  onNBarbeiroChange, onImagemBarbeiroChange, onAddBarbeiro, onToggleBarbeiroStatus, onRemoveBarbeiro
+  onNBarbeiroChange, onImagemBarbeiroChange, onAddBarbeiro, onToggleBarbeiroStatus, onRemoveBarbeiro, onUpdateBarbeiroPhoto
 }: EquipeSectionProps) {
   return (
     <div className="space-y-4">
@@ -412,7 +401,35 @@ function EquipeSection({
         {barbeiros.map((b) => (
           <div key={b.id} className="bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl flex items-center justify-between group">
             <div className="flex items-center gap-4">
-              {b.url_foto ? <img src={b.url_foto} alt={b.nome} className={cn("h-12 w-12 rounded-full object-cover border-2", b.ativo ? "border-emerald-500" : "border-red-500 grayscale opacity-50")} /> : <div className={cn("h-12 w-12 rounded-full flex items-center justify-center text-lg font-black", b.ativo ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50" : "bg-red-500/20 text-red-500 border border-red-500/50")}>{b.nome.charAt(0).toUpperCase()}</div>}
+              {/* FOTO DO BARBEIRO COM BOTÃO DE TROCAR */}
+              <div className="relative group/img">
+                {b.url_foto ? (
+                  <img
+                    src={b.url_foto}
+                    alt={b.nome}
+                    className={cn("h-12 w-12 rounded-full object-cover border-2 transition-opacity", b.ativo ? "border-emerald-500" : "border-red-500 grayscale opacity-50")}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                  />
+                ) : null}
+                <div className={cn("h-12 w-12 rounded-full flex items-center justify-center text-lg font-black", b.ativo ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50" : "bg-red-500/20 text-red-500 border border-red-500/50", b.url_foto ? 'hidden' : '')}>
+                  {b.nome.charAt(0).toUpperCase()}
+                </div>
+                {onUpdateBarbeiroPhoto && (
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity cursor-pointer border border-white/20">
+                    <Camera className="h-5 w-5 text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) onUpdateBarbeiroPhoto(b.id, file);
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
               <div>
                 <p className={cn("text-base font-black uppercase italic tracking-tight", !b.ativo && "opacity-50 line-through")}>{b.nome}</p>
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Comissão: <span className="text-white">{b.comissao_pct ?? 0}%</span></p>
@@ -431,7 +448,7 @@ function EquipeSection({
 
 function ServicosSection({
   servicos, nServico, imagemServico, isUploadingServico, brand, ctaFg, glass,
-  onNServicoChange, onImagemServicoChange, onAddServico, onRemoveServico
+  onNServicoChange, onImagemServicoChange, onAddServico, onRemoveServico, onUpdateServicoImage
 }: ServicosSectionProps) {
   return (
     <div className="space-y-4">
@@ -464,7 +481,35 @@ function ServicosSection({
         {servicos.map((s) => (
           <div key={s.id} className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between group">
             <div className="flex items-center gap-4">
-              {s.url_imagem ? <img src={s.url_imagem} className="h-12 w-12 rounded-xl object-cover border border-white/10" alt={s.nome} /> : <div className="h-12 w-12 rounded-xl bg-black/30 flex items-center justify-center border border-white/5"><Scissors className="h-5 w-5 text-white/20" /></div>}
+              {/* FOTO DO SERVIÇO COM BOTÃO DE TROCAR */}
+              <div className="relative group/img">
+                {s.url_imagem ? (
+                  <img
+                    src={s.url_imagem}
+                    className="h-12 w-12 rounded-xl object-cover border border-white/10"
+                    alt={s.nome}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                  />
+                ) : null}
+                <div className={cn("h-12 w-12 rounded-xl bg-black/30 flex items-center justify-center border border-white/5", s.url_imagem ? 'hidden' : '')}>
+                  <Scissors className="h-5 w-5 text-white/20" />
+                </div>
+                {onUpdateServicoImage && (
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl opacity-0 group-hover/img:opacity-100 transition-opacity cursor-pointer border border-white/20">
+                    <Camera className="h-4 w-4 text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) onUpdateServicoImage(s.id, file);
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
               <div>
                 <p className="text-sm font-black uppercase italic tracking-tight">{s.nome}</p>
                 <p className="text-[11px] font-black mt-0.5 tracking-widest uppercase" style={{ color: brand }}>R$ {formatarMoedaBR(s.preco)} <span className="text-zinc-500 font-bold ml-1 opacity-70">• {s.duracao_minutos} min</span></p>

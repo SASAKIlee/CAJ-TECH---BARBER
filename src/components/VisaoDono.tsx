@@ -127,7 +127,7 @@ function VisaoDonoComponent({
         .eq('ativo', true)
         .order('criado_em', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         const dataAviso = new Date(data.criado_em);
@@ -155,7 +155,7 @@ function VisaoDonoComponent({
         .from("barbearias")
         .select("data_vencimento")
         .eq("dono_id", authData.user.id)
-        .single();
+        .maybeSingle();
       if (barbearia) {
         setDataVencimento(barbearia.data_vencimento);
       }
@@ -234,20 +234,32 @@ function VisaoDonoComponent({
     [data.checkinHabilitado, updateData]
   );
 
-  const handleUploadImagem = useCallback(async (file: File, bucket: string): Promise<string | null> => {
+  // ==========================================
+  // UPLOAD DE IMAGEM (Bucket único: "imagens")
+  // ==========================================
+  const handleUploadImagem = useCallback(async (file: File, pasta: string): Promise<string | null> => {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 600 });
       const uniqueId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
-      const fileName = `${uniqueId}.${compressed.name.split(".").pop()}`;
-      const { error } = await supabase.storage.from(bucket).upload(fileName, compressed);
+      const ext = compressed.name.split(".").pop() || "jpg";
+      const fileName = `${data.slug}/${pasta}/${uniqueId}.${ext}`;
+
+      const { error } = await supabase.storage.from("imagens").upload(fileName, compressed, { upsert: true });
       if (error) throw error;
-      return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
-    } catch {
+
+      const result = supabase.storage.from("imagens").getPublicUrl(fileName);
+      if (!result.data?.publicUrl) throw new Error("Erro ao obter URL da imagem.");
+      return result.data.publicUrl;
+    } catch (err) {
+      console.error("Erro upload imagem:", err);
       toast.error("Erro no processamento da imagem.");
       return null;
     }
-  }, []);
+  }, [data.slug]);
 
+  // ==========================================
+  // ADICIONAR BARBEIRO
+  // ==========================================
   const handleAddBarbeiroComFotoETrava = useCallback(async () => {
     if (data.planoAtual === "starter" && barbeiros.length >= 2) {
       setModalUpgradeAberto(true);
@@ -258,7 +270,7 @@ function VisaoDonoComponent({
     setIsUploadingBarbeiro(true);
     let urlFinal: string | null = null;
     if (imagemBarbeiro) {
-      urlFinal = await handleUploadImagem(imagemBarbeiro, "equipe");
+      urlFinal = await handleUploadImagem(imagemBarbeiro, "barbeiros");
     }
     onAddBarbeiro?.(validacao.data.nome, Number(validacao.data.comissao), validacao.data.email, validacao.data.senha, urlFinal);
     setNBarbeiro({ nome: "", comissao: "50", email: "", senha: "" });
@@ -266,6 +278,9 @@ function VisaoDonoComponent({
     setIsUploadingBarbeiro(false);
   }, [data.planoAtual, barbeiros.length, nBarbeiro, imagemBarbeiro, handleUploadImagem, onAddBarbeiro]);
 
+  // ==========================================
+  // ADICIONAR SERVIÇO
+  // ==========================================
   const handleAddServicoComFoto = useCallback(async () => {
     const validacao = servicoSchema.safeParse(nServico);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
@@ -280,6 +295,55 @@ function VisaoDonoComponent({
     setIsUploadingServico(false);
   }, [nServico, imagemServico, handleUploadImagem, onAddServico]);
 
+  // ==========================================
+  // TROCAR FOTO DO BARBEIRO
+  // ==========================================
+  const handleUpdateBarbeiroPhoto = useCallback(async (barbeiroId: string, file: File) => {
+    const toastId = toast.loading("Atualizando foto do barbeiro...");
+    try {
+      const url = await handleUploadImagem(file, "barbeiros");
+      if (!url) throw new Error("Falha no upload da imagem.");
+
+      const { error: updateError } = await supabase
+        .from('barbeiros')
+        .update({ url_foto: url })
+        .eq('id', barbeiroId);
+
+      if (updateError) throw updateError;
+
+      toast.success("Foto do barbeiro atualizada!", { id: toastId });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error(message, { id: toastId });
+    }
+  }, [handleUploadImagem]);
+
+  // ==========================================
+  // TROCAR FOTO DO SERVIÇO
+  // ==========================================
+  const handleUpdateServicoImage = useCallback(async (servicoId: string, file: File) => {
+    const toastId = toast.loading("Atualizando imagem do serviço...");
+    try {
+      const url = await handleUploadImagem(file, "servicos");
+      if (!url) throw new Error("Falha no upload da imagem.");
+
+      const { error: updateError } = await supabase
+        .from('servicos')
+        .update({ url_imagem: url })
+        .eq('id', servicoId);
+
+      if (updateError) throw updateError;
+
+      toast.success("Imagem do serviço atualizada!", { id: toastId });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error(message, { id: toastId });
+    }
+  }, [handleUploadImagem]);
+
+  // ==========================================
+  // SALVAR HORÁRIOS
+  // ==========================================
   const handleSaveHorarios = useCallback(async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return toast.error("Sessão expirada.");
@@ -305,6 +369,9 @@ function VisaoDonoComponent({
     }
   }, [data.horariosLoja]);
 
+  // ==========================================
+  // SALVAR BRANDING (Logo + Fundo)
+  // ==========================================
   const handleSaveBranding = useCallback(async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return toast.error("Sessão expirada.");
@@ -313,11 +380,11 @@ function VisaoDonoComponent({
     try {
       const updates: Record<string, string> = {};
       if (imagemLogo) {
-        const urlLogo = await handleUploadImagem(imagemLogo, "barbearias");
+        const urlLogo = await handleUploadImagem(imagemLogo, "branding");
         if (urlLogo) updates.url_logo = urlLogo;
       }
       if (imagemFundo) {
-        const urlFundo = await handleUploadImagem(imagemFundo, "barbearias");
+        const urlFundo = await handleUploadImagem(imagemFundo, "branding");
         if (urlFundo) updates.url_fundo = urlFundo;
       }
       if (Object.keys(updates).length > 0) {
@@ -394,7 +461,7 @@ function VisaoDonoComponent({
       try {
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError || !authData.user) throw new Error("Sessão expirada. Recarregue a página.");
-        const { data: barbearia } = await supabase.from("barbearias").select("id").eq("dono_id", authData.user.id).single();
+        const { data: barbearia } = await supabase.from("barbearias").select("id").eq("dono_id", authData.user.id).maybeSingle();
         if (!barbearia) throw new Error("Barbearia não identificada. Entre em contato com o suporte.");
         const { data: fnData, error: fnError } = await supabase.functions.invoke("mercado-pago-pix", {
           body: {
@@ -701,6 +768,8 @@ function VisaoDonoComponent({
                 onRemoveBarbeiro={onRemoveBarbeiro ?? (() => { })}
                 onRemoveServico={onRemoveServico ?? (() => { })}
                 onHorarioChange={(campo, valor) => updateData({ horariosLoja: { ...data.horariosLoja, [campo]: valor } })}
+                onUpdateBarbeiroPhoto={handleUpdateBarbeiroPhoto}
+                onUpdateServicoImage={handleUpdateServicoImage}
               />
             )}
           </motion.div>
