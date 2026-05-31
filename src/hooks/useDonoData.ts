@@ -41,118 +41,62 @@ export function useDonoData() {
   const [tempoPix, setTempoPix] = useState(900);
 
   // Carregar dados da loja e se inscrever em tempo real
-// Carregar dados da loja e se inscrever em tempo real
-useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let mounted = true;
+  useEffect(() => {
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+  let mounted = true;
 
-    const init = async () => {
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user || !mounted) return;
+  const carregarTudo = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !mounted) return;
 
-      const userId = authData.user.id;
+    // 1. Busca os dados da loja
+    const { data: loja } = await supabase
+      .from("barbearias")
+      .select("*")
+      .eq("dono_id", user.id)
+      .maybeSingle();
 
-      // Buscar dados iniciais
-      const { data: lojaData, error: lojaError } = await supabase
-        .from("barbearias")
-        .select("*")
-        .eq("dono_id", userId)
-        .maybeSingle();
+    if (!mounted) return;
 
-      if (!mounted) return;
+    if (loja) {
+      setData((prev) => ({
+        ...prev,
+        slug: loja.slug,
+        isLojaAtiva: loja.ativo !== false,
+        planoAtual: normalizePlano(loja.plano),
+        // ... preencha os outros campos do seu state aqui
+      }));
 
-      if (lojaError) {
-        console.error("Erro ao carregar dados da loja:", lojaError);
-        return;
+      // 2. Só cria o canal se a loja existir e NÃO houver um canal ativo
+      if (!channel) {
+        channel = supabase
+          .channel(`perfil-${user.id}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "barbearias",
+              filter: `dono_id=eq.${user.id}`,
+            },
+            () => carregarTudo() // Recarrega se mudar
+          );
+        
+        // Inscreve por último
+        channel.subscribe();
       }
+    }
+  };
 
-      if (!lojaData) {
-        console.log("Nenhuma barbearia encontrada para este dono.");
-        return;
-      }
+  carregarTudo();
 
-      // ✅ ATUALIZE SEU ESTADO AQUI
-      // Exemplo (adapte para os campos que você usa):
-      // updateData({
-      //   slug: lojaData.slug,
-      //   planoAtual: lojaData.plano,
-      //   isLojaAtiva: lojaData.ativo,
-      //   checkinHabilitado: lojaData.checkin_habilitado ?? false,
-      //   horariosLoja: {
-      //     abertura: lojaData.horario_abertura || "",
-      //     fechamento: lojaData.horario_fechamento || "",
-      //     inicio_almoco: lojaData.pausa_inicio || "",
-      //     fim_almoco: lojaData.pausa_fim || "",
-      //     dias_trabalho: lojaData.dias_abertos || [],
-      //     datas_fechadas: lojaData.datas_fechadas || [],
-      //   },
-      //   fasePagamento: lojaData.fase_pagamento ?? 1,
-      //   diasRestantes: lojaData.dias_restantes ?? 0,
-      // });
-
-      // Inscrever em mudanças em tempo real
-      channel = supabase
-        .channel(`barbearia-dono-${userId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "barbearias",
-            filter: `dono_id=eq.${userId}`,
-          },
-          async (payload) => {
-            if (!mounted) return;
-
-            // Se for UPDATE, usa o payload direto (mais rápido)
-            if (payload.eventType === "UPDATE" && payload.new) {
-              const d = payload.new as Record<string, unknown>;
-              // ✅ ATUALIZE SEU ESTADO AQUI (REALTIME UPDATE)
-              // updateData({
-              //   slug: d.slug as string,
-              //   planoAtual: d.plano as string,
-              //   isLojaAtiva: d.ativo as boolean,
-              //   checkinHabilitado: d.checkin_habilitado as boolean,
-              //   horariosLoja: {
-              //     abertura: (d.horario_abertura as string) || "",
-              //     fechamento: (d.horario_fechamento as string) || "",
-              //     inicio_almoco: (d.pausa_inicio as string) || "",
-              //     fim_almoco: (d.pausa_fim as string) || "",
-              //     dias_trabalho: (d.dias_abertos as number[]) || [],
-              //     datas_fechadas: (d.datas_fechadas as string[]) || [],
-              //   },
-              //   fasePagamento: (d.fase_pagamento as number) ?? 1,
-              //   diasRestantes: (d.dias_restantes as number) ?? 0,
-              // });
-            } else {
-              // Para INSERT ou DELETE, busca no banco
-              const { data: freshData } = await supabase
-                .from("barbearias")
-                .select("*")
-                .eq("dono_id", userId)
-                .maybeSingle();
-
-              if (freshData && mounted) {
-                // ✅ ATUALIZE SEU ESTADO AQUI (REFETCH)
-                // updateData({ ... });
-              }
-            }
-          }
-        )
-        .subscribe();
-    };
-
-    init();
-
-    // Cleanup ao desmontar
-    return () => {
-      mounted = false;
-      if (channel) {
-        supabase.removeChannel(channel);
-        channel = null;
-      }
-    };
-  }, []);
+  return () => {
+    mounted = false;
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
+  };
+}, []);
 
   // Timer do PIX — rodando limpo, sem re-criar intervalo
   useEffect(() => {
