@@ -277,66 +277,106 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
     const planoEscolhido = planos[lead.id] || lead.dados_adicionais?.plano_escolhido || "pro";
     const extras = lead.dados_adicionais || {};
     if (!slugDesejado) return toast.error("Defina o Slug do link antes de aprovar.");
-    if (!extras.email_dono || !extras.senha_temp) return toast.error("Este lead não possui e-mail e senha.");
-    const toastId = toast.loading("Verificando disponibilidade e ativando...");
+
+    const toastId = toast.loading("Ativando barbearia...");
     try {
-      // Verifica slug com tratamento de erro
-      const { data: slugExistente, error: slugError } = await supabase
+      // 1. Verifica se o slug já está em uso por OUTRA barbearia
+      const { data: slugUsado } = await supabase
         .from("barbearias")
-        .select("id")
+        .select("id, nome")
         .eq("slug", slugDesejado)
         .maybeSingle();
 
-      if (slugError) throw new Error("Erro ao verificar slug. Tente novamente.");
-      if (slugExistente) throw new Error(`O link '${slugDesejado}' já está sendo usado.`);
-
-      // Cliente temporário com storage em memória (evita warning do GoTrue)
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          storage: {
-            getItem: () => null,
-            setItem: () => { },
-            removeItem: () => { },
-          },
-        },
-      });
-
-      const { data: authData, error: authError } = await tempSupabase.auth.signUp({
-        email: extras.email_dono,
-        password: extras.senha_temp,
-      });
-
-      if (authError) {
-        if (authError.message.includes("already registered") || authError.message.includes("already exists")) {
-          throw new Error("Este e-mail já está cadastrado. Use outro e-mail ou recupere a senha.");
-        }
-        throw new Error(authError.message);
+      if (slugUsado && slugUsado.nome !== lead.nome_barbearia) {
+        throw new Error(`O slug '${slugDesejado}' já está sendo usado por "${slugUsado.nome}".`);
       }
 
-      if (!authData.user?.id) throw new Error("Erro ao criar conta. Tente novamente.");
-      const novoDonoId = authData.user.id;
+      // 2. Verifica se a barbearia JÁ EXISTE (criada pelo vendedor)
+      const { data: barbExistente } = await supabase
+        .from("barbearias")
+        .select("id, dono_id, nome")
+        .eq("nome", lead.nome_barbearia)
+        .maybeSingle();
 
-      await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
+      if (barbExistente) {
+        // Barbearia já existe — só atualizar slug, plano e ativar
+        const dataVencimento = new Date();
+        dataVencimento.setDate(dataVencimento.getDate() + 7);
 
-      const dataVencimento = new Date();
-      dataVencimento.setDate(dataVencimento.getDate() + 7);
+        const { error: updateError } = await supabase
+          .from("barbearias")
+          .update({
+            slug: slugDesejado,
+            plano: planoEscolhido,
+            ativo: true,
+            data_vencimento: dataVencimento.toISOString(),
+            cor_primaria: extras.cor_primaria || "#D4AF37",
+            cor_secundaria: extras.cor_secundaria || "#18181B",
+            cor_destaque: extras.cor_destaque || "#FFFFFF",
+          })
+          .eq("id", barbExistente.id);
 
-      const { error: barbError } = await supabase.from("barbearias").insert({
-        nome: lead.nome_barbearia,
-        slug: slugDesejado,
-        dono_id: novoDonoId,
-        cor_primaria: extras.cor_primaria || "#D4AF37",
-        cor_secundaria: extras.cor_secundaria || "#18181B",
-        cor_destaque: extras.cor_destaque || "#FFFFFF",
-        plano: planoEscolhido,
-        ativo: true,
-        data_vencimento: dataVencimento.toISOString(),
-      });
+        if (updateError) throw new Error(updateError.message);
+      } else {
+        // Barbearia NÃO existe — criar tudo do zero
+        if (!extras.email_dono || !extras.senha_temp) {
+          throw new Error("Barbearia não encontrada e dados de acesso (e-mail/senha) não informados no lead.");
+        }
 
-      if (barbError) throw new Error(barbError.message);
+        const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            storage: {
+              getItem: () => null,
+              setItem: () => { },
+              removeItem: () => { },
+            },
+          },
+        });
 
+        const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+          email: extras.email_dono,
+          password: extras.senha_temp,
+        });
+
+        if (authError) {
+          if (
+            authError.message.includes("already registered") ||
+            authError.message.includes("already exists") ||
+            authError.message.includes("already been registered")
+          ) {
+            throw new Error(
+              "Este e-mail já está cadastrado mas a barbearia não foi encontrada. Verifique na aba 'Barbearias' se ela já existe com outro nome."
+            );
+          }
+          throw new Error(authError.message);
+        }
+
+        if (!authData.user?.id) throw new Error("Erro ao criar conta. Tente novamente.");
+        const novoDonoId = authData.user.id;
+
+        await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
+
+        const dataVencimento = new Date();
+        dataVencimento.setDate(dataVencimento.getDate() + 7);
+
+        const { error: barbError } = await supabase.from("barbearias").insert({
+          nome: lead.nome_barbearia,
+          slug: slugDesejado,
+          dono_id: novoDonoId,
+          cor_primaria: extras.cor_primaria || "#D4AF37",
+          cor_secundaria: extras.cor_secundaria || "#18181B",
+          cor_destaque: extras.cor_destaque || "#FFFFFF",
+          plano: planoEscolhido,
+          ativo: true,
+          data_vencimento: dataVencimento.toISOString(),
+        });
+
+        if (barbError) throw new Error(barbError.message);
+      }
+
+      // 3. Atualiza o lead para "convertido"
       await supabase.from("leads").update({
         status: 'convertido',
         dados_adicionais: { ...extras, plano_escolhido: planoEscolhido }
@@ -347,7 +387,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       setExpandido(null);
 
       if (extras.telefone) {
-        const msg = `Fala mestre! Seu app CAJ TECH está no ar.\n🔗 cajtech.net.br/agendar/${slugDesejado}\n\nAcesse com:\nE-mail: ${extras.email_dono}\nSenha: ${extras.senha_temp}`;
+        const msg = `Fala mestre! Seu app CAJ TECH está no ar.\n🔗 cajtech.net.br/agendar/${slugDesejado}\n\nAcesse com:\nE-mail: ${extras.email_dono || 'seu e-mail'}\nSenha: ${extras.senha_temp || 'a que você cadastrou'}`;
         window.open(`https://wa.me/55${extras.telefone}?text=${encodeURIComponent(msg)}`, '_blank');
       }
     } catch (err: unknown) {
