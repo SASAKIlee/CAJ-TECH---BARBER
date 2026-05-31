@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
-  TrendingUp, Users, Store, DollarSign, ChevronDown, ChevronUp,
-  BarChart3, ShieldCheck, ArrowUpRight, ClipboardList, CheckCircle,
-  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone, Calendar, CreditCard, Filter, ArrowRight, Activity, Bot, Settings, Edit3, PieChart as PieChartIcon, Scissors
+  TrendingUp, Users, Store, ChevronDown, ChevronUp,
+  BarChart3, ShieldCheck, ClipboardList, CheckCircle,
+  XCircle, Lock, Unlock, Download, Megaphone, UserPlus, Eye, Wallet, X, Loader2, Search, AlertTriangle, Trash2, Smartphone, Calendar, CreditCard, Bot, Settings
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { createClient } from "@supabase/supabase-js";
 import { toast } from "sonner";
@@ -61,22 +60,13 @@ interface VendedorRanking extends Vendedor {
   ativo: boolean;
 }
 
-interface BarbeiroCEO {
-  id: string;
-  nome: string;
-  barbearia_slug: string;
-  comissao_pct: number;
-  ativo: boolean;
-  barbearia_nome?: string;
-}
-
 interface VisaoCEOProps {
   totalLojas?: number;
   faturamentoTotal?: number;
   vendedores?: Vendedor[];
 }
 
-type CEOTab = "dashboard" | "aprovacoes" | "lojas" | "equipe" | "barbeiros" | "comissoes";
+type CEOTab = "dashboard" | "aprovacoes" | "lojas" | "equipe" | "comissoes";
 type FiltroLoja = "todas" | "ativas" | "bloqueadas" | "trial";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -117,12 +107,6 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
   const [novoConsultor, setNovoConsultor] = useState({ nome: "", email: "", senha: "" });
   const [isSavingConsultor, setIsSavingConsultor] = useState(false);
 
-  const [modalBarbeiroAberto, setModalBarbeiroAberto] = useState(false);
-  const [novoBarbeiro, setNovoBarbeiro] = useState({ nome: "", email: "", senha: "", comissao_pct: 50, barbearia_slug: "" });
-  const [isSavingBarbeiro, setIsSavingBarbeiro] = useState(false);
-  const [barbeirosCEO, setBarbeirosCEO] = useState<BarbeiroCEO[]>([]);
-  const [buscaBarbeiros, setBuscaBarbeiros] = useState("");
-
   const [modalComissaoAberto, setModalComissaoAberto] = useState(false);
   const [vendedorSelecionado, setVendedorSelecionado] = useState<VendedorRanking | null>(null);
   const [comissaoStarter, setComissaoStarter] = useState("");
@@ -154,14 +138,12 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
         { data: leads },
         { data: lojas },
         { data: vendedoresDB },
-        { data: carteiraDB },
-        { data: barbeirosDB }
+        { data: carteiraDB }
       ] = await Promise.all([
         supabase.from('leads').select('*').order('created_at', { ascending: false }).abortSignal(controller.signal),
         supabase.from('barbearias').select('*').order('created_at', { ascending: false }).abortSignal(controller.signal),
         supabase.from('perfis_vendedores').select('*').abortSignal(controller.signal),
-        supabase.from('carteira_comissoes').select(`*, vendedor:perfis_vendedores(nome)`).order('mes_referencia', { ascending: false }).abortSignal(controller.signal),
-        supabase.from('barbeiros').select('id, nome, barbearia_slug, comissao_pct, ativo').abortSignal(controller.signal)
+        supabase.from('carteira_comissoes').select(`*, vendedor:perfis_vendedores(nome)`).order('mes_referencia', { ascending: false }).abortSignal(controller.signal)
       ]);
 
       if (!isMountedRef.current) return;
@@ -178,20 +160,6 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
         return { ...loja, diffDias, isTrial: diasDesdeCriacao <= 7, plano: loja.plano || 'pro' };
       });
       setLojasAtivas(lojasData);
-
-      // Mapa slug -> nome para barbeiros
-      const slugToNome: Record<string, string> = {};
-      lojasData.forEach((l: Loja) => { slugToNome[l.slug] = l.nome; });
-
-      const barbeirosData: BarbeiroCEO[] = (barbeirosDB || []).map((b: any) => ({
-        id: b.id,
-        nome: b.nome,
-        barbearia_slug: b.barbearia_slug,
-        comissao_pct: Number(b.comissao_pct || 0),
-        ativo: b.ativo !== false,
-        barbearia_nome: slugToNome[b.barbearia_slug] || b.barbearia_slug
-      }));
-      setBarbeirosCEO(barbeirosData);
 
       const listaVendedores = (vendedoresDB || vendedores) as Vendedor[];
       const rankingCalculado: VendedorRanking[] = listaVendedores.map((v) => {
@@ -240,8 +208,8 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
         { mes: 'M-3', mrr: totalReceita * 0.6 }, { mes: 'M-2', mrr: totalReceita * 0.8 },
         { mes: 'M-1', mrr: totalReceita * 0.9 }, { mes: 'Atual', mrr: totalReceita },
       ]);
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error("Erro ao carregar dados do CEO:", err);
       toast.error("Falha ao carregar dados. Recarregue a página.");
     }
@@ -270,7 +238,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
   const taxaChurn = totalLojasNaBase > 0 ? (lojasInativas / totalLojasNaBase) * 100 : 0;
 
   const diagnostico = useMemo(() => {
-    if (totalLojasNaBase === 0 && leadsRecentes.length === 0) return { titulo: "SISTEMA ZERADO", cor: "text-zinc-400", bg: "bg-zinc-900/50", border: "border-zinc-800", texto: "Sua base está limpa. Cadastre vendedores e comece a prospectar." };
+    if (totalLojasNaBase === 0 && leadsRecentes.length === 0) return { titulo: "SISTEMA ZERADO", cor: "text-zinc-400", bg: "bg-zinc-900/50", border: "border-zinc-800", texto: "Sua base está limpa. Cadastre consultores e comece a prospectar." };
     if (Number(taxaConversao) >= 25 && taxaChurn <= 10) return { titulo: "OPERAÇÃO DE ELITE", cor: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20", texto: `Sua máquina está voando! Conversão alta (${taxaConversao}%) e pouquíssimos cancelamentos.` };
     if (Number(taxaConversao) < 15 && leadsRecentes.length > 5) return { titulo: "ALERTA DE VENDAS", cor: "text-yellow-500", bg: "bg-yellow-500/10", border: "border-yellow-500/20", texto: `A equipe visita, mas converte pouco (${taxaConversao}%). Revise o script de vendas.` };
     if (taxaChurn > 20) return { titulo: "RISCO DE CHURN", cor: "text-red-500", bg: "bg-red-500/10", border: "border-red-500/20", texto: `Atenção! Você está perdendo muitos clientes (${taxaChurn.toFixed(0)}% bloqueados).` };
@@ -301,10 +269,6 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
     return filtradas;
   }, [lojasAtivas, buscaLojas, filtroLojas]);
 
-  const barbeirosFiltrados = useMemo(() =>
-    barbeirosCEO.filter(b => b.nome.toLowerCase().includes(buscaBarbeiros.toLowerCase()) || b.barbearia_nome?.toLowerCase().includes(buscaBarbeiros.toLowerCase())),
-    [barbeirosCEO, buscaBarbeiros]);
-
   // ==========================================
   // HANDLERS
   // ==========================================
@@ -321,7 +285,8 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: extras.email_dono, password: extras.senha_temp });
       if (authError) throw new Error(authError.message);
-      const novoDonoId = authData.user!.id;
+      if (!authData.user?.id) throw new Error("Erro ao criar conta. Verifique se o e-mail já não está cadastrado.");
+      const novoDonoId = authData.user.id;
       await supabase.from("user_roles").insert({ user_id: novoDonoId, role: "dono" });
       const dataVencimento = new Date();
       dataVencimento.setDate(dataVencimento.getDate() + 7);
@@ -333,27 +298,30 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       });
       if (barbError) throw new Error(barbError.message);
       await supabase.from("leads").update({ status: 'convertido', dados_adicionais: { ...extras, plano_escolhido: planoEscolhido } }).eq('id', lead.id);
-      toast.success("✅ Cliente Ativado com sucesso!", { id: toastId });
+      toast.success("✅ Barbearia ativada com sucesso!", { id: toastId });
       carregarDados();
       setExpandido(null);
       if (extras.telefone) {
         const msg = `Fala mestre! Seu app CAJ TECH está no ar.\n🔗 cajtech.net.br/agendar/${slugDesejado}\n\nAcesse com:\nE-mail: ${extras.email_dono}\nSenha: ${extras.senha_temp}`;
         window.open(`https://wa.me/55${extras.telefone}?text=${encodeURIComponent(msg)}`, '_blank');
       }
-    } catch (err: any) { toast.error(err.message, { id: toastId }); }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error(message, { id: toastId });
+    }
   }, [slugs, planos, carregarDados]);
 
   const handleRecusarContrato = useCallback(async (leadId: string) => {
     if (!motivoRecusa) return toast.error("Digite o motivo da recusa.");
     try {
       await supabase.from("leads").update({ status: 'recusado', dados_adicionais: { motivo_recusa: motivoRecusa } }).eq('id', leadId);
-      toast.success("Contrato devolvido ao vendedor.");
+      toast.success("Contrato devolvido ao consultor.");
       carregarDados(); setMotivoRecusa(""); setExpandido(null);
     } catch { toast.error("Erro ao recusar."); }
   }, [motivoRecusa, carregarDados]);
 
   const toggleStatusLoja = useCallback(async (lojaId: string, statusAtual: boolean) => {
-    try { await supabase.from("barbearias").update({ ativo: !statusAtual }).eq('id', lojaId); carregarDados(); toast.success(!statusAtual ? "Acesso liberado!" : "Loja Bloqueada."); }
+    try { await supabase.from("barbearias").update({ ativo: !statusAtual }).eq('id', lojaId); carregarDados(); toast.success(!statusAtual ? "Acesso liberado!" : "Barbearia Bloqueada."); }
     catch { toast.error("Falha ao alterar status."); }
   }, [carregarDados]);
 
@@ -364,7 +332,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       baseDate.setDate(baseDate.getDate() + 30);
       await supabase.from("barbearias").update({ data_vencimento: baseDate.toISOString(), ativo: true }).eq('id', lojaId);
       carregarDados(); toast.success("✅ Assinatura renovada por +30 dias!", { id: toastId });
-    } catch { toast.error("Erro ao renovar loja.", { id: toastId }); }
+    } catch { toast.error("Erro ao renovar.", { id: toastId }); }
   }, [carregarDados]);
 
   const toggleStatusVendedor = useCallback(async (vendedorId: string, statusAtual: boolean) => {
@@ -372,7 +340,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
     try {
       const { error } = await supabase.from("perfis_vendedores").update({ ativo: !statusAtual }).eq('id', vendedorId);
       if (error) throw error;
-      toast.success(!statusAtual ? "Acesso do vendedor restaurado." : "Acesso do vendedor cortado!");
+      toast.success(!statusAtual ? "Acesso do consultor restaurado." : "Acesso do consultor cortado!");
       carregarDados();
     } catch { toast.error("Erro ao alterar status."); carregarDados(); }
   }, [carregarDados]);
@@ -387,7 +355,10 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       const { error } = await supabase.from("perfis_vendedores").delete().eq('id', vendedorId);
       if (error) throw error;
       toast.success("Consultor apagado definitivamente!", { id: toastId }); carregarDados();
-    } catch (err: any) { toast.error(err.message, { id: toastId }); }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error(message, { id: toastId });
+    }
   }, [carregarDados]);
 
   const pagarComissao = useCallback(async (vendedorId: string) => {
@@ -409,8 +380,10 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
         await supabase.from("leads").update({ dados_adicionais: { ...lead.dados_adicionais, comissao_paga: true, data_pagamento_comissao: new Date().toISOString() } }).eq("id", lead.id);
       }
       toast.success(`Pagamento de ${formatarMoeda(vendedor.comissao_pendente)} realizado!`, { id: toastId }); carregarDados();
-    } catch (err: any) { toast.error("Erro ao pagar: " + err.message, { id: toastId }); }
-    finally { setIsPagarComissao(false); }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro ao pagar: " + message, { id: toastId });
+    } finally { setIsPagarComissao(false); }
   }, [ranking, leadsRecentes, formatarMoeda, carregarDados, supabaseUrl]);
 
   const dispararAviso = useCallback(async () => {
@@ -421,8 +394,10 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       const { error } = await supabase.from('avisos_rede').insert({ mensagem: novoAviso, criado_por: user?.id, ativo: true });
       if (error) throw error;
       toast.success("Aviso enviado para toda a rede! 📢"); setNovoAviso("");
-    } catch (err: any) { toast.error("Erro ao enviar: " + err.message); }
-    finally { setEnviandoAviso(false); }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro ao enviar: " + message);
+    } finally { setEnviandoAviso(false); }
   }, [novoAviso]);
 
   const handleCadastrarConsultor = useCallback(async () => {
@@ -441,41 +416,11 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       if (perfilError) throw perfilError;
       toast.success("✅ Consultor criado com sucesso!", { id: toastId });
       carregarDados(); setModalConsultorAberto(false); setNovoConsultor({ nome: "", email: "", senha: "" });
-    } catch (err: any) { toast.error(err.message, { id: toastId }); }
-    finally { setIsSavingConsultor(false); }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error(message, { id: toastId });
+    } finally { setIsSavingConsultor(false); }
   }, [novoConsultor, carregarDados]);
-
-  const handleCadastrarBarbeiro = useCallback(async () => {
-    if (!novoBarbeiro.nome || !novoBarbeiro.email || !novoBarbeiro.senha || !novoBarbeiro.barbearia_slug) return toast.error("Preencha todos os campos, incluindo a barbearia!");
-    setIsSavingBarbeiro(true);
-    const toastId = toast.loading("Criando barbeiro...");
-    try {
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-      const { data: authData, error: authError } = await tempSupabase.auth.signUp({ email: novoBarbeiro.email, password: novoBarbeiro.senha });
-      if (authError) throw new Error(authError.message);
-      if (!authData.user?.id) throw new Error("Usuário não criado. Verifique se o e-mail já não está cadastrado.");
-      const novoId = authData.user.id;
-      const { error: roleError } = await supabase.from("user_roles").insert({ user_id: novoId, role: "barbeiro" });
-      if (roleError) throw roleError;
-      const { error: barbError } = await supabase.from("barbeiros").insert({
-        id: novoId, nome: novoBarbeiro.nome, barbearia_slug: novoBarbeiro.barbearia_slug,
-        comissao_pct: novoBarbeiro.comissao_pct, ativo: true
-      });
-      if (barbError) throw barbError;
-      toast.success("✅ Barbeiro criado com sucesso!", { id: toastId });
-      carregarDados(); setModalBarbeiroAberto(false);
-      setNovoBarbeiro({ nome: "", email: "", senha: "", comissao_pct: 50, barbearia_slug: "" });
-    } catch (err: any) { toast.error(err.message, { id: toastId }); }
-    finally { setIsSavingBarbeiro(false); }
-  }, [novoBarbeiro, carregarDados]);
-
-  const toggleStatusBarbeiro = useCallback(async (barbeiroId: string, statusAtual: boolean) => {
-    try {
-      await supabase.from("barbeiros").update({ ativo: !statusAtual }).eq('id', barbeiroId);
-      toast.success(!statusAtual ? "Barbeiro reativado!" : "Barbeiro desativado.");
-      carregarDados();
-    } catch { toast.error("Erro ao alterar status."); }
-  }, [carregarDados]);
 
   const salvarComissao = useCallback(async () => {
     if (!vendedorSelecionado) return;
@@ -487,7 +432,10 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       const { error } = await supabase.from('perfis_vendedores').update({ comissao_starter: valStarter, comissao_pro: valPro, comissao_elite: valElite }).eq('id', vendedorSelecionado.id);
       if (error) throw error;
       toast.success("Comissões atualizadas!"); setModalComissaoAberto(false); carregarDados();
-    } catch (err: any) { toast.error("Erro ao salvar: " + err.message); }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error("Erro ao salvar: " + message);
+    }
   }, [vendedorSelecionado, comissaoStarter, comissaoPro, comissaoElite, carregarDados]);
 
   const exportarCaixa = useCallback(() => {
@@ -516,14 +464,13 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
   }, []);
 
   // ==========================================
-  // NAV
+  // NAV — Sem aba "Barbeiros" (barbeiros são gerenciados pelo Dono)
   // ==========================================
-  const navItems: { id: CEOTab; icon: any; label: string; badge?: number }[] = [
+  const navItems: { id: CEOTab; icon: React.ElementType; label: string; badge?: number }[] = [
     { id: "dashboard", icon: BarChart3, label: "Métricas" },
     { id: "aprovacoes", icon: ClipboardList, label: "Aprovações", badge: statPendentes },
-    { id: "lojas", icon: Store, label: "Lojas" },
+    { id: "lojas", icon: Store, label: "Barbearias" },
     { id: "equipe", icon: Users, label: "Consultores" },
-    { id: "barbeiros", icon: Scissors, label: "Barbeiros" },
     { id: "comissoes", icon: Wallet, label: "Comissões" },
   ];
 
@@ -590,14 +537,8 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
               </Card>
 
               <div className="grid grid-cols-2 gap-3">
-                <Card className="p-4 bg-zinc-900/40 border-zinc-800">
-                  <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Taxa de Conversão</p>
-                  <p className="text-2xl font-black text-white italic">{taxaConversao}%</p>
-                </Card>
-                <Card className="p-4 bg-zinc-900/40 border-zinc-800">
-                  <p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Lojas Pagantes</p>
-                  <p className="text-2xl font-black text-white italic">{lojasAtivas.filter(l => l.ativo !== false).length}</p>
-                </Card>
+                <Card className="p-4 bg-zinc-900/40 border-zinc-800"><p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Taxa de Conversão</p><p className="text-2xl font-black text-white italic">{taxaConversao}%</p></Card>
+                <Card className="p-4 bg-zinc-900/40 border-zinc-800"><p className="text-[9px] uppercase font-black text-zinc-500 mb-1">Barbearias Ativas</p><p className="text-2xl font-black text-white italic">{lojasAtivas.filter(l => l.ativo !== false).length}</p></Card>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -643,7 +584,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
                     {expandido === lead.id && (
                       <div className="p-4 bg-black/40 border-t border-zinc-800 space-y-5">
                         <div className="grid grid-cols-2 gap-3 text-[10px] font-black uppercase text-zinc-400 bg-black p-4 rounded-2xl border border-zinc-800/50">
-                          <div className="col-span-2 border-b border-zinc-800 pb-2 mb-1">Acesso Solicitado</div>
+                          <div className="col-span-2 border-b border-zinc-800 pb-2 mb-1">Dados do Dono</div>
                           <div>E-mail: <span className="text-white lowercase block mt-0.5 break-all">{lead.dados_adicionais?.email_dono}</span></div>
                           <div>Senha: <span className="text-white block mt-0.5">{lead.dados_adicionais?.senha_temp}</span></div>
                           <div>Tel: <span className="text-white block mt-0.5">{lead.dados_adicionais?.telefone || 'Não informado'}</span></div>
@@ -659,7 +600,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Plano Vendido</label>
+                            <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Plano</label>
                             <Select value={planos[lead.id] || lead.dados_adicionais?.plano_escolhido || "pro"} onValueChange={(v: 'starter' | 'pro' | 'elite') => setPlanos({ ...planos, [lead.id]: v })}>
                               <SelectTrigger className="bg-zinc-900 border-zinc-700 h-12 rounded-xl text-xs font-bold text-white"><SelectValue /></SelectTrigger>
                               <SelectContent className="bg-zinc-900 border-zinc-700 text-white rounded-xl">
@@ -676,7 +617,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
                         </div>
                         <Button onClick={() => handleAprovarContrato(lead)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-black font-black h-14 rounded-xl text-xs uppercase"><CheckCircle className="h-5 w-5 mr-2" /> Aprovar & Enviar Zap</Button>
                         <div className="flex flex-col gap-2 pt-4 border-t border-zinc-800/50">
-                          <label className="text-[9px] font-black text-red-500 uppercase ml-1">Devolver ao Vendedor</label>
+                          <label className="text-[9px] font-black text-red-500 uppercase ml-1">Devolver ao Consultor</label>
                           <div className="flex gap-2">
                             <Input placeholder="Ex: Telefone inválido" className="bg-red-500/5 border-red-500/20 text-xs h-12 text-white" value={motivoRecusa} onChange={e => setMotivoRecusa(e.target.value)} />
                             <Button variant="outline" onClick={() => handleRecusarContrato(lead.id)} className="h-12 px-6 text-red-500 border-red-500/20 bg-red-500/10 hover:bg-red-500 hover:text-white font-black uppercase text-[10px] rounded-xl"><XCircle className="h-4 w-4 mr-2" /> Recusar</Button>
@@ -691,13 +632,13 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
             </div>
           )}
 
-          {/* ===== LOJAS ===== */}
+          {/* ===== BARBEARIAS ===== */}
           {tabAtiva === "lojas" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="relative">
                   <Search className="absolute left-4 top-3.5 h-5 w-5 text-zinc-500" />
-                  <Input placeholder="Buscar loja ou slug..." value={buscaLojas} onChange={(e) => setBuscaLojas(e.target.value)} className="bg-zinc-900/80 border-zinc-800 pl-12 text-white rounded-2xl h-12" />
+                  <Input placeholder="Buscar barbearia ou slug..." value={buscaLojas} onChange={(e) => setBuscaLojas(e.target.value)} className="bg-zinc-900/80 border-zinc-800 pl-12 text-white rounded-2xl h-12" />
                 </div>
                 <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
                   {(['todas', 'ativas', 'trial', 'bloqueadas'] as FiltroLoja[]).map(f => (
@@ -750,7 +691,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
             </div>
           )}
 
-          {/* ===== EQUIPE COMERCIAL ===== */}
+          {/* ===== CONSULTORES ===== */}
           {tabAtiva === "equipe" && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
@@ -803,40 +744,6 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
             </div>
           )}
 
-          {/* ===== BARBEIROS ===== */}
-          {tabAtiva === "barbeiros" && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-lg font-black uppercase italic text-white">Barbeiros</h2>
-                  <p className="text-xs text-zinc-500 mt-1">{barbeirosCEO.length} barbeiro(s) em {lojasAtivas.length} loja(s)</p>
-                </div>
-                <Button onClick={() => setModalBarbeiroAberto(true)} className="bg-emerald-600 hover:bg-emerald-500 text-black font-bold text-xs uppercase h-10 rounded-xl gap-2"><UserPlus className="h-4 w-4" /> Novo Barbeiro</Button>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
-                <Input placeholder="Buscar barbeiro ou barbearia..." value={buscaBarbeiros} onChange={e => setBuscaBarbeiros(e.target.value)} className="bg-zinc-900 border-zinc-800 pl-10 text-white rounded-xl h-12" />
-              </div>
-              <div className="grid gap-3">
-                {barbeirosFiltrados.map(b => (
-                  <Card key={b.id} className="bg-zinc-900/50 border-zinc-800 p-4 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("h-2 w-2 rounded-full", b.ativo ? "bg-emerald-500" : "bg-red-500")} />
-                      <div>
-                        <h4 className="font-bold text-white text-sm uppercase italic">{b.nome}</h4>
-                        <p className="text-[9px] text-zinc-500 font-bold uppercase">{b.barbearia_nome} · Comissão {b.comissao_pct}%</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => toggleStatusBarbeiro(b.id, b.ativo)} className={cn("h-8 text-[10px] font-black uppercase rounded-xl", b.ativo ? "text-red-500 border-red-500/20 bg-red-500/5" : "text-emerald-500 border-emerald-500/20 bg-emerald-500/5")}>
-                      {b.ativo ? "Desativar" : "Reativar"}
-                    </Button>
-                  </Card>
-                ))}
-                {barbeirosFiltrados.length === 0 && <p className="text-center text-xs font-bold text-zinc-600 uppercase italic py-10">Nenhum barbeiro encontrado.</p>}
-              </div>
-            </div>
-          )}
-
           {/* ===== COMISSÕES ===== */}
           {tabAtiva === "comissoes" && (
             <div className="space-y-4">
@@ -880,35 +787,6 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setModalConsultorAberto(false)} className="flex-1 border-zinc-700 text-zinc-400 h-12 rounded-xl">Cancelar</Button>
               <Button onClick={handleCadastrarConsultor} disabled={isSavingConsultor} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-black font-bold h-12 rounded-xl">{isSavingConsultor ? "Salvando..." : "Criar Consultor"}</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== MODAL: NOVO BARBEIRO ===== */}
-      {modalBarbeiroAberto && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-black uppercase text-white">Novo Barbeiro</h3>
-              <Button variant="ghost" size="icon" onClick={() => setModalBarbeiroAberto(false)} className="text-zinc-500"><X className="h-5 w-5" /></Button>
-            </div>
-            <Input placeholder="Nome completo" value={novoBarbeiro.nome} onChange={e => setNovoBarbeiro({ ...novoBarbeiro, nome: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white h-12 rounded-xl" />
-            <Input placeholder="E-mail" type="email" value={novoBarbeiro.email} onChange={e => setNovoBarbeiro({ ...novoBarbeiro, email: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white h-12 rounded-xl" />
-            <Input placeholder="Senha" type="password" value={novoBarbeiro.senha} onChange={e => setNovoBarbeiro({ ...novoBarbeiro, senha: e.target.value })} className="bg-zinc-800 border-zinc-700 text-white h-12 rounded-xl" />
-            <Select value={novoBarbeiro.barbearia_slug} onValueChange={v => setNovoBarbeiro({ ...novoBarbeiro, barbearia_slug: v })}>
-              <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white h-12 rounded-xl"><SelectValue placeholder="Selecione a Barbearia" /></SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-700 text-white rounded-xl">
-                {lojasAtivas.map(l => <SelectItem key={l.id} value={l.slug}>{l.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <div>
-              <label className="text-[10px] text-zinc-400 font-bold uppercase ml-1">Comissão (%)</label>
-              <Input type="number" value={novoBarbeiro.comissao_pct} onChange={e => setNovoBarbeiro({ ...novoBarbeiro, comissao_pct: Number(e.target.value) })} className="bg-zinc-800 border-zinc-700 text-white h-12 rounded-xl" />
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setModalBarbeiroAberto(false)} className="flex-1 border-zinc-700 text-zinc-400 h-12 rounded-xl">Cancelar</Button>
-              <Button onClick={handleCadastrarBarbeiro} disabled={isSavingBarbeiro} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-black font-bold h-12 rounded-xl">{isSavingBarbeiro ? "Salvando..." : "Criar Barbeiro"}</Button>
             </div>
           </div>
         </div>
