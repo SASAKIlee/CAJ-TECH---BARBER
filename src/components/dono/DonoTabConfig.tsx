@@ -399,24 +399,24 @@ function EquipeSection({
       </Card>
       <div className="grid gap-3">
         {barbeiros.map((b) => (
-          <div key={b.id} className="bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl flex items-center justify-between group">
+          <div key={b.id} className="bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* FOTO DO BARBEIRO COM BOTÃO DE TROCAR */}
-              <div className="relative group/img">
+              {/* FOTO DO BARBEIRO COM BOTÃO DE TROCAR SEMPRE VISÍVEL */}
+              <div className="relative">
                 {b.url_foto ? (
                   <img
                     src={b.url_foto}
                     alt={b.nome}
-                    className={cn("h-12 w-12 rounded-full object-cover border-2 transition-opacity", b.ativo ? "border-emerald-500" : "border-red-500 grayscale opacity-50")}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                    className={cn("h-14 w-14 rounded-full object-cover border-2", b.ativo ? "border-emerald-500" : "border-red-500 grayscale opacity-50")}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; const fallback = (e.target as HTMLImageElement).nextElementSibling; if (fallback) fallback.classList.remove('hidden'); }}
                   />
                 ) : null}
-                <div className={cn("h-12 w-12 rounded-full flex items-center justify-center text-lg font-black", b.ativo ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50" : "bg-red-500/20 text-red-500 border border-red-500/50", b.url_foto ? 'hidden' : '')}>
+                <div className={cn("h-14 w-14 rounded-full flex items-center justify-center text-xl font-black", b.ativo ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50" : "bg-red-500/20 text-red-500 border border-red-500/50", b.url_foto ? 'hidden' : '')}>
                   {b.nome.charAt(0).toUpperCase()}
                 </div>
                 {onUpdateBarbeiroPhoto && (
-                  <label className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity cursor-pointer border border-white/20">
-                    <Camera className="h-5 w-5 text-white" />
+                  <label className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full flex items-center justify-center cursor-pointer border-2 border-black shadow-lg transition-transform hover:scale-110 active:scale-95" style={{ backgroundColor: brand }}>
+                    <Camera className="h-3.5 w-3.5 text-black" />
                     <input
                       type="file"
                       accept="image/*"
@@ -479,24 +479,24 @@ function ServicosSection({
       </Card>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {servicos.map((s) => (
-          <div key={s.id} className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between group">
+          <div key={s.id} className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* FOTO DO SERVIÇO COM BOTÃO DE TROCAR */}
-              <div className="relative group/img">
+              {/* FOTO DO SERVIÇO COM BOTÃO DE TROCAR SEMPRE VISÍVEL */}
+              <div className="relative">
                 {s.url_imagem ? (
                   <img
                     src={s.url_imagem}
-                    className="h-12 w-12 rounded-xl object-cover border border-white/10"
+                    className="h-14 w-14 rounded-xl object-cover border border-white/10"
                     alt={s.nome}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; const fallback = (e.target as HTMLImageElement).nextElementSibling; if (fallback) fallback.classList.remove('hidden'); }}
                   />
                 ) : null}
-                <div className={cn("h-12 w-12 rounded-xl bg-black/30 flex items-center justify-center border border-white/5", s.url_imagem ? 'hidden' : '')}>
+                <div className={cn("h-14 w-14 rounded-xl bg-black/30 flex items-center justify-center border border-white/5", s.url_imagem ? 'hidden' : '')}>
                   <Scissors className="h-5 w-5 text-white/20" />
                 </div>
                 {onUpdateServicoImage && (
-                  <label className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl opacity-0 group-hover/img:opacity-100 transition-opacity cursor-pointer border border-white/20">
-                    <Camera className="h-4 w-4 text-white" />
+                  <label className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full flex items-center justify-center cursor-pointer border-2 border-black shadow-lg transition-transform hover:scale-110 active:scale-95" style={{ backgroundColor: brand }}>
+                    <Camera className="h-3.5 w-3.5 text-black" />
                     <input
                       type="file"
                       accept="image/*"
@@ -522,7 +522,6 @@ function ServicosSection({
     </div>
   );
 }
-
 function BrandingSection({
   imagemLogo, imagemFundo, previewLogo, previewFundo,
   isUploadingBranding, brand, ctaFg, glass,
