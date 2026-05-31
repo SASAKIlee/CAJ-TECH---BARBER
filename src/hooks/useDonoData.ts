@@ -43,79 +43,116 @@ export function useDonoData() {
   // Carregar dados da loja e se inscrever em tempo real
 // Carregar dados da loja e se inscrever em tempo real
 useEffect(() => {
-  let authUser: { id: string } | null = null;
-  let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let mounted = true;
 
-  const fetchLoja = async () => {
-    if (!authUser) return;
-    
-    const { data, error } = await supabase
-      .from("barbearias")
-      .select("*")
-      .eq("dono_id", authUser.id)
-      .maybeSingle();
+    const init = async () => {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user || !mounted) return;
 
-    if (error) {
-      console.error("Erro ao carregar dados da loja:", error);
-      return;
-    }
+      const userId = authData.user.id;
 
-    if (!data) {
-      console.log("Nenhuma barbearia encontrada para este dono.");
-      return;
-    }
+      // Buscar dados iniciais
+      const { data: lojaData, error: lojaError } = await supabase
+        .from("barbearias")
+        .select("*")
+        .eq("dono_id", userId)
+        .maybeSingle();
 
-    // ✅ Processar os dados da loja
-    // Aqui você atualiza o estado com os dados recebidos
-    // Exemplo:
-    // setDadosLoja(data);
-    // setHorariosLoja({
-    //   abertura: data.horario_abertura || "09:00",
-    //   fechamento: data.horario_fechamento || "18:00",
-    //   ...
-    // });
-  };
+      if (!mounted) return;
 
-  const carregarDadosLoja = async () => {
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) return;
-    authUser = authData.user;
+      if (lojaError) {
+        console.error("Erro ao carregar dados da loja:", lojaError);
+        return;
+      }
 
-    // ✅ Limpar canal anterior antes de criar um novo
-    if (channel) {
-      supabase.removeChannel(channel);
-      channel = null;
-    }
+      if (!lojaData) {
+        console.log("Nenhuma barbearia encontrada para este dono.");
+        return;
+      }
 
-    await fetchLoja();
+      // ✅ ATUALIZE SEU ESTADO AQUI
+      // Exemplo (adapte para os campos que você usa):
+      // updateData({
+      //   slug: lojaData.slug,
+      //   planoAtual: lojaData.plano,
+      //   isLojaAtiva: lojaData.ativo,
+      //   checkinHabilitado: lojaData.checkin_habilitado ?? false,
+      //   horariosLoja: {
+      //     abertura: lojaData.horario_abertura || "",
+      //     fechamento: lojaData.horario_fechamento || "",
+      //     inicio_almoco: lojaData.pausa_inicio || "",
+      //     fim_almoco: lojaData.pausa_fim || "",
+      //     dias_trabalho: lojaData.dias_abertos || [],
+      //     datas_fechadas: lojaData.datas_fechadas || [],
+      //   },
+      //   fasePagamento: lojaData.fase_pagamento ?? 1,
+      //   diasRestantes: lojaData.dias_restantes ?? 0,
+      // });
 
-    channel = supabase
-      .channel(`barbearia-dono-${authUser.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "barbearias",
-          filter: `dono_id=eq.${authUser.id}`,
-        },
-        () => {
-          fetchLoja();
-        }
-      )
-      .subscribe();
-  };
+      // Inscrever em mudanças em tempo real
+      channel = supabase
+        .channel(`barbearia-dono-${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "barbearias",
+            filter: `dono_id=eq.${userId}`,
+          },
+          async (payload) => {
+            if (!mounted) return;
 
-  carregarDadosLoja();
+            // Se for UPDATE, usa o payload direto (mais rápido)
+            if (payload.eventType === "UPDATE" && payload.new) {
+              const d = payload.new as Record<string, unknown>;
+              // ✅ ATUALIZE SEU ESTADO AQUI (REALTIME UPDATE)
+              // updateData({
+              //   slug: d.slug as string,
+              //   planoAtual: d.plano as string,
+              //   isLojaAtiva: d.ativo as boolean,
+              //   checkinHabilitado: d.checkin_habilitado as boolean,
+              //   horariosLoja: {
+              //     abertura: (d.horario_abertura as string) || "",
+              //     fechamento: (d.horario_fechamento as string) || "",
+              //     inicio_almoco: (d.pausa_inicio as string) || "",
+              //     fim_almoco: (d.pausa_fim as string) || "",
+              //     dias_trabalho: (d.dias_abertos as number[]) || [],
+              //     datas_fechadas: (d.datas_fechadas as string[]) || [],
+              //   },
+              //   fasePagamento: (d.fase_pagamento as number) ?? 1,
+              //   diasRestantes: (d.dias_restantes as number) ?? 0,
+              // });
+            } else {
+              // Para INSERT ou DELETE, busca no banco
+              const { data: freshData } = await supabase
+                .from("barbearias")
+                .select("*")
+                .eq("dono_id", userId)
+                .maybeSingle();
 
-  // ✅ Cleanup ao desmontar
-  return () => {
-    if (channel) {
-      supabase.removeChannel(channel);
-      channel = null;
-    }
-  };
-}, []);
+              if (freshData && mounted) {
+                // ✅ ATUALIZE SEU ESTADO AQUI (REFETCH)
+                // updateData({ ... });
+              }
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    init();
+
+    // Cleanup ao desmontar
+    return () => {
+      mounted = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
+    };
+  }, []);
 
   // Timer do PIX — rodando limpo, sem re-criar intervalo
   useEffect(() => {
