@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { contrastTextOnBrand } from "@/lib/branding";
 import { BarbeiroAcoes } from "./barbeiro/BarbeiroAcoes";
 import { AgendaBarbeiro } from "./barbeiro/AgendaBarbeiro";
 import { ModalNovoAgendamento } from "./barbeiro/ModalNovoAgendamento";
@@ -72,6 +73,9 @@ export function VisaoBarbeiro({
 }: VisaoBarbeiroProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // ✅ Calcula cor do texto sobre a cor primária — evita texto ilegível em fundos escuros
+  const ctaFg = contrastTextOnBrand(corPrimaria);
+
   // ✅ Objeto memoizado — não recria a cada render
   const infoLoja = useMemo(() => ({
     abertura: horarioAbertura,
@@ -86,7 +90,7 @@ export function VisaoBarbeiro({
         barbeiroSelecionadoId={barbeiroSelecionadoId}
         setBarbeiroSelecionadoId={setBarbeiroSelecionadoId}
         brand={corPrimaria}
-        ctaFg="#000000"
+        ctaFg={ctaFg}
         onOpenModal={() => setIsModalOpen(true)}
       />
 
@@ -123,7 +127,7 @@ export function VisaoBarbeiro({
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         brand={corPrimaria}
-        ctaFg="#000000"
+        ctaFg={ctaFg}
         barbeiros={barbeiros}
         servicos={servicos}
         barbeiroSelecionadoId={barbeiroSelecionadoId}

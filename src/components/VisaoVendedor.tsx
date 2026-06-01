@@ -12,10 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { getValorPlano } from "@/config/planos.config";
 
-// ==========================================
-// TIPAGENS (MELHORIA #1)
-// ==========================================
 interface DadosAdicionais {
   cidade?: string;
   plano_escolhido?: string;
@@ -65,9 +63,6 @@ interface VisaoVendedorProps {
   vendedorNome?: string;
 }
 
-// ==========================================
-// CONSTANTES E FUNÇÕES AUXILIARES
-// ==========================================
 const FORM_NOVO_LEAD_INICIAL: FormNovoLead = {
   nome: "", bairro: "", email: "", senha: "", telefone: "",
   plano: "pro",
@@ -75,10 +70,8 @@ const FORM_NOVO_LEAD_INICIAL: FormNovoLead = {
   cor_primaria: "#D4AF37", cor_secundaria: "#18181B", cor_destaque: "#FFFFFF"
 };
 
-// Variáveis de ambiente (MELHORIA #8)
 const CEO_WHATSAPP = import.meta.env.VITE_CEO_WHATSAPP || "5517992051576";
 const AFILIADO_BASE_URL = import.meta.env.VITE_AFILIADO_BASE_URL || window.location.origin;
-
 const META_MENSAL = 2000;
 
 function formatarMoeda(valor: number): string {
@@ -106,19 +99,6 @@ function validarTelefone(telefone: string): boolean {
   return digits.length >= 10;
 }
 
-// Cálculo de comissão (MELHORIA #5)
-function calcularComissao(plano: string): number {
-  const valores: Record<string, number> = {
-    starter: 50 * 0.30,
-    pro: 99.90 * 0.40,
-    elite: 497 * 0.50
-  };
-  return valores[plano] || 0;
-}
-
-// ==========================================
-// COMPONENTE LEAD CARD (MEMOIZADO - MELHORIA #2)
-// ==========================================
 interface LeadCardProps {
   lead: Lead;
   onFollowUp: () => void;
@@ -132,7 +112,7 @@ interface LeadCardProps {
 const LeadCard = memo(({ lead, onFollowUp, onMover, onArquivar, isFinal = false, nextLabel, isLoading = false }: LeadCardProps) => {
   const telefone = lead.dados_adicionais?.telefone;
   const planoAtual = lead.dados_adicionais?.plano_escolhido || 'pro';
-  
+
   const isChurn = lead.status === 'convertido' && lead.barbearia_real && lead.barbearia_real.ativo === false;
   const isUpsell = lead.status === 'convertido' && !isChurn && planoAtual === 'starter';
   const isRecusado = lead.status === 'recusado';
@@ -213,14 +193,10 @@ const LeadCard = memo(({ lead, onFollowUp, onMover, onArquivar, isFinal = false,
 
 LeadCard.displayName = 'LeadCard';
 
-// ==========================================
-// COMPONENTE PRINCIPAL
-// ==========================================
 export function VisaoVendedor({
   vendedorId,
   vendedorNome = "Consultor CAJ",
 }: VisaoVendedorProps) {
-  // Estados unificados (MELHORIA #9)
   const [modalAberto, setModalAberto] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [tabAtiva, setTabAtiva] = useState<"visita" | "contrato">("visita");
@@ -238,67 +214,27 @@ export function VisaoVendedor({
 
   const progressoMeta = Math.min(100, (recorrenciaCalculada / META_MENSAL) * 100);
 
-  // ==========================================
-  // CARREGAMENTO DE DADOS (MELHORIA #4 - CLEANUP)
-  // ==========================================
-  useEffect(() => {
-    let cancelled = false;
-    
-    async function carregarDadosPerformance() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const idReal = session?.user?.id || vendedorId;
-        if (!idReal) {
-          if (!cancelled) setLoadingLeads(false);
-          return;
-        }
+  // CORREÇÃO: Carregamento unificado, seguro e cruzado por servidor (Edge Function)
+  const fetchDadosVendedor = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('carregar-performance-vendedor');
+      if (error || data?.error) throw new Error(error?.message || data?.error || "Erro no servidor ao carregar dados do funil.");
 
-        const { data: leads, error: leadsError } = await supabase.from("leads").select("*").eq("vendedor_id", idReal).neq("status", "deleted");
-        if (leadsError) throw leadsError;
-
-        const nomesConvertidos = leads?.filter(l => l.status === 'convertido').map(l => l.nome_barbearia) || [];
-        let barbeariasReais: any[] = [];
-        
-        if (nomesConvertidos.length > 0) {
-          const { data: barbs } = await supabase.from("barbearias").select("nome, plano, ativo, data_vencimento").in("nome", nomesConvertidos);
-          barbeariasReais = barbs || [];
-        }
-
-        let somaComissoes = 0;
-        
-        const leadsEnriquecidos: Lead[] = (leads || []).map(lead => {
-          if (lead.status === 'convertido') {
-            const barbReal = barbeariasReais.find(b => b.nome === lead.nome_barbearia);
-            if (barbReal && barbReal.ativo) {
-              somaComissoes += calcularComissao(barbReal.plano);
-            }
-            return { ...lead, barbearia_real: barbReal } as Lead;
-          }
-          return lead as Lead;
-        });
-
-        if (!cancelled) {
-          setMeusLeads(leadsEnriquecidos);
-          setRecorrenciaCalculada(somaComissoes);
-          const total = leadsEnriquecidos.length;
-          const convertidos = leadsEnriquecidos.filter(l => l.status === 'convertido').length;
-          setTaxaConversao(total > 0 ? Math.round((convertidos / total) * 100) : 0);
-        }
-      } catch (error) {
-        console.error("Erro na performance:", error);
-        if (!cancelled) toast.error("Falha de conexão ao carregar seu funil.");
-      } finally {
-        if (!cancelled) setLoadingLeads(false);
-      }
+      setMeusLeads(data.leads || []);
+      setRecorrenciaCalculada(data.saldo_calculado || 0);
+      setTaxaConversao(data.taxa_conversao || 0);
+    } catch (error: any) {
+      console.error("Erro na performance:", error);
+      toast.error("Falha de conexão ao carregar seu funil.");
+    } finally {
+      setLoadingLeads(false);
     }
+  }, []);
 
-    carregarDadosPerformance();
-    return () => { cancelled = true; };
-  }, [vendedorId]);
+  useEffect(() => {
+    fetchDadosVendedor();
+  }, [fetchDadosVendedor]);
 
-  // ==========================================
-  // CALLBACKS ESTABILIZADOS (MELHORIA #3)
-  // ==========================================
   const fecharModalCadastro = useCallback(() => {
     setModalAberto(null);
     setFormNovoLead(FORM_NOVO_LEAD_INICIAL);
@@ -313,7 +249,6 @@ export function VisaoVendedor({
       return;
     }
 
-    // Validação de email e telefone (MELHORIA #6)
     const emailValido = tabAtiva === "contrato" ? validarEmail(formNovoLead.email) : true;
     const telefoneValido = validarTelefone(formNovoLead.telefone);
     setErrosForm({
@@ -321,14 +256,8 @@ export function VisaoVendedor({
       telefone: !telefoneValido
     });
 
-    if (!telefoneValido) {
-      toast.error("Telefone inválido (mínimo 10 dígitos).");
-      return;
-    }
-    if (tabAtiva === "contrato" && !emailValido) {
-      toast.error("E-mail inválido.");
-      return;
-    }
+    if (!telefoneValido) return toast.error("Telefone inválido (mínimo 10 dígitos).");
+    if (tabAtiva === "contrato" && !emailValido) return toast.error("E-mail inválido.");
 
     setIsSubmitting(true);
     try {
@@ -339,7 +268,9 @@ export function VisaoVendedor({
         cidade: formNovoLead.bairro,
         plano_escolhido: formNovoLead.plano,
         email_dono: formNovoLead.email,
-        senha_temp: formNovoLead.senha,
+        // senha_temp removida do payload — a Edge Function 'aprovar-contrato-admin'
+        // já recebe email+senha e cria a conta via Supabase Auth.
+        // Guardar a senha em texto plano num campo JSON é um risco de segurança.
         telefone: formNovoLead.telefone.replace(/\D/g, ''),
         vip: formNovoLead.vip,
         cor_primaria: formNovoLead.cor_primaria,
@@ -382,20 +313,14 @@ export function VisaoVendedor({
       }
 
       fecharModalCadastro();
-      // Recarregar dados
       setLoadingLeads(true);
-      const { data: { session: newSession } } = await supabase.auth.getSession();
-      const idReal2 = newSession?.user?.id || vendedorId;
-      if (idReal2) {
-        const { data: leads } = await supabase.from("leads").select("*").eq("vendedor_id", idReal2).neq("status", "deleted");
-        // ... (repetir lógica de enriquecimento, omitida por brevidade mas no código completo)
-      }
+      await fetchDadosVendedor();
     } catch (error: any) {
       toast.error(error.message || "Erro ao salvar. Verifique sua conexão.");
     } finally {
       setIsSubmitting(false);
     }
-  }, [formNovoLead, tabAtiva, leadSendoEditado, meusLeads, vendedorId, fecharModalCadastro]);
+  }, [formNovoLead, tabAtiva, leadSendoEditado, meusLeads, vendedorId, fecharModalCadastro, aceiteLGPD, fetchDadosVendedor]);
 
   const handlePrepararContrato = useCallback((lead: Lead) => {
     setFormNovoLead({
@@ -403,7 +328,7 @@ export function VisaoVendedor({
       bairro: lead.bairro || "",
       telefone: lead.dados_adicionais?.telefone ? aplicarMascaraTelefone(lead.dados_adicionais.telefone) : "",
       email: lead.dados_adicionais?.email_dono || "",
-      senha: lead.dados_adicionais?.senha_temp || "",
+      senha: "", // nunca re-exibir senha salva — usuário preenche novamente se necessário
       plano: lead.dados_adicionais?.plano_escolhido || "pro",
       vip: lead.dados_adicionais?.vip || false,
       cor_primaria: lead.dados_adicionais?.cor_primaria || "#D4AF37",
@@ -442,7 +367,6 @@ export function VisaoVendedor({
       toast.success("Anotação salva com sucesso!");
       setTextoFollowUp("");
       setModalAberto(null);
-      // Atualizar lead localmente
       setMeusLeads(prev => prev.map(l => l.id === leadSelecionado.id ? { ...l, dados_adicionais: dadosAtualizados } : l));
     } catch (e: any) {
       toast.error("Erro ao salvar anotação.");
@@ -457,9 +381,6 @@ export function VisaoVendedor({
     toast.success("Link de afiliado copiado! Envie para o barbeiro assinar.");
   }, [vendedorId]);
 
-  // ==========================================
-  // FILTRO DE LEADS (MELHORIA #13)
-  // ==========================================
   const leadsFiltrados = useMemo(() => {
     const termoNormalizado = normalizarTexto(busca);
     if (!termoNormalizado) return meusLeads;
@@ -473,9 +394,6 @@ export function VisaoVendedor({
   const leadsPendente = useMemo(() => leadsFiltrados.filter(l => l.status === 'pendente'), [leadsFiltrados]);
   const leadsConvertido = useMemo(() => leadsFiltrados.filter(l => l.status === 'convertido'), [leadsFiltrados]);
 
-  // ==========================================
-  // SKELETON LOADER (MELHORIA #12)
-  // ==========================================
   const renderSkeleton = () => (
     <div className="flex gap-4 overflow-x-auto pb-6 snap-x">
       {[1, 2, 3].map(col => (
@@ -491,12 +409,8 @@ export function VisaoVendedor({
     </div>
   );
 
-  // ==========================================
-  // RENDER
-  // ==========================================
   return (
     <div className="space-y-6 pb-32 w-full max-w-full overflow-x-hidden p-4 bg-black min-h-screen relative font-sans">
-      {/* HEADER */}
       <header className="flex flex-col gap-3 pt-2">
         <div className="flex justify-between items-start">
           <div>
@@ -520,7 +434,6 @@ export function VisaoVendedor({
           </div>
         </div>
 
-        {/* Barra de meta */}
         <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl mt-2">
           <div className="flex justify-between text-[11px] font-black uppercase text-zinc-500 mb-3">
             <span>Progresso da Meta</span>
@@ -540,7 +453,6 @@ export function VisaoVendedor({
         </div>
       </header>
 
-      {/* MÉTRICAS */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-5 bg-zinc-900/50 border-zinc-800 backdrop-blur-md relative overflow-hidden group flex flex-col justify-center">
           <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:rotate-12 transition-transform duration-500">
@@ -560,7 +472,6 @@ export function VisaoVendedor({
         </Card>
       </div>
 
-      {/* BARRA DE AÇÕES */}
       <div className="flex gap-2 sticky top-2 z-40 bg-black/80 backdrop-blur-md p-1 -mx-1 rounded-2xl">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-4 h-5 w-5 text-zinc-500" />
@@ -590,7 +501,6 @@ export function VisaoVendedor({
         </Button>
       </div>
 
-      {/* FUNIL KANBAN */}
       <section className="space-y-4">
         <h3 className="font-black text-white uppercase text-sm italic px-1 flex items-center gap-2 border-b border-zinc-800 pb-2">
           <Target className="h-5 w-5 text-emerald-500" /> Pipeline de Vendas
@@ -598,7 +508,6 @@ export function VisaoVendedor({
 
         {loadingLeads ? renderSkeleton() : (
           <div className="flex gap-4 overflow-x-auto pb-6 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
-            {/* COLUNA 1: VISITAS E RECUSADOS */}
             <div className="min-w-[300px] max-w-[350px] bg-zinc-900/30 rounded-[28px] p-2 border border-zinc-800/50 snap-center flex flex-col h-[65vh]">
               <div className="flex justify-between items-center px-4 py-3 mb-2">
                 <h4 className="text-[11px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="h-4 w-4" /> Prospecção ({leadsVisita.length})</h4>
@@ -633,7 +542,6 @@ export function VisaoVendedor({
               </div>
             </div>
 
-            {/* COLUNA 2: NEGOCIAÇÃO / PENDENTE */}
             <div className="min-w-[300px] max-w-[350px] bg-blue-900/5 rounded-[28px] p-2 border border-blue-900/20 snap-center flex flex-col h-[65vh]">
               <div className="flex justify-between items-center px-4 py-3 mb-2">
                 <h4 className="text-[11px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-2"><Clock className="h-4 w-4" /> Aguardando CEO ({leadsPendente.length})</h4>
@@ -651,7 +559,6 @@ export function VisaoVendedor({
               </div>
             </div>
 
-            {/* COLUNA 3: ATIVOS / CONVERTIDOS */}
             <div className="min-w-[300px] max-w-[350px] bg-emerald-900/5 rounded-[28px] p-2 border border-emerald-900/20 snap-center flex flex-col h-[65vh]">
               <div className="flex justify-between items-center px-4 py-3 mb-2">
                 <h4 className="text-[11px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2"><Crown className="h-4 w-4" /> Carteira Ativa ({leadsConvertido.length})</h4>
@@ -672,7 +579,6 @@ export function VisaoVendedor({
         )}
       </section>
 
-      {/* BOTÃO FLUTUANTE KIT DE GUERRA */}
       <div className="fixed bottom-6 right-4 z-50">
         <Button
           onClick={() => setModalAberto("kit")}
@@ -683,9 +589,6 @@ export function VisaoVendedor({
         </Button>
       </div>
 
-      {/* ========================================================
-          MODAIS (EXTRAÍDOS PARA FUNÇÕES INTERNAS - MELHORIA #14)
-      ======================================================== */}
       {modalAberto === "cadastro" && (
         <ModalCadastro
           formNovoLead={formNovoLead}
@@ -726,10 +629,6 @@ export function VisaoVendedor({
     </div>
   );
 }
-
-// ==========================================
-// COMPONENTES DE MODAL (INTERNOS)
-// ==========================================
 
 interface ModalCadastroProps {
   formNovoLead: FormNovoLead;
@@ -825,10 +724,10 @@ function ModalCadastro({ formNovoLead, setFormNovoLead, tabAtiva, setTabAtiva, i
         </div>
 
         <div className="flex items-start gap-3 p-4 rounded-2xl bg-black/20 border border-white/5">
-          <Checkbox 
-            id="lgpd_lead" 
-            checked={aceiteLGPD} 
-            onCheckedChange={(checked) => setAceiteLGPD(!!checked)} 
+          <Checkbox
+            id="lgpd_lead"
+            checked={aceiteLGPD}
+            onCheckedChange={(checked) => setAceiteLGPD(!!checked)}
           />
           <label htmlFor="lgpd_lead" className="text-[11px] text-zinc-400 leading-relaxed cursor-pointer">
             O cliente leu e concorda com a{" "}
@@ -857,7 +756,7 @@ interface ModalFollowUpProps {
 
 function ModalFollowUp({ lead, textoFollowUp, setTextoFollowUp, isSubmitting, onClose, onSave }: ModalFollowUpProps) {
   const historico = lead.dados_adicionais?.historico || [];
-  
+
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Histórico de follow-up">
       <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-[2rem] p-6 space-y-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95">
@@ -871,7 +770,7 @@ function ModalFollowUp({ lead, textoFollowUp, setTextoFollowUp, isSubmitting, on
           <p className="font-bold text-white uppercase text-base">{lead.nome_barbearia}</p>
           <p className="text-[11px] text-zinc-500 uppercase font-black tracking-widest mt-1">Registro de contatos</p>
         </div>
-        
+
         <div className="max-h-48 overflow-y-auto space-y-3 border-l-2 border-zinc-800 pl-4 ml-2 py-2">
           {historico.length > 0 ? (
             historico.map((h, i) => (
@@ -964,7 +863,7 @@ function ModalKit({ onClose }: ModalKitProps) {
             <X className="h-5 w-5" />
           </button>
         </div>
-        
+
         <div className="space-y-4">
           <a
             href="/apresentacao-cajtech.pdf"

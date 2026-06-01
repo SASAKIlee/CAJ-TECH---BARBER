@@ -21,7 +21,8 @@ import { supabase } from "@/integrations/supabase/client";
 import imageCompression from "browser-image-compression";
 import { useDonoData } from "@/hooks/useDonoData";
 import { calcularStatsFiltrados } from "@/lib/dono-stats";
-import { DonoSubTab, PlanoType, BarbeiroForm, ServicoForm } from "@/types/dono";
+import { DonoSubTab, BarbeiroForm, ServicoForm } from "@/types/dono";
+import { PlanoType, VALORES_PLANO, getValorPlano } from "@/config/planos.config";
 import { DonoTabResumo } from "@/components/dono/DonoTabResumo";
 import { DonoTabDashboard } from "@/components/dono/DonoTabDashboard";
 import { DonoTabVIP } from "@/components/dono/DonoTabVIP";
@@ -36,12 +37,6 @@ import { LojinhaPDV } from "@/components/dono/LojinhaPDV";
 import { GestaoDespesas } from "@/components/dono/GestaoDespesas";
 
 const MotionButton = motion.create(Button);
-
-const VALORES_PLANO: Record<PlanoType, number> = {
-  starter: 50.0,
-  pro: 99.9,
-  elite: 497.0,
-};
 
 interface VisaoDonoProps {
   faturamentoHoje?: number;
@@ -89,7 +84,7 @@ function VisaoDonoComponent({
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
   const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter");
   const [isGerandoPix, setIsGerandoPix] = useState(false);
-  const [dataVencimento, setDataVencimento] = useState<string | null>(null);
+  const [dataVencimentoSegura, setDataVencimentoSegura] = useState<boolean>(false); // Flag segura validada no backend
 
   const [nBarbeiro, setNBarbeiro] = useState<BarbeiroForm>({ nome: "", comissao: "50", email: "", senha: "" });
   const [nServico, setNServico] = useState<ServicoForm>({ nome: "", preco: "", duracao_minutos: "30" });
@@ -148,19 +143,25 @@ function VisaoDonoComponent({
   }, []);
 
   useEffect(() => {
-    async function buscarVencimento() {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) return;
-      const { data: barbearia } = await supabase
-        .from("barbearias")
-        .select("data_vencimento")
-        .eq("dono_id", authData.user.id)
-        .maybeSingle();
-      if (barbearia) {
-        setDataVencimento(barbearia.data_vencimento);
+    async function validarStatusBackend() {
+      try {
+        // Simula verificação segura: O status `ativo` deve ser cravado pelo backend via cronjob ou API.
+        const { data: authData } = await supabase.auth.getUser();
+        if (!authData.user) return;
+        const { data: barbearia } = await supabase
+          .from("barbearias")
+          .select("ativo")
+          .eq("dono_id", authData.user.id)
+          .maybeSingle();
+
+        if (barbearia) {
+          setDataVencimentoSegura(!barbearia.ativo); // Se ativo=false, está bloqueado/vencida.
+        }
+      } catch {
+        // Falha segura
       }
     }
-    buscarVencimento();
+    validarStatusBackend();
   }, []);
 
   // ==========================================
@@ -234,9 +235,6 @@ function VisaoDonoComponent({
     [data.checkinHabilitado, updateData]
   );
 
-  // ==========================================
-  // UPLOAD DE IMAGEM (Bucket único: "imagens")
-  // ==========================================
   const handleUploadImagem = useCallback(async (file: File, pasta: string): Promise<string | null> => {
     try {
       const compressed = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 600 });
@@ -257,9 +255,6 @@ function VisaoDonoComponent({
     }
   }, [data.slug]);
 
-  // ==========================================
-  // ADICIONAR BARBEIRO
-  // ==========================================
   const handleAddBarbeiroComFotoETrava = useCallback(async () => {
     if (data.planoAtual === "starter" && barbeiros.length >= 2) {
       setModalUpgradeAberto(true);
@@ -278,9 +273,6 @@ function VisaoDonoComponent({
     setIsUploadingBarbeiro(false);
   }, [data.planoAtual, barbeiros.length, nBarbeiro, imagemBarbeiro, handleUploadImagem, onAddBarbeiro]);
 
-  // ==========================================
-  // ADICIONAR SERVIÇO
-  // ==========================================
   const handleAddServicoComFoto = useCallback(async () => {
     const validacao = servicoSchema.safeParse(nServico);
     if (!validacao.success) return toast.error(validacao.error.errors[0].message);
@@ -295,9 +287,6 @@ function VisaoDonoComponent({
     setIsUploadingServico(false);
   }, [nServico, imagemServico, handleUploadImagem, onAddServico]);
 
-  // ==========================================
-  // TROCAR FOTO DO BARBEIRO
-  // ==========================================
   const handleUpdateBarbeiroPhoto = useCallback(async (barbeiroId: string, file: File) => {
     const toastId = toast.loading("Atualizando foto do barbeiro...");
     try {
@@ -318,9 +307,6 @@ function VisaoDonoComponent({
     }
   }, [handleUploadImagem]);
 
-  // ==========================================
-  // TROCAR FOTO DO SERVIÇO
-  // ==========================================
   const handleUpdateServicoImage = useCallback(async (servicoId: string, file: File) => {
     const toastId = toast.loading("Atualizando imagem do serviço...");
     try {
@@ -341,9 +327,7 @@ function VisaoDonoComponent({
     }
   }, [handleUploadImagem]);
 
-  // ==========================================
-  // EXCLUIR BARBEIRO COM TRANSFERÊNCIA DE DADOS
-  // ==========================================
+  // CORREÇÃO: Delegação da exclusão com transferência de dados para a Edge Function
   const handleRemoveBarbeiroComTransferencia = useCallback(async (barbeiroId: string) => {
     const barbeiro = barbeiros.find(b => b.id === barbeiroId);
     if (!barbeiro) return;
@@ -359,37 +343,13 @@ function VisaoDonoComponent({
 
     const toastId = toast.loading(`Excluindo ${barbeiro.nome} e transferindo dados...`);
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) throw new Error("Sessão expirada.");
+      const { data, error } = await supabase.functions.invoke('excluir-barbeiro-admin', {
+        body: { barbeiro_id: barbeiroId }
+      });
 
-      const donoId = authData.user.id;
-
-      // 1. Transferir todos os agendamentos para o dono
-      const { error: agError } = await supabase
-        .from("agendamentos")
-        .update({ barbeiro_id: donoId })
-        .eq("barbeiro_id", barbeiroId);
-
-      if (agError) throw agError;
-
-      // 2. Remover a role de barbeiro (se tiver)
-      await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", barbeiroId)
-        .eq("role", "barbeiro");
-
-      // 3. Deletar o barbeiro da tabela
-      const { error: delError } = await supabase
-        .from("barbeiros")
-        .delete()
-        .eq("id", barbeiroId);
-
-      if (delError) throw delError;
+      if (error || data?.error) throw new Error(error?.message || data?.error || "Erro ao excluir barbeiro no servidor.");
 
       toast.success(`"${barbeiro.nome}" excluído. Dados transferidos para você!`, { id: toastId });
-
-      // Atualiza a lista local
       onRemoveBarbeiro?.(barbeiroId);
 
     } catch (err: unknown) {
@@ -398,9 +358,6 @@ function VisaoDonoComponent({
     }
   }, [barbeiros, onRemoveBarbeiro]);
 
-  // ==========================================
-  // SALVAR HORÁRIOS
-  // ==========================================
   const handleSaveHorarios = useCallback(async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return toast.error("Sessão expirada.");
@@ -426,9 +383,6 @@ function VisaoDonoComponent({
     }
   }, [data.horariosLoja]);
 
-  // ==========================================
-  // SALVAR BRANDING (Logo + Fundo)
-  // ==========================================
   const handleSaveBranding = useCallback(async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return toast.error("Sessão expirada.");
@@ -581,22 +535,10 @@ function VisaoDonoComponent({
     }
   }, [pixGerado]);
 
-  const getValorPlano = useCallback((planoTarget: PlanoType) => {
-    return VALORES_PLANO[planoTarget] || 99.9;
-  }, []);
+  // getValorPlano importada de @/config/planos.config
 
-  // ==========================================
-  // RENDER CONDICIONAL DE BLOQUEIO (CORRIGIDO)
-  // ==========================================
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0); // Zera horas para comparar apenas os dias
-
-  // Adiciona T23:59:59 para garantir que o dia do vencimento inteiro seja válido
-  const vencimentoDate = dataVencimento ? new Date(dataVencimento + "T23:59:59") : null;
-  const isVencida = vencimentoDate ? vencimentoDate < hoje : false;
-
-  // 1ª PRIORIDADE: Plano vencido (Bloqueia TUDO até pagar)
-  if (isVencida) {
+  // 1ª PRIORIDADE: Plano vencido validado pelo backend
+  if (dataVencimentoSegura) {
     return (
       <DonoBloqueio
         motivo="inadimplencia"
@@ -612,7 +554,7 @@ function VisaoDonoComponent({
     );
   }
 
-  // 2ª PRIORIDADE: Loja desativada manualmente (por você/admin)
+  // 2ª PRIORIDADE: Loja desativada (segurança via hook base)
   if (data.isLojaAtiva === false) {
     return (
       <DonoBloqueio
@@ -629,7 +571,7 @@ function VisaoDonoComponent({
     );
   }
 
-  // 3ª PRIORIDADE: Fase de pagamento crítica (ex: trial acabou)
+  // 3ª PRIORIDADE: Fase de pagamento crítica
   if (data.fasePagamento === 4) {
     return (
       <DonoBloqueio
@@ -646,9 +588,6 @@ function VisaoDonoComponent({
     );
   }
 
-  // ==========================================
-  // RENDER PRINCIPAL (Só chega aqui se estiver em dia)
-  // ==========================================
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-32 sm:pb-40 pt-3 sm:pt-4 w-full overflow-x-hidden text-white relative min-h-screen">
       {avisoRede && (
