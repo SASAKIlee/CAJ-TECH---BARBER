@@ -121,7 +121,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
           data,
           produtos ( nome )
         `)
-        .eq("barbaria_slug", slug)
+        .eq("barbearia_slug", slug)
         .gte("data", primeiroDia)
         .lte("data", ultimoDiaStr)
         .abortSignal(controller.signal);
