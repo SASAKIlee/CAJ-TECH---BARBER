@@ -17,14 +17,51 @@ export function TermosDeUso({ userId }: TermosDeUsoProps) {
   const [aberto, setAberto] = useState(false);
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isChecking, setIsChecking] = useState(true); // Começa verificando
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const aceitou = localStorage.getItem(STORAGE_KEY);
-    if (!aceitou) {
-      setAberto(true);
+    // Se ainda não tem o ID do usuário, espera até ter
+    if (!userId) {
+      setIsChecking(false);
+      return;
     }
-  }, []);
+
+    async function verificarAceiteNoBanco() {
+      try {
+        // 1. Verifica no banco de dados se o usuário já aceitou esta versão dos termos
+        const { data, error } = await supabase
+          .from("lgpd_solicitacoes")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("tipo", `aceite_termos_${TERMOS_VERSAO}`)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Erro ao verificar termos:", error);
+          // Se der erro de RLS ou banco, cai no fallback do localStorage
+          const aceitouLocal = localStorage.getItem(STORAGE_KEY);
+          if (!aceitouLocal) setAberto(true);
+        } else if (data) {
+          // Já está registrado no banco! Não abre mais.
+          localStorage.setItem(STORAGE_KEY, "true"); // Atualiza o cache local
+          setAberto(false);
+        } else {
+          // Não tem no banco. Verifica se tem no cache local (para não abrir se acabou de aceitar)
+          const aceitouLocal = localStorage.getItem(STORAGE_KEY);
+          if (!aceitouLocal) setAberto(true);
+        }
+      } catch (err) {
+        console.error("Falha ao verificar aceite:", err);
+        const aceitouLocal = localStorage.getItem(STORAGE_KEY);
+        if (!aceitouLocal) setAberto(true);
+      } finally {
+        setIsChecking(false);
+      }
+    }
+
+    verificarAceiteNoBanco();
+  }, [userId]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -37,23 +74,35 @@ export function TermosDeUso({ userId }: TermosDeUsoProps) {
   const handleAceitar = async () => {
     setIsSaving(true);
     try {
-      // Salva no navegador (cache local)
+      // 1. Salva no banco de dados (Prova legal inquebrável)
+      if (userId) {
+        const { error } = await supabase.from("lgpd_solicitacoes").insert({
+          user_id: userId,
+          nome_cliente: "Usuário do Sistema",
+          tipo: `aceite_termos_${TERMOS_VERSAO}`,
+          motivo: "Aceite dos Termos de Uso e Política de Privacidade",
+          ip_requisicao: "WebApp"
+        });
+
+        if (error) throw error;
+      }
+
+      // 2. Salva no navegador (cache local para aliviar o banco)
       localStorage.setItem(STORAGE_KEY, "true");
 
-      // ✅ LGPD: Salva no banco também (prova legal)
-      if (userId) {
-        await supabase
-          .from("profiles")
-          .update({ termos_aceitos_em: new Date().toISOString() })
-          .eq("user_id", userId);
-      }
+      // 3. Fecha o modal
+      setAberto(false);
+      toast.success("Termos aceitos com sucesso!");
     } catch (err) {
       console.error("Erro ao salvar aceite dos termos:", err);
+      toast.error("Erro ao salvar aceite. Tente novamente.");
     } finally {
       setIsSaving(false);
-      setAberto(false);
     }
   };
+
+  // Enquanto está verificando o banco, não mostra nada (evita piscar a tela)
+  if (isChecking) return null;
 
   return (
     <Dialog open={aberto} onOpenChange={() => { }}>
