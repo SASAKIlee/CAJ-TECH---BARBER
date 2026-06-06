@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (barbeariaData) {
                 await supabase.from("barbeiros").insert({
                   id: user.id,
-                  barbearia_id: barbeariaData.id,
+                  barbearia_slug: barbeariaData.id,
                   nome: nomeDono,
                   comissao_pct: 0, // Dono não paga comissão pra ele mesmo
                   ativo: true,
@@ -140,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const nomeDono = user.user_metadata?.full_name || user.email?.split('@')[0] || "Dono";
               await supabase.from("barbeiros").insert({
                 id: user.id,
-                barbearia_id: donoData.id,
+                barbearia_slug: donoData.id,
                 nome: nomeDono,
                 comissao_pct: 0,
                 ativo: true,

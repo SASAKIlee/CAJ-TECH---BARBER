@@ -95,9 +95,9 @@ export function GestaoDespesas({ slug, brand, glass, faturamentoMes }: GestaoDes
         barbearia_slug: slug,
         descricao: novaDespesa.descricao.trim(),
         valor: valorNumerico,
-        categoria: novaDespesa.categoria,
         data: novaDespesa.data,
       });
+
 
       if (error) throw error;
       toast.success("Despesa registrada!");
