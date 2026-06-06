@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 .maybeSingle();
 
               if (barbeariaData) {
-                await supabase.from("barbeiros").insert({
+                await supabase.from("barbeiros").upsert({
                   id: user.id,
                   barbearia_slug: barbeariaData.id,
                   nome: nomeDono,
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
               // Cria o dono como barbeiro também
               const nomeDono = user.user_metadata?.full_name || user.email?.split('@')[0] || "Dono";
-              await supabase.from("barbeiros").insert({
+              await supabase.from("barbeiros").upsert({
                 id: user.id,
                 barbearia_slug: donoData.id,
                 nome: nomeDono,
