@@ -7,8 +7,11 @@ import { StatCard } from "./StatCard";
 import { DonoTabResumoProps } from "@/types/dono";
 
 export function DonoTabResumo({ slug, stats, brand, ctaFg, glass }: DonoTabResumoProps) {
-  const linkCompleto = slug ? `https://${window.location.host}/agendar/${slug}` : "";
-  const linkDisplay = slug ? `${window.location.host}/agendar/${slug}` : "Link não disponível";
+  // Pega o domínio limpo da variável de ambiente, ou usa o atual como fallback
+  const baseUrl = import.meta.env.VITE_APP_URL || `https://${window.location.host}`;
+
+  const linkCompleto = slug ? `${baseUrl}/agendar/${slug}` : "";
+  const linkDisplay = slug ? `${new URL(baseUrl).host}/agendar/${slug}` : "Link não disponível";
 
   const handleCopyLink = useCallback(() => {
     if (!linkCompleto) {
