@@ -208,7 +208,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       console.error("Erro ao carregar dados do CEO:", err);
       toast.error("Falha ao carregar dados. Recarregue a página.");
     }
-  }, [vendedores, getValorPlano]);
+  }, [vendedores]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -381,7 +381,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
       const message = err instanceof Error ? err.message : "Erro desconhecido";
       toast.error("Erro ao pagar: " + message, { id: toastId });
     } finally { setIsPagarComissao(false); }
-  }, [ranking, leadsRecentes, formatarMoeda, carregarDados, supabaseUrl]);
+  }, [ranking, leadsRecentes, formatarMoeda, carregarDados]);
 
   const dispararAviso = useCallback(async () => {
     if (!novoAviso.trim()) return;
@@ -443,7 +443,7 @@ export function VisaoCEO({ totalLojas: _totalLojas = 0, vendedores = [] }: Visao
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'caixa_cajtech_mes.csv'; a.click();
     toast.success("Relatório Exportado!");
-  }, [lojasAtivas, getValorPlano]);
+  }, [lojasAtivas]);
 
   const impersonarLoja = useCallback(async (loja: Loja) => {
     const toastId = toast.loading(`Acessando painel de "${loja.nome}"...`);

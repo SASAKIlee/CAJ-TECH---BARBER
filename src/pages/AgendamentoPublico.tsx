@@ -331,7 +331,7 @@ export default function AgendamentoPublico() {
 
     carregarOcupados();
     return () => controller.abort();
-  }, [selecao.data, selecao.barbeiro?.id, slug, servicos]);
+  }, [selecao.data, selecao.barbeiro, slug, servicos]);
 
   const salvarTicketComoImagem = useCallback(async () => {
     const el = document.getElementById(WALLET_TICKET_CAPTURE_ID);

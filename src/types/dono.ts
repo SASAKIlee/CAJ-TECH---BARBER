@@ -237,3 +237,13 @@ export interface ClienteRadar {
   total_visitas: number;
   valor_total_gasto: number;
 }
+
+export interface ClienteVIP {
+  id?: string;
+  barbearia_slug: string;
+  nome: string;
+  telefone: string;
+  observacao?: string;
+  criado_em?: string;
+}
+

@@ -10,6 +10,7 @@ import {
   ListOrdered,
   ShoppingBag,
   Receipt,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { barbeiroSchema, servicoSchema } from "@/lib/schemas";
@@ -35,6 +36,8 @@ import { RadarVendas } from "@/components/dono/RadarVendas";
 import { FilaEsperaInteligente } from "@/components/dono/FilaEsperaInteligente";
 import { LojinhaPDV } from "@/components/dono/LojinhaPDV";
 import { GestaoDespesas } from "@/components/dono/GestaoDespesas";
+import { ClientesVIP } from "@/components/dono/ClientesVIP";
+import { RelatoriosAvancados } from "@/components/dono/RelatoriosAvancados";
 
 const MotionButton = motion.create(Button);
 
@@ -79,7 +82,7 @@ function VisaoDonoComponent({
   const [subTab, setSubTab] = useState<DonoSubTab>("resumo");
   const [subDir, setSubDir] = useState(1);
 
-  const [vipSubTab, setVipSubTab] = useState<"radar" | "fila" | "lojinha" | "despesas" | "automacoes">("automacoes");
+  const [vipSubTab, setVipSubTab] = useState<"radar" | "fila" | "lojinha" | "despesas" | "automacoes" | "fidelidade" | "relatorios">("automacoes");
   const [modalPagamentoAberto, setModalPagamentoAberto] = useState(false);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
   const [planoPagamento, setPlanoPagamento] = useState<PlanoType>("starter");
@@ -676,6 +679,8 @@ function VisaoDonoComponent({
                 <div className="flex rounded-xl border border-white/[0.08] p-1 gap-0.5 bg-zinc-900/50 overflow-x-auto hide-scrollbar">
                   {([
                     { id: "automacoes" as const, label: "Automações", Icon: Zap },
+                    { id: "fidelidade" as const, label: "Clientes VIP", Icon: Crown },
+                    { id: "relatorios" as const, label: "Relatórios", Icon: FileText },
                     { id: "radar" as const, label: "Radar", Icon: AlertTriangle },
                     { id: "fila" as const, label: "Fila", Icon: ListOrdered },
                     { id: "lojinha" as const, label: "Lojinha", Icon: ShoppingBag },
@@ -718,6 +723,12 @@ function VisaoDonoComponent({
                     )}
                     {vipSubTab === "despesas" && (
                       <GestaoDespesas slug={data.slug} brand={brand} glass={glass} faturamentoMes={faturamentoMensalProp} />
+                    )}
+                    {vipSubTab === "fidelidade" && (
+                      <ClientesVIP slug={data.slug} brand={brand} glass={glass} />
+                    )}
+                    {vipSubTab === "relatorios" && (
+                      <RelatoriosAvancados slug={data.slug} brand={brand} glass={glass} />
                     )}
                     {vipSubTab === "automacoes" && (
                       <DonoTabVIP

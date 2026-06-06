@@ -90,26 +90,35 @@ export function DonoTabVIP({
           </Button>
         </Card>
       ) : (
-        <div className="grid gap-4">
-          {/* Recursos VIP - Em desenvolvimento */}
-          <Card className="p-6 rounded-3xl border border-white/[0.08] bg-zinc-950/80 opacity-50 pointer-events-none">
-            <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card className="p-6 rounded-3xl border border-white/[0.08] bg-zinc-950/80 opacity-60">
+            <div className="flex items-center justify-between gap-4 mb-2">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black">Automação</p>
-                <h4 className="text-xl font-black text-white">Lembretes WhatsApp</h4>
-                <p className="text-sm text-zinc-400 mt-2">Em breve: Envio automático de lembretes antes do agendamento.</p>
+                <p className="text-[9px] uppercase tracking-[0.3em] text-zinc-500 font-black">Automação</p>
+                <h4 className="text-base font-black text-white mt-1">Lembretes WhatsApp</h4>
               </div>
             </div>
+            <p className="text-xs text-zinc-400">Em desenvolvimento: Lembretes automáticos integrados via API (disparos manuais ativos no dashboard).</p>
           </Card>
 
-          <Card className="p-6 rounded-3xl border border-white/[0.08] bg-zinc-950/80 opacity-50 pointer-events-none">
-            <div className="flex items-center justify-between gap-4 mb-4">
+          <Card className="p-6 rounded-3xl border border-yellow-500/20 bg-yellow-950/10">
+            <div className="flex items-center justify-between gap-4 mb-2">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black">Fidelidade</p>
-                <h4 className="text-xl font-black text-white">Cliente VIP 👑</h4>
-                <p className="text-sm text-zinc-400 mt-2">Em breve: Identifique e premie seus melhores clientes.</p>
+                <p className="text-[9px] uppercase tracking-[0.3em] text-yellow-600 font-black">Fidelidade 👑</p>
+                <h4 className="text-base font-black text-yellow-300 mt-1">Clientes VIP</h4>
               </div>
             </div>
+            <p className="text-xs text-zinc-400">ATIVO: Classifique seus melhores clientes e adicione preferências exclusivas na aba ao lado.</p>
+          </Card>
+
+          <Card className="p-6 rounded-3xl border border-emerald-500/20 bg-emerald-950/10">
+            <div className="flex items-center justify-between gap-4 mb-2">
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.3em] text-emerald-600 font-black">Financeiro 📊</p>
+                <h4 className="text-base font-black text-emerald-400 mt-1">Relatórios em PDF</h4>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-400">ATIVO: Consolide receitas de serviços, vendas e despesas, e exporte o caixa em PDF pronto para A4.</p>
           </Card>
         </div>
       )}
