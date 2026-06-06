@@ -117,14 +117,13 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
         .select(`
           id,
           quantidade,
-          preco_unitario,
-          total,
-          data_venda,
+          valor_total,
+          data,
           produtos ( nome )
         `)
-        .eq("barbearia_slug", slug)
-        .gte("data_venda", primeiroDia)
-        .lte("data_venda", ultimoDiaStr)
+        .eq("barbaria_slug", slug)
+        .gte("data", primeiroDia)
+        .lte("data", ultimoDiaStr)
         .abortSignal(controller.signal);
 
       if (errVen) throw errVen;
@@ -188,7 +187,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
       const mapaProdutos = new Map<string, ProdutoVendido>();
 
       (vendas || []).forEach((ven: any) => {
-        const totalVenda = Number(ven.total || 0);
+        const totalVenda = Number(ven.valor_total || 0);
         somaProdutos += totalVenda;
 
         const prodNome = ven.produtos?.nome || "Produto";
