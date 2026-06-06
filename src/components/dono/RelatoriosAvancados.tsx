@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
+import { cn } from "@/lib/utils";
 
 interface RelatoriosAvancadosProps {
   slug: string;
@@ -36,7 +37,7 @@ interface ProdutoVendido {
 
 export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
-  
+
   const [filtroMes, setFiltroMes] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [loading, setLoading] = useState(true);
   const [isExportingImage, setIsExportingImage] = useState(false);
@@ -46,7 +47,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
   const [receitaServicos, setReceitaServicos] = useState(0);
   const [receitaProdutos, setReceitaProdutos] = useState(0);
   const [totalDespesas, setTotalDespesas] = useState(0);
-  
+
   const [despesasPorCategoria, setDespesasPorCategoria] = useState<CategoriaDespesa[]>([]);
   const [produtosMaisVendidos, setProdutosMaisVendidos] = useState<ProdutoVendido[]>([]);
   const [desempenhoEquipe, setDesempenhoEquipe] = useState<PerformanceBarbeiro[]>([]);
@@ -71,7 +72,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
         .select("*")
         .eq("slug", slug)
         .maybeSingle();
-      
+
       setDadosLoja(barbearia);
 
       // 2. Carregar agendamentos finalizados do período
@@ -103,8 +104,8 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
         .from("despesas")
         .select("*")
         .eq("barbearia_slug", slug)
-        .gte("data_despesa", primeiroDia)
-        .lte("data_despesa", ultimoDiaStr)
+        .gte("data", primeiroDia)
+        .lte("data", ultimoDiaStr)
         .abortSignal(controller.signal);
 
       if (errDes) throw errDes;
@@ -130,7 +131,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
       if (controller.signal.aborted) return;
 
       // --- PROCESSAR DADOS DE FINANÇAS ---
-      
+
       // Receita de serviços
       let somaServicos = 0;
       const mapaBarbeiros = new Map<string, PerformanceBarbeiro>();
@@ -155,7 +156,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
         const barbId = ag.barbeiro_id;
         const barbNome = ag.barbeiros?.nome || "Profissional";
         const pctComissao = Number(ag.barbeiros?.comissao_pct || 0);
-        
+
         // Se a comissão foi gravada no agendamento, usa ela, senão calcula baseada na porcentagem
         const comissaoPaga = ag.comissao_ganha !== null ? Number(ag.comissao_ganha) : (precoServico * pctComissao) / 100;
         const lucroLoja = precoServico - comissaoPaga;
@@ -222,12 +223,12 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
       });
 
       setTotalDespesas(somaDespesas);
-      
+
       const listCategorias: CategoriaDespesa[] = Array.from(mapaDespesas.entries()).map(([categoria, valor]) => ({
         categoria,
         valor
       })).sort((a, b) => b.valor - a.valor);
-      
+
       setDespesasPorCategoria(listCategorias);
 
     } catch (err: any) {
@@ -452,7 +453,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
         <Card className="p-1 border-white/[0.08] overflow-hidden rounded-[28px]" style={glass}>
           {/* CONTENT PRINCIPAL CAPTURADO PELO PDF/PNG */}
           <div id="pdf-report-content" className="p-6 sm:p-8 space-y-8 bg-zinc-950/70 text-white rounded-[26px]">
-            
+
             {/* Cabeçalho do Relatório */}
             <div className="flex items-start justify-between border-b border-white/[0.08] pb-6">
               <div>
@@ -502,7 +503,7 @@ export function RelatoriosAvancados({ slug, brand, glass }: RelatoriosAvancadosP
 
             {/* Grid Detalhado */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
+
               {/* Tabela de Profissionais */}
               <div className="space-y-3">
                 <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1.5"><Briefcase className="h-4 w-4 text-zinc-400" /> Produção da Equipe</h4>
