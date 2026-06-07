@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner"; // <--- LINHA QUE FALTAVA
 
 // ✅ VERSIONAMENTO: Troque a versão quando atualizar os termos.
 // Isso faz todo mundo aceitar de novo automaticamente.
