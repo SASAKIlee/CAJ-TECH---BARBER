@@ -20,6 +20,7 @@ import {
   useMutacoesBarbeiro,
   useMutacoesServico,
   useMutacoesAgendamento,
+  useMutacoesDespesa, // <--- ADICIONADO AQUI
   useClientesVIP
 } from "@/hooks/useQueries";
 import { useDonoData } from "@/hooks/useDonoData";
@@ -312,6 +313,7 @@ export default function Index() {
   const mutacoesBarbeiro = useMutacoesBarbeiro();
   const mutacoesServico = useMutacoesServico();
   const mutacoesAgendamento = useMutacoesAgendamento();
+  const mutacoesDespesa = useMutacoesDespesa(); // <--- ADICIONADO AQUI
 
   const refetchDadosPrincipais = useCallback(async () => {
     if (!isImpersonating) {
@@ -568,6 +570,18 @@ export default function Index() {
       );
     },
     [mutacoesServico, slug, withLoadingToast]
+  );
+
+  // <--- ADICIONADO: Handler de despesas que faltava
+  const handleAddDespesa = useCallback(
+    (descricao: string, valor: number, data: string) => {
+      if (!slug) return Promise.reject("Slug não definido");
+      return withLoadingToast(
+        mutacoesDespesa.adicionarDespesa.mutateAsync({ descricao, valor, data, slug }),
+        { loading: "Salvando despesa...", success: "Despesa salva!", error: "Erro ao salvar despesa." }
+      );
+    },
+    [mutacoesDespesa, slug, withLoadingToast]
   );
 
   const handleGerarPix = useCallback(async () => {
@@ -828,7 +842,7 @@ export default function Index() {
                         onToggleBarbeiroStatus={isImpersonating ? undefined : handleToggleBarbeiroStatus}
                         onAddServico={isImpersonating ? undefined : handleAddServico}
                         onRemoveServico={isImpersonating ? undefined : handleRemoveServico}
-                        onAddDespesa={() => { }}
+                        onAddDespesa={isImpersonating ? undefined : handleAddDespesa} // <--- CORRIGIDO AQUI
                       />
                     </>
                   </Suspense>
@@ -839,19 +853,22 @@ export default function Index() {
         </main>
 
         {!lojaBloqueada && (
-          <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/40 backdrop-blur-xl flex justify-around p-2 shadow-2xl z-20 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/60 backdrop-blur-xl flex justify-around items-center p-1 sm:p-2 shadow-2xl z-20 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {visibleTabs.map((t) => (
               <motion.button
                 key={t.id}
-                whileTap={{ scale: 0.95 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => goTab(t.id)}
-                className={cn("flex flex-col items-center p-1 sm:p-2 transition-colors duration-300 outline-none rounded-xl", tab === t.id ? "font-bold scale-105 sm:scale-110" : "text-white/45")}
+                className={cn(
+                  "flex flex-col items-center justify-center p-3 sm:p-2 rounded-2xl transition-colors duration-300 outline-none min-w-[80px] sm:min-w-0", // <--- MELHORADO PARA CELULAR
+                  tab === t.id ? "font-bold" : "text-white/40"
+                )}
                 style={tab === t.id ? { color: marca } : undefined}
                 aria-label={t.label}
                 role="tab"
               >
-                <t.icon className="h-6 w-6 sm:h-7 sm:w-7" />
-                <span className="text-[9px] sm:text-[11px] mt-1 uppercase tracking-tighter">{t.label}</span>
+                <t.icon className="h-7 w-7 sm:h-6 sm:w-6" /> {/* <--- MAIOR NO CELULAR */}
+                <span className="text-[11px] sm:text-[10px] mt-1 uppercase tracking-tighter font-black">{t.label}</span>
               </motion.button>
             ))}
           </nav>
