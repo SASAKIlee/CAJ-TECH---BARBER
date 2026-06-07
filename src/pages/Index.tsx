@@ -768,7 +768,7 @@ export default function Index() {
 
         <ImpersonationBanner isImpersonating={isImpersonating} impersonateName={impersonateName} onExit={sairImpersonacao} />
 
-        <main className="flex-1 p-3 sm:p-4 md:p-6 pb-28 max-w-7xl mx-auto w-full flex flex-col min-h-0">
+        <main className="flex-1 p-4 sm:p-4 md:p-6 pb-24 max-w-7xl mx-auto w-full flex flex-col min-h-0">
           {lojaBloqueada ? (
             <div className="flex flex-col items-center justify-center flex-1 h-full text-center px-4">
               <div className="bg-zinc-900 border border-red-500/30 p-8 rounded-2xl max-w-md w-full shadow-2xl">
@@ -853,22 +853,22 @@ export default function Index() {
         </main>
 
         {!lojaBloqueada && (
-          <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/60 backdrop-blur-xl flex justify-around items-center p-1 sm:p-2 shadow-2xl z-20 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <nav className="fixed bottom-0 w-full border-t border-white/[0.08] bg-black/60 backdrop-blur-xl flex justify-around items-center p-1.5 sm:p-2 shadow-2xl z-20 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {visibleTabs.map((t) => (
               <motion.button
                 key={t.id}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => goTab(t.id)}
                 className={cn(
-                  "flex flex-col items-center justify-center p-3 sm:p-2 rounded-2xl transition-colors duration-300 outline-none min-w-[80px] sm:min-w-0", // <--- MELHORADO PARA CELULAR
+                  "flex flex-col items-center justify-center p-2 sm:p-1.5 rounded-xl transition-colors duration-300 outline-none flex-1", // <--- flex-1 distribui o espaço igual, sem forçar tamanho
                   tab === t.id ? "font-bold" : "text-white/40"
                 )}
                 style={tab === t.id ? { color: marca } : undefined}
                 aria-label={t.label}
                 role="tab"
               >
-                <t.icon className="h-7 w-7 sm:h-6 sm:w-6" /> {/* <--- MAIOR NO CELULAR */}
-                <span className="text-[11px] sm:text-[10px] mt-1 uppercase tracking-tighter font-black">{t.label}</span>
+                <t.icon className="h-6 w-6" /> {/* <--- Voltou pro tamanho médio padrao (24px) */}
+                <span className="text-[10px] sm:text-[11px] mt-0.5 uppercase tracking-tighter font-bold">{t.label}</span>
               </motion.button>
             ))}
           </nav>
